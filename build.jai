@@ -3,7 +3,7 @@
     set_build_options_dc(.{do_output=false});
     w := compiler_create_workspace();
     build_options := get_build_options(w);
-    build_options.entry_point_name = "Main";
+    build_options.entry_point_name = "Vai_Main";
     build_options.output_executable_name = "vai";
     build_options.output_path = "bin";
     build_options.output_type = .EXECUTABLE;

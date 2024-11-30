@@ -6,6 +6,7 @@ DEBUG_ENCODING          :: false;
 DEBUG_RENDER_PARSE      :: false;
 DEBUG_POOLS             :: false;
 DEBUG_TEXT_BUFFERS      :: true;
+DEBUG_GRAPHICS          :: false;
 
 MSAA :: 4;
 

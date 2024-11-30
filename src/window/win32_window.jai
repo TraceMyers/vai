@@ -3,12 +3,9 @@ WindowType :: HWND;
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-Create_Window :: (width: s32, height: s32, window_name: string, window_x := -1, window_y := -1, parent: WindowType = null, bg_color := float.[0.0, 0.0, 0.0], msaa := DEFAULT_MSAA) -> WindowType {
+Create_Window :: (window_name: string, msaa := DEFAULT_MSAA) -> WindowType {
 
-    if !window_class_created && !Create_Window_Class(bg_color) then return null;
-
-    style := WINDOWED_STYLE;
-    style = ifx parent == null WINDOWED_STYLE else SECONDARY_WINDOW_STYLE;
+    if !window_class_created && !Create_Window_Class() then return null;
 
     SPI_GETWORKAREA :: 0x30;
     // can use this function to query or change a bunch of stuff in Windows. we're using this to get the area on screen
@@ -16,49 +13,49 @@ Create_Window :: (width: s32, height: s32, window_name: string, window_x := -1, 
     // http://www.jasinskionline.com/windowsapi/ref/s/systemparametersinfo.html
     SystemParametersInfoW :: (uiAction: u32, uiParam: u32, pvParam: *void, fWinIni: u32) -> BOOL #foreign user32;
 
-    if window_x == -1 || window_y == -1 {
+    if window.x == -1 || window.y == -1 {
         work_area: RECT;
         work_area_get_success := SystemParametersInfoW(SPI_GETWORKAREA, 0, *work_area, 0); 
         if work_area_get_success {
-            window_x = work_area.left;
-            window_y = work_area.left;
+            window.x = work_area.left;
+            window.y = work_area.left;
         }
     }
 
     // apparently (?) window size in terms of pixels is kind of virtual; this converts our virtual (intended)
     // size to the true size, according to Windows
     window_rect: RECT;
-    window_rect.right = width;
-    window_rect.bottom = height;
-    AdjustWindowRect(*window_rect, style, .FALSE);
+    window_rect.right = window.width;
+    window_rect.bottom = window.height;
+    AdjustWindowRect(*window_rect, WINDOWED_STYLE, .FALSE);
 
     true_width := window_rect.right - window_rect.left;
     true_height := window_rect.bottom - window_rect.top;
 
-    window_handle := CreateWindowExW(
+    window.handle = CreateWindowExW(
         0, // extended window style
         xx Encode_Temp_C_String(WINDOW_CLASS, .UTF8, .UTF16),
         xx Encode_Temp_C_String(window_name, .UTF8, .UTF16),
-        style,
-        xx window_x,
-        xx window_y,
+        WINDOWED_STYLE,
+        xx window.x,
+        xx window.y,
         xx true_width,
         xx true_height,
-        parent,
+        null,
         null,
         cast(HINSTANCE) 0,
         null
     );
 
-    if window_handle == null {
+    if window.handle == null {
         Log_Error("CreateWindowExW returned 0");
         return null;
     }
 
-    UpdateWindow(window_handle);
-    ShowWindow(window_handle, SW_SHOW);
+    UpdateWindow(window.handle);
+    ShowWindow(window.handle, SW_SHOW);
 
-    return window_handle;
+    return window.handle;
 }
 
 Query_Window_Dimensions :: (window_handle: HWND) -> s32, s32 {
@@ -88,15 +85,20 @@ Receive_Window_Message :: (hwnd: HWND, message: u32, wParam: WPARAM, lParam: LPA
             return DefWindowProcW(hwnd, message, wParam, lParam);
         case WM_SYSKEYDOWN; #through;
         case WM_KEYDOWN;
-        case WM_SYSKEYUP; #through;
+        case WM_SYSKEYUP;   #through;
         case WM_KEYUP;
-        case WM_PAINT;
-            paint_struct: PAINTSTRUCT;
-            hdc := BeginPaint(hwnd, *paint_struct);
-            FillRect(hdc, *paint_struct.rcPaint, xx (COLOR_WINDOW + 1));
-            EndPaint(hwnd, *paint_struct);
+        // case WM_PAINT;
+            // paint_struct: PAINTSTRUCT;
+            // hdc := BeginPaint(hwnd, *paint_struct);
+            // FillRect(hdc, *paint_struct.rcPaint, xx (COLOR_WINDOW + 1));
+            // EndPaint(hwnd, *paint_struct);
+            // Log("paint please");
+            // return 0;
+        case WM_SIZE;
             return 0;
-        case WM_CLOSE; #through;
+        case WM_MOVE;
+            return 0;
+        case WM_CLOSE;      #through;
         case WM_QUIT;
             quit = true;
             return DefWindowProcW(hwnd, message, wParam, lParam);
@@ -109,7 +111,7 @@ Receive_Window_Message :: (hwnd: HWND, message: u32, wParam: WPARAM, lParam: LPA
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 
-Create_Window_Class :: (bg_color: = float.[0.0, 0.0, 0.0]) -> bool {
+Create_Window_Class :: (bg_color := float.[0.0, 0.0, 0.0]) -> bool {
     assert(!window_class_created);
 
     this_program := GetModuleHandleW(null);
@@ -168,12 +170,12 @@ EndPaint :: (hwnd: HWND, lpPaint: *PAINTSTRUCT) -> BOOL #foreign user32;
 FillRect :: (hdc: HDC, lprc: *RECT, hbr: HBRUSH) -> s32 #foreign user32;
 
 PAINTSTRUCT :: struct {
-  hdc: HDC;
-  fErase: BOOL;
-  rcPaint: RECT;
-  fRestore: BOOL;
-  fIncUpdate: BOOL;
-  rgbReserved: [32]u8;
+    hdc: HDC;
+    fErase: BOOL;
+    rcPaint: RECT;
+    fRestore: BOOL;
+    fIncUpdate: BOOL;
+    rgbReserved: [32]u8;
 }
 
 window_class_created := false;

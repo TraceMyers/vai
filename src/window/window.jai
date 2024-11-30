@@ -6,11 +6,13 @@ WindowInfo :: struct {
     height: s32;
     x: s32;
     y: s32;
+    clear_color: fRGB;
 }
 
 Window :: struct {
     handle: WindowType;
     using info: *WindowInfo;
+    just_resized: bool;
     MIN_WIDTH :: 256;
     MIN_HEIGHT :: 256;
 }
@@ -20,11 +22,13 @@ Query_Window_Dimensions :: inline () -> (s32, s32) {
     return w, h;
 }
 
-Update_Window_Dimensions :: () {
+Update_Window_Dimensions :: () -> resized: bool {
     new_width, new_height := Query_Window_Dimensions();
-    // window.resized = new_width != window.width || new_height != window.height;
+    window.just_resized = new_width != window.width || new_height != window.height;
     window.width = new_width;
     window.height = new_height;
+    updated_once = true;
+    return window.just_resized | updated_once;
 }
 
 Window_Dimensions :: ($T1: Type) -> T1, T1
@@ -42,3 +46,7 @@ Window_Dimensions :: ($T1: Type) -> T1, T1
 #if OS == .WINDOWS {
     #load "win32_window.jai";
 }
+
+#scope_file // ------------------------------------------------------------------------------------------------ { FILE }
+
+updated_once: bool;

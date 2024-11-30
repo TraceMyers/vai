@@ -204,18 +204,18 @@ Utf32_To_Utf8 :: (b: *u8, max_read_count := 4) -> CodePoint {
         cs.count = 1;
     } else if (c & 0x07_ff) == c {
         cs.bytes[0] = ub(0xc0) | ub((c & 0x07_c0) >> 6);
-        cs.bytes[1] = ub(0x80) |  ub(c & 0x00_3f);
+        cs.bytes[1] = ub(0x80) | ub( c & 0x00_3f);
         cs.count = 2;
     } else if (c & 0xff_ff) == c {
         cs.bytes[0] = ub(0xe0) | ub((c & 0xf0_00) >> 12);
         cs.bytes[1] = ub(0x80) | ub((c & 0x0f_c0) >> 6);
-        cs.bytes[2] = ub(0x80) |  ub(c & 0x00_3f);
+        cs.bytes[2] = ub(0x80) | ub( c & 0x00_3f);
         cs.count = 3;
     } else {
         cs.bytes[0] = ub(0xf0) | ub((c & 0x1c_00_00) >> 18);
         cs.bytes[1] = ub(0x80) | ub((c & 0x03_f0_00) >> 12);
         cs.bytes[2] = ub(0x80) | ub((c & 0x00_0f_c0) >> 6);
-        cs.bytes[3] = ub(0x80) |  ub(c & 0x00_00_3f);
+        cs.bytes[3] = ub(0x80) | ub( c & 0x00_00_3f);
         cs.count = 4;
     }
     cs.read_count = 4;

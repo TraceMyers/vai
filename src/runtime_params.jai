@@ -4,9 +4,10 @@ SETTINGS_FILE_NAME :: "settings.txt";
 // for use with Scoped_Construct
 Runtime_Settings :: struct {
 
-    Initialize :: () {
+    Initialize :: () -> success: bool {
         window.info = *settings_file_data.window_info;
         Load_Struct_From_Text_File(SETTINGS_FILE_NAME, *settings_file_data);
+        return true;
     }
 
     Shutdown :: () {
@@ -24,6 +25,9 @@ SettingsFileData :: struct {
     window_height: s32 = 512;
     window_x: s32 = 1;
     window_y: s32 = 1;
+    window_clear_r := 1.0;
+    window_clear_g := 0.0;
+    window_clear_b := 0.0;
     view_accel := 1000.0;
     view_max_speed := 600.0;
     key_repeat_delay := 0.3;
