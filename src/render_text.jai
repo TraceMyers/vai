@@ -1,5 +1,5 @@
 
-Initialize_Fonts :: () {
+Initialize_Render_Text :: () {
     font = get_font_at_size("fonts/cascadia_code", "Cascadia.ttf", pixel_height);
     font.temporary_glyphs.allocator = temp;
     font.current_quads.allocator = temp;
@@ -11,7 +11,7 @@ Prepare_Text :: inline (text: string, effect_flags: Font_Effects = 0) -> width: 
     return prepare_text(font, text, effect_flags);
 }
 
-Text_End_Frame :: () {
+Render_Text_End_Frame :: () {
     array_reset(*font.temporary_glyphs);
     array_reset(*font.current_quads);
 }
@@ -61,7 +61,6 @@ Generate_Quads_For_Prepared_Text :: (x: s64, y: s64, effect_flags: Font_Effects 
 		sx += cast(float) info.advance;
     }
 }
-
 
 font: *Dynamic_Font;
 pixel_height: s32 = 12;

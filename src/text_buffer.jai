@@ -52,11 +52,16 @@ Shutdown_Text_Buffer :: (buffer: *TextBuffer) {
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-Get_File_Buffer :: (file_path: string) -> *TextBuffer {
+Get_File_Buffer_ID :: (file_path: string) -> s64 {
     existing_buffer := Find_Item(*file_buffers, file_path, (buf, path) => buf.file_path == path);
     if existing_buffer == -1 {
         existing_buffer = Load_File_Into_Buffer(file_path);
     }
+    return existing_buffer;
+}
+
+Get_File_Buffer :: (file_path: string) -> *TextBuffer {
+    existing_buffer := Get_File_Buffer_ID(file_path);
     return ifx existing_buffer == -1 then null else *file_buffers.items[existing_buffer];
 }
 
@@ -210,7 +215,7 @@ Commit_Utf32_To_Line :: (utf32_buffer: *Utf32Buffer) {
 Remove_Utf32_Buffer :: (buffer: *TextBuffer, row: s64) {
     utf32_buffer := Get_Utf32_Buffer(buffer, row, false);
     if utf32_buffer != null {
-        index := Array_Item_Index(utf32_buffer, temp_utf32_buffers);
+        index := Element_Index(utf32_buffer, temp_utf32_buffers);
         if utf32_buffer.temp_bin_id.index != -1 {
             Release_Bin(*temp_utf32_buffer_pool, *utf32_buffer.temp_bin_id);
         }

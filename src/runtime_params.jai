@@ -13,8 +13,8 @@ Runtime_Settings :: struct {
     Shutdown :: () {
         // compensation for extending rect into client area in window. TODO: is this actually constant? it's in the win32 docs
         // (seet Input's windows.jai: 8 left 8 right, blah blah)
-        window.width = max(window.width - 16, Window.MIN_WIDTH);
-        window.height = max(window.height - 39, Window.MIN_HEIGHT);
+        // window.width = max(window.width - 16, Window.MIN_WIDTH);
+        // window.height = max(window.height - 39, Window.MIN_HEIGHT);
         Save_Struct_To_Text_File(SETTINGS_FILE_NAME, *settings_file_data);
     }
 
@@ -38,3 +38,8 @@ SettingsFileData :: struct {
 }
 
 settings_file_data: SettingsFileData;
+
+file_editor_background_color: fRGB;
+file_editor_outline_color: fRGBA;
+top_bar_background_color: fRGB;
+vim_console_background_color: fRGB;

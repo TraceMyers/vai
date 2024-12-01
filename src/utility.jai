@@ -5,11 +5,15 @@ fRGB :: struct {
 }
 
 fRGBA :: struct {
-    using rgb: fRGB;
+    r, g, b: float32;
     a := 1.0;
+
+    #place r;
+        rgb: fRGB = ---;
 }
 
-COLOR_WHITE :: fRGBA.{.{1, 1, 1}, 1};
+COLOR_WHITE :: fRGBA.{1, 1, 1, 1};
+RGB_WHITE :: fRGB.{1,1,1};
 
 // ctor/dtor style scope-dependent resource management. not used for individual data, but rather whole systems. (there is no data tied to the call.) to use, define an empty struct with an [Initialize :: () -> bool] and a [Shutdown :: ()]. Shutdown() should be callable even if initialization fails.
 Scoped_Construct :: ($T: Type) -> bool #expand {
@@ -75,7 +79,7 @@ Temp_Buffer :: inline ($T: Type, count: s64) -> []T {
     return buffer;
 }
 
-Array_Item_Index :: inline (item: *$T, array: []T) -> s64 {
+Element_Index :: inline (item: *$T, array: []T) -> s64 {
     index := item - array.data;
     assert(index >= 0 && index < array.count);
     return index;
@@ -156,6 +160,14 @@ Offset_Of :: inline ($T: Type, $FIELD: string) -> s64 {
     }
 }
 
+Inline_Buffer :: inline (from_data: string, $T: Type) ->  []T {
+    assert((from_data.count / size_of(T)) * size_of(T) == from_data.count);
+    buf: []T = ---;
+    buf.data = xx from_data.data;
+    buf.count = 0;
+    return buf;
+}
+
 Inline_Buffer :: inline (from_data: []$T) -> []T {
     buf: []T = ---;
     buf.data = from_data.data;
@@ -167,4 +179,10 @@ Inline_Buffer :: inline (from_data: []$T) -> []T {
 Inline_Buffer_Append :: (buf: *[]$T, item: T) #expand {
     buf.count += 1;
     buf.*[buf.count-1] = item;
+}
+
+Arrays_Equal :: (a: []$T, b: []T) -> bool {
+    if a.count != b.count return false;
+    for a { if it != b[it_index] then return false; }
+    return true;
 }

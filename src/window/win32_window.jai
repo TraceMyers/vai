@@ -68,6 +68,7 @@ Query_Window_Dimensions :: (window_handle: HWND) -> s32, s32 {
 }
 
 Update_Window_Events :: () {
+    Update_Modifier_Keys();
     while true {
         msg: MSG;
         result := PeekMessageW(*msg, null, 0, 0, PM_REMOVE);
@@ -81,12 +82,33 @@ Receive_Window_Message :: (hwnd: HWND, message: u32, wParam: WPARAM, lParam: LPA
     new_context: Context;
     push_context new_context {
         if message == {
-        case WM_SYSCOMMAND;
-            return DefWindowProcW(hwnd, message, wParam, lParam);
+        // case WM_SYSCOMMAND;
+            // return DefWindowProcW(hwnd, message, wParam, lParam);
         case WM_SYSKEYDOWN; #through;
         case WM_KEYDOWN;
-        case WM_SYSKEYUP;   #through;
-        case WM_KEYUP;
+            last_vkey = xx wParam;
+            last_vkey_modified_by_control = (modifier_keys & .CONTROL) != 0;
+            last_vkey_modified_by_shift = (modifier_keys & .SHIFT) != 0;
+          case WM_SYSCHAR;
+              // This is here to prevent beeps when a Alt key combo is pressed. If we don't return 0, windows helpfully emits a beep sound to
+              // indicate the user that the key wasn't handled.
+        case WM_CHAR;
+            // Control characters generate key codes < 32, and this program wants to know which code points would
+            // have been generated if control were not pressed. currently this only gets the vkey rather than
+            // the unicode. there appears to be a way to translate it w/ windows but it looks awful so I'm avoiding it.
+            code_point := U32_MAX;
+            if !last_vkey_modified_by_control || (wParam >= 32 && wParam != 127) {
+                code_point = xx wParam;
+            } else if (last_vkey >= 32 && last_vkey <= 126) || (last_vkey >= 128) {
+                code_point = last_vkey;
+                if code_point >= #char "A" && code_point <= #char "Z" && !last_vkey_modified_by_shift {
+                    // because the vkey was pressed without shift, uncapitalize the letter
+                    code_point += 32;
+                }
+            }
+            if code_point != U32_MAX {
+                Take_Raw_Input(code_point);
+            }
         // case WM_PAINT;
             // paint_struct: PAINTSTRUCT;
             // hdc := BeginPaint(hwnd, *paint_struct);
@@ -179,3 +201,6 @@ PAINTSTRUCT :: struct {
 }
 
 window_class_created := false;
+last_vkey: u32;
+last_vkey_modified_by_control: bool;
+last_vkey_modified_by_shift: bool;

@@ -60,7 +60,7 @@ Request_Item :: (using pool: *DynamicPool($T), grow_behavior := PoolResizeBehavi
     lock(*mutex);
     defer unlock(*mutex);
 
-    index := Find_Inactive(in_use, "in_use[i] |= shifted_flags;");
+    index := Find_Inactive(in_use, "in_use[byte] |= shifted_flags;");
     if index != -1 {
         if index > top then top = xx index;
         return index;
@@ -87,7 +87,7 @@ Find_Item :: (using pool: *DynamicPool($T), user_data: $T2, Compare: (*T, T2) ->
     defer unlock(*mutex);
     i := -1;
     while true {
-        i = Find_Active_Forward_From(in_use, i + 1);
+        i = Find_Active(in_use, i + 1);
         if i == -1 then break;
         if Compare(*items[i], user_data) then return i;
     }
@@ -167,23 +167,6 @@ Item_Index_To_Byte_Index :: (i: s64) -> s32, s32 #expand {
     return byte_index, bit_index;
 }
 
-// Find_Inactive :: (in_use: [..]u8, $c: string) -> s64 #expand {
-//     for i : 0..in_use.count-1 {
-//         in_use_chunk := in_use[i];
-//         if (in_use_chunk & U8_MAX) != U8_MAX {
-//             for shift : 0..7 {
-//                 shifted_bit := ub(1) << shift;
-//                 if (in_use_chunk & shifted_bit) == 0 {
-//                     item_index := Byte_Index_To_Item_Index(i, shift);
-//                     #insert c;
-//                     return item_index;
-//                 }
-//             }
-//         }
-//     }
-//     return -1;
-// }
-
 Find_Active_Backwards_From :: (in_use: [..]u8, item_index: s64) -> s64 #expand {
     start_byte, start_bit := Item_Index_To_Byte_Index(item_index);
     for < byte : start_byte..0 {
@@ -202,15 +185,16 @@ Find_Active_Backwards_From :: (in_use: [..]u8, item_index: s64) -> s64 #expand {
     return -1;
 }
 
-Find_Active_Forward_From :: (in_use: [..]u8, item_index: s64) -> s64 #expand {
-    start_byte, start_bit := Item_Index_To_Byte_Index(item_index);
+Find_Active :: (in_use: [..]u8, from_index := 0, $INDEXING_INFO := PoolUsageIndexingInfo(1)) -> s64 #expand {
+    start_byte, start_bit := Item_Index_To_Byte_Index(from_index);
     for byte : start_byte..in_use.count-1 {
         in_use_chunk := in_use[byte];
         if (in_use_chunk & U8_MAX) != 0 {
-            for bit_index: start_bit..7 {
-                bit := ub(1) << bit_index;
-                if (in_use_chunk & bit) != 0 {
-                    item_index := Byte_Index_To_Item_Index(byte, bit_index);
+            for shift_count : 0..INDEXING_INFO.STEP_COUNT-1 {
+                shift := (INDEXING_INFO.STEP_SIZE * shift_count);
+                shifted_flags := INDEXING_INFO.FLAGS << shift;
+                if (in_use_chunk & shifted_flags) != 0 && shifted_flags >= start_bit {
+                    item_index := Byte_Index_To_Item_Index(byte, shift);
                     return item_index;
                 }
             }
@@ -220,23 +204,22 @@ Find_Active_Forward_From :: (in_use: [..]u8, item_index: s64) -> s64 #expand {
     return -1;
 }
 
-// TODO: convert above to this style
-
 Find_Inactive :: (in_use: [..]u8, $c: string, from_index := 0, $INDEXING_INFO := PoolUsageIndexingInfo(1)) -> s64 #expand {
-    start_byte, _ := Item_Index_To_Byte_Index(from_index);
-    for i : start_byte..in_use.count-1 {
-        in_use_chunk := in_use[i];
+    start_byte, start_bit := Item_Index_To_Byte_Index(from_index);
+    for byte : start_byte..in_use.count-1 {
+        in_use_chunk := in_use[byte];
         if in_use_chunk != U8_MAX {
             for shift_count : 0..INDEXING_INFO.STEP_COUNT-1 {
                 shift := (INDEXING_INFO.STEP_SIZE * shift_count);
                 shifted_flags := INDEXING_INFO.FLAGS << shift;
-                if (in_use_chunk & shifted_flags) == 0 {
-                    item_index := Byte_Index_To_Item_Index(i, shift);
+                if (in_use_chunk & shifted_flags) == 0 && shifted_flags >= start_bit {
+                    item_index := Byte_Index_To_Item_Index(byte, shift);
                     #insert c;
                     return item_index;
                 }
             }
         }
+        start_bit = 0;
     }
     return -1;
 }
@@ -244,7 +227,7 @@ Find_Inactive :: (in_use: [..]u8, $c: string, from_index := 0, $INDEXING_INFO :=
 #scope_module // -------------------------------------------------------------------------------------------- { MODULE }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// ----------------------------------------------------------------------------------------------------- contiguous pool
+// ------------------------------------------------------------------------------------------------- contiguous bin pool
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 BinPoolAllocationType :: enum u8 {
@@ -358,7 +341,7 @@ Request_Bin :: (using pool: *BinPool($SIZE, $T), min_size: s64, grow_behavior :=
     mark: *s32;
 
     Try_Alloc :: (t: s32, $BIN_COUNT: u8, use_mark: *s32) #expand {
-        `id.index = xx Find_Inactive(trackers[t].in_use, "in_use[i] |= shifted_flags;", use_mark.*, PoolUsageIndexingInfo(BIN_COUNT));
+        `id.index = xx Find_Inactive(trackers[t].in_use, "in_use[byte] |= shifted_flags;", use_mark.*, PoolUsageIndexingInfo(BIN_COUNT));
         `id.bin_count = BIN_COUNT;
         `tracker = *trackers[t];
         base_alloc_flags = PoolUsageIndexingInfo(BIN_COUNT).FLAGS;
