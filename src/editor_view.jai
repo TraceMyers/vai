@@ -29,7 +29,7 @@ Create_Base_Views :: () {
     transparent_blue.r *= 2.0;
     transparent_blue.g *= 2.0;
     transparent_blue.b = 0.95;
-    vim_console_background_color = transparent_blue.rgb;
+    vim_console_background_color = transparent_blue;
     top_bar_background_color = transparent_blue.rgb;
     file_editor_background_color = .{};
     file_editor_outline_color = .{1,1,1,0.15};
@@ -53,7 +53,6 @@ Create_Base_Views :: () {
         layer.type = .VIM_CONSOLE;
         layer.vim_console = .{};
         vim_console_id = Add_View(.{type=.PIXELS, bottom_pixels=20}, *layer, ROOT_ID);
-        vim_console := Get_Item(*view_pool, vim_console_id);
     }
     // empty background to stage file editors
     empty_id: s64;
@@ -190,7 +189,7 @@ Render_Views :: () {
 
     // walking the view tree multiple times because tree traversal is pretty cheap + number of draw calls can be reduced
     // by grouping draws into batches that can be drawn the same way
-    Set_Shader_For_Color();
+    Set_Shader_For_Blended_Color();
     Walk_View_Tree(0, Render_View, ViewRenderPass.BACKGROUND);
     Set_Shader_For_Lines();
     Walk_View_Tree(0, Render_View, ViewRenderPass.LINES);
@@ -198,7 +197,7 @@ Render_Views :: () {
     // Walk_View_Tree(0, Render_View, ViewRenderPass.IMAGES);
     Set_Shader_For_Text();
     Walk_View_Tree(0, Render_View, ViewRenderPass.TEXT);
-    Set_Shader_For_Color();
+    // it's the responsibility of the render proc to set the shader when doing foreground rendering
     Walk_View_Tree(0, Render_View, ViewRenderPass.FOREGROUND);
 }
 
@@ -206,7 +205,12 @@ Render_View :: (view: *View, view_id: s64, viewport_id: s64, render_pass: ViewRe
     if view.layers.data != null {
         rect := viewport_rects[viewport_id];
         rendering_scissor_ul, rendering_scissor_lr = Viewport_Rect_Points(*rect, s32);
-        Set_Scissor(rendering_scissor_ul, rendering_scissor_lr);
+        if render_pass == {
+        case .TEXT;
+        case .IMAGES;
+        case .FOREGROUND;
+            Set_Scissor(rendering_scissor_ul, rendering_scissor_lr);
+        }
 
         view_layer := *view.layers[view.active_layer];
         view_active := view_id == active_view_id;
@@ -416,6 +420,9 @@ Lower_Right :: inline () -> IntVector2 {
 VIEW_CHILDREN_MAX :: 16;
 VIEW_LAYERS_MAX :: 16;
 VIEWS_MAX :: 128;
+
+VIM_CONSOLE_DEPTH :: 0.0;
+TEXT_DEPTH :: 0.0;
 
 active_view_id: s64;
 // for storing the active view id when another view temporarily takes precedence

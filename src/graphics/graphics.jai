@@ -13,7 +13,7 @@ Post_Resize_Window :: () {
 // TODO: simple axis-aligned 2d projection means don't need matrix
 Set_Projection :: (render_target_width: s32, render_target_height: s32) {
     // right-handed
-    m := orthographic_projection_matrix(0, cast(float) render_target_width*1, 0, cast(float) render_target_height, -1.0, 1.0);
+    m := orthographic_projection_matrix(0, cast(float) render_target_width*1, 0, cast(float) render_target_height, -1.0, 1.0, true);
     Set_Parameter_On_All_Shaders("mvp", m);
 }
 

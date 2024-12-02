@@ -18,6 +18,7 @@ Vai_Main :: () {
     if !Create_Window("vai")                    then return;
     if !Scoped_Construct(Graphics_Backend)      then return;
     if !Scoped_Construct(Input)                 then return;
+    if !Scoped_Construct(Viewports)             then return;
     if !Scoped_Construct(Editor_Views)          then return;
 
     Initialize_Render_Text();
@@ -30,30 +31,8 @@ Vai_Main :: () {
         }
 
         Translate_Inputs_To_Actions();
-
-        // Begin_Draw_Frame();
-
-        // Set_Shader_For_Blended_Color();
-        // Render_Quad(.{200, 200}, .{300, 300}, .{b=0.9});
-        // Set_Shader_For_Color_Inversion();
-        // Render_Quad(.{250, 250}, .{350, 350});
-
-        // Set_Shader_For_Lines();
-        // Render_Quad_Lines(.{200, 200}, .{300, 300}, .{rgb=RGB_WHITE, a=0.5});
-        // Render_Quad_Lines(.{250, 250}, .{350, 350}, .{rgb=RGB_WHITE, a=0.5});
-
-        // Set_Shader_For_Text();
-        // Prepare_Text("hello, sailor!");
-        // Generate_Quads_For_Prepared_Text(600, 100);
-        // Render_Quads_Generated_For_Text();
-
-        // End_Draw_Frame();
         Render_Views();
         Render_Text_End_Frame();
-
-        // utf32_str := As_String(auxiliary_input_buffer);
-        // ansi_str := Encode(utf32_str, .UTF32, .ANSI);
-        // Log("auxiliary input buffer: %", ansi_str);
 
         reset_temporary_storage();
         Sample_Frame_Time();

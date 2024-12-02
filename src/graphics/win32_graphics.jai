@@ -21,7 +21,7 @@ Graphics_Backend :: struct {
         glBlendEquation(GL_FUNC_ADD);
         glEnable(GL_SCISSOR_TEST);
         // glEnable(GL_CULL_FACE);
-        glLineWidth(2); // for view layer outlines
+        glLineWidth(1); // for view layer outlines
 
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 1);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -101,6 +101,8 @@ Set_Scissor :: (ul: IntVector2, lr: IntVector2) {
 }
 
 Begin_Draw_Frame :: () {
+    Clear_Viewports();
+    Set_Scissor(.{}, .{window.width, window.height});
     glClearColor(window.clear_color.r, window.clear_color.g, window.clear_color.b, 1.0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
@@ -150,14 +152,14 @@ Set_Shader_Parameter :: (shader: *Shader, $PARAM_NAME: string, m: Matrix4) #expa
     }
 }
 
-Render_Line :: (a: IntVector2, b: IntVector2, color := COLOR_WHITE, uv1 := Vector2.{}, uv2 := Vector2.{}, depth := 1.0) {
+Render_Line :: (a: IntVector2, b: IntVector2, color := COLOR_WHITE, uv1 := Vector2.{}, uv2 := Vector2.{}, depth := DEFAULT_DEPTH) {
     assert(current_shader.draw_style == .LINES);
     if vertices.count + 2 > MAX_VERTICES then Flush_Draws();
     Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(a), z=depth}, xx color, .{}});
     Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(b), z=depth}, xx color, .{}});
 }
 
-Render_Quad_Lines :: (ul: IntVector2, lr: IntVector2, color := COLOR_WHITE, depth := 1.0) {
+Render_Quad_Lines :: (ul: IntVector2, lr: IntVector2, color := COLOR_WHITE, depth := DEFAULT_DEPTH) {
     assert(current_shader.draw_style == .LINES);
     if vertices.count + 8 > MAX_VERTICES then Flush_Draws();
     // left side
@@ -174,7 +176,7 @@ Render_Quad_Lines :: (ul: IntVector2, lr: IntVector2, color := COLOR_WHITE, dept
     Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(ul), z=depth}, xx color, .{}});
 }
 
-Render_Quad :: (ul: IntVector2, lr: IntVector2, color := COLOR_WHITE, uv1 := Vector2.{}, uv2 := Vector2.{}, depth := 1.0) {
+Render_Quad :: (ul: IntVector2, lr: IntVector2, color := COLOR_WHITE, uv1 := Vector2.{}, uv2 := Vector2.{}, depth := DEFAULT_DEPTH) {
     if vertices.count + 6 > MAX_VERTICES then Flush_Draws();
     // tri 1
     Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(ul), z=depth}, xx color, uv1});
@@ -186,7 +188,7 @@ Render_Quad :: (ul: IntVector2, lr: IntVector2, color := COLOR_WHITE, uv1 := Vec
     Inline_Buffer_Append(*vertices, .{Vector3.{xy=.{xx lr.x, xx ul.y}, z=depth}, xx color, .{uv2.x, uv1.y}});
 }
 
-Render_Quad :: (ul: Vector2, lr: Vector2, color := COLOR_WHITE, uv1 := Vector2.{}, uv2 := Vector2.{}, depth := 1.0) {
+Render_Quad :: (ul: Vector2, lr: Vector2, color := COLOR_WHITE, uv1 := Vector2.{}, uv2 := Vector2.{}, depth := DEFAULT_DEPTH) {
     if vertices.count + 6 > MAX_VERTICES then Flush_Draws();
     // tri 1
     Inline_Buffer_Append(*vertices, .{Vector3.{xy=ul, z=depth}, xx color, uv1});
@@ -231,8 +233,8 @@ Set_Vertex_Format :: (shader: *Shader) {
     DumpGLErrors("Set_Vertex_Format: before starting");
 
     if shader.position_loc != -1 {
-        glEnableVertexAttribArray(xx shader.position_loc);
         glVertexAttribPointer(xx shader.position_loc, 3, GL_FLOAT, xx false, VERTEX_STRIDE, xx Offset_Of(Vertex, "position"));
+        glEnableVertexAttribArray(xx shader.position_loc);
         DumpGLErrors("Set_Vertex_Format: position");
     }
     if shader.color_loc != -1 {
@@ -379,7 +381,8 @@ layout(location=1) in vec4 vert_color;
 uniform mat4 mvp;
 
 void main() {
-    gl_Position = mvp * vec4(vert_position.xyz, 1.0);
+    vec4 pos = mvp * vec4(vert_position.xyz, 1.0);
+    gl_Position = vec4(pos.x, -pos.y, pos.z, pos.w);
     f_color = vert_color;
 }
 HERE
@@ -411,7 +414,8 @@ layout(location=2) in vec2 vert_uv;
 uniform mat4 mvp;
 
 void main() {
-    gl_Position = mvp * vec4(vert_position.xyz, 1.0);
+    vec4 pos = mvp * vec4(vert_position.xyz, 1.0);
+    gl_Position = vec4(pos.x, -pos.y, pos.z, pos.w);
     f_color = vert_color;
     tex_coords = vert_uv;
 }
@@ -463,6 +467,8 @@ Vertex :: struct {
 MAX_VERTICES :: 4800;
 vertex_buffer: [MAX_VERTICES] Vertex;
 vertices: []Vertex;
+
+DEFAULT_DEPTH :: -1.0;
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

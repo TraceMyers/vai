@@ -1,36 +1,20 @@
-ViewportSide :: enum u8 {
-    LEFT; TOP; RIGHT; BOTTOM;
+
+// for use with Scoped_Construct
+Viewports :: struct {
+
+    Initialize :: () -> bool {
+        array_reserve(*viewport_stack, 64);
+        array_reserve(*viewport_rects, 64);
+        array_add(*viewport_rects, Window_Viewport_Rect());
+        return true;
+    }
+
+    Shutdown :: () {
+        array_free(viewport_stack);
+        array_free(viewport_rects);
+    }
+
 }
-
-ViewportOffsetType :: enum u8 {
-    PROPORTION; PIXELS;
-}
-
-Viewport :: struct {
-    left: float;
-    top: float;
-    right: float;
-    bottom: float;
-    type: ViewportOffsetType;
-    inverted: bool;
-
-    #place left;
-        left_pixels: s32;
-        top_pixels: s32;
-        right_pixels: s32;
-        bottom_pixels: s32;
-    #place left;
-        offsets: [4]float32;
-    #place left;
-        pixel_offsets: [4]s32;
-}
-
-ViewportRect :: struct {
-    using upper_left: IntVector2;
-    dimensions: IntVector2;
-}
-
-viewport_rects: [..]ViewportRect;
 
 Window_Viewport_Rect :: inline () -> ViewportRect {
     return .{.{0, 0}, .{window.width, window.height}};
@@ -40,17 +24,6 @@ Clear_Viewports :: () {
     array_reset_keeping_memory(*viewport_stack);
     array_reset_keeping_memory(*viewport_rects);
     array_add(*viewport_rects, Window_Viewport_Rect());
-}
-
-Initialize_Viewports :: () {
-    array_reserve(*viewport_stack, 64);
-    array_reserve(*viewport_rects, 64);
-    array_add(*viewport_rects, Window_Viewport_Rect());
-}
-
-Shutdown_Viewports :: () {
-    array_free(viewport_stack);
-    array_free(viewport_rects);
 }
 
 Viewport_Push :: (v: Viewport, do_cache := false) -> s64 {
@@ -121,6 +94,44 @@ Viewport_Rect_Points :: inline (r: *ViewportRect, $T1: Type) -> $T2, T2
 } {
     return .{xx r.x, xx r.y}, .{xx (r.x + r.dimensions.x), xx (r.y + r.dimensions.y)};
 }
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+ViewportSide :: enum u8 {
+    LEFT; TOP; RIGHT; BOTTOM;
+}
+
+ViewportOffsetType :: enum u8 {
+    PROPORTION; PIXELS;
+}
+
+Viewport :: struct {
+    left: float;
+    top: float;
+    right: float;
+    bottom: float;
+    type: ViewportOffsetType;
+    inverted: bool;
+
+    #place left;
+        left_pixels: s32;
+        top_pixels: s32;
+        right_pixels: s32;
+        bottom_pixels: s32;
+    #place left;
+        offsets: [4]float32;
+    #place left;
+        pixel_offsets: [4]s32;
+}
+
+ViewportRect :: struct {
+    using upper_left: IntVector2;
+    dimensions: IntVector2;
+}
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+viewport_rects: [..]ViewportRect;
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 

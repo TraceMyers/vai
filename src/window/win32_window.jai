@@ -79,20 +79,53 @@ Update_Window_Events :: () {
 }
     
 Receive_Window_Message :: (hwnd: HWND, message: u32, wParam: WPARAM, lParam: LPARAM) -> s64 #c_call {
+
+    // defs just for here
+    WM_ACTIVATE : u32 : 0x0006;
+    MARGINS :: struct {
+        cxLeftWidth, cxRightWidth, cyTopHeight, cyBottomHeight: int;
+    }
+    dwmapi   :: #system_library "Dwmapi";
+    DwmExtendFrameIntoClientArea :: (window: HWND, margins: *MARGINS) -> HRESULT #foreign dwmapi;
+
     new_context: Context;
     push_context new_context {
         if message == {
-        // case WM_SYSCOMMAND;
-            // return DefWindowProcW(hwnd, message, wParam, lParam);
+        //   case WM_CREATE;
+            // push the window that we draw to into the upper left of the Windows window, so we're drawing to the whole window I guess -Trace
+            // rect: RECT;
+            // GetWindowRect(hwnd, *rect);
+            // success := SetWindowPos(hwnd, null, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, SWP_FRAMECHANGED);
+            // if !success {
+            //     log("failed to set window pos during window creation");
+            // } else {
+            //     log("set window pos during window creation");
+            // }
+        //   case WM_ACTIVATE;
+            // when create/maximize. by pushing the margins inward before removing the default microsoft border, we keep its pretty rounded edges -Trace
+            // margins: MARGINS;
+            // margins.cxLeftWidth = 8;
+            // margins.cxRightWidth = 8;
+            // margins.cyBottomHeight = 20;
+            // margins.cyTopHeight = 27;
+            // result := DwmExtendFrameIntoClientArea(hwnd, *margins);
+            // if FAILED(result) {
+            //     log("failed to extend frame into client area");
+            // } else {
+            //     log ("extended frame into client area");
+            // }
         case WM_SYSKEYDOWN; #through;
         case WM_KEYDOWN;
+            if wParam == VK_F9 {
+                quit = true;
+            }
             last_vkey = xx wParam;
             last_vkey_modified_by_control = (modifier_keys & .CONTROL) != 0;
             last_vkey_modified_by_shift = (modifier_keys & .SHIFT) != 0;
-          case WM_SYSCHAR;
-              // This is here to prevent beeps when a Alt key combo is pressed. If we don't return 0, windows helpfully emits a beep sound to
-              // indicate the user that the key wasn't handled.
+        case WM_SYSCHAR;
+              // This is here to prevent beeps when a Alt key combo is pressed. If we don't return 0, windows helpfully emits a beep sound to indicate the user that the key wasn't handled.
         case WM_CHAR;
+
             // Control characters generate key codes < 32, and this program wants to know which code points would
             // have been generated if control were not pressed. currently this only gets the vkey rather than
             // the unicode. there appears to be a way to translate it w/ windows but it looks awful so I'm avoiding it.
