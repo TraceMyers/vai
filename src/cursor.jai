@@ -15,3 +15,8 @@ Cursor :: struct {
     scroll_timer: float32;
     history: CursorActionHistory;
 }
+
+TextSelection :: struct {
+    begin: IntVector2;
+    end: IntVector2;
+}

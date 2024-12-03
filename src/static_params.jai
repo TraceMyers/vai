@@ -2,7 +2,7 @@
 DEBUG_ECHO_ACTIONS      :: false;
 DEBUG_ECHO_TEXT_INPUT   :: false;
 DEBUG_ECHO_COMMANDS     :: false;
-DEBUG_ENCODING          :: false;
+DEBUG_ENCODING          :: true;
 DEBUG_RENDER_PARSE      :: false;
 DEBUG_POOLS             :: false;
 DEBUG_TEXT_BUFFERS      :: true;

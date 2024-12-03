@@ -10,7 +10,13 @@ Encode :: (in: string, from: TextEncoding, to: TextEncoding, append_null := fals
         max_bytes := min(in.count-string_index, 4);
         c := Encode(*in.data[string_index], from, to, max_bytes);
         char_str := As_String(c);
-        print_to_builder(*builder, char_str);
+        #if DEBUG_ENCODING {
+            builder_count_before := get_base_buffer(*builder).count;
+        }
+        print_to_builder(*builder, "%", char_str);
+        #if DEBUG_ENCODING {
+            assert(builder_count_before + c.count == get_base_buffer(*builder).count);
+        }
         string_index += c.read_count;
     }
     if append_null {
@@ -24,7 +30,14 @@ Encode :: (in: string, from: TextEncoding, to: TextEncoding, append_null := fals
             print_to_builder(*builder, "\0\0\0\0");
         }
     }
-    return builder_to_string(*builder,,allocator=allocator);
+    #if DEBUG_ENCODING {
+        builder_count := get_base_buffer(*builder).count;
+    }
+    str := builder_to_string(*builder,,allocator=allocator);
+    #if DEBUG_ENCODING {
+        assert(str.count == builder_count);
+    }
+    return str;
 }
 
 Encode_Temp_C_String :: inline (in: string, from: TextEncoding, to: TextEncoding) -> *u8 {
@@ -91,7 +104,6 @@ Encode :: (in: *u8, from: TextEncoding, to: TextEncoding, max_read_count := 4) -
 As_String :: (c: CodePoint) -> string {
     return .{count=c.count, data=c.bytes.data};
 }
-
 
 // returns the byte index of the code point, given a code point index
 Find_Byte_Index :: (str: string, code_point_index: s64, $ENCODING: TextEncoding) -> s64 {

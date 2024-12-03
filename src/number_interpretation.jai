@@ -17,6 +17,7 @@ psw  :: inline (val: s64) -> *s16 #expand { return cast(*s16)val; }
 psdw :: inline (val: s64) -> *s32 #expand { return cast(*s32)val; }
 psqw :: inline (val: s64) -> *s64 #expand { return cast(*s64)val; }
 
+
 tub  :: inline (val: s64) -> u8  #expand { return cast,trunc(u8)val;  }
 tuw  :: inline (val: s64) -> u16 #expand { return cast,trunc(u16)val; }
 tudw :: inline (val: s64) -> u32 #expand { return cast,trunc(u32)val; }
@@ -27,6 +28,8 @@ tsdw :: inline (val: s64) -> s32 #expand { return cast,trunc(s32)val; }
 tsqw :: inline (val: s64) -> s64 #expand { return cast,trunc(s64)val; }
 
 uqw :: inline (val: *void) -> u64 #expand { return cast,force(u64)val; }
+
+pub :: inline (val: *void) -> *u8 #expand { return cast,force(*u8)val;  }
 // sqw :: inline (val: *void) -> s64 #expand { return cast,force(s64)val; }
 
 Is_Number_Type :: inline (InType: Type) -> bool {

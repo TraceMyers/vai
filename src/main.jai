@@ -24,15 +24,20 @@ Vai_Main :: () {
     Initialize_Render_Text();
     Initialize_Time();
 
+    // TODO: syntax highlighting
+    text_colors[0] = bRGB_WHITE;
+
     while !quit {
         resized := Update_Window_Dimensions();
         if resized {
             Post_Resize_Window();
         }
 
+        Begin_Update_Text_Buffers();
         Translate_Inputs_To_Actions();
         Render_Views();
         Render_Text_End_Frame();
+        End_Update_Text_Buffers();
 
         reset_temporary_storage();
         Sample_Frame_Time();
@@ -88,3 +93,4 @@ Program_Print :: #import "Program_Print";
 #load "view_layers/top_bar.jai";
 #load "view_layers/vim_console.jai";
 #load "editor_view.jai";
+#load "text_processing.jai";

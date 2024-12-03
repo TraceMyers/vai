@@ -169,7 +169,7 @@ Replace_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64, code_point: u32)
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     assert(col < utf32_buffer.array.count);
     #if DEBUG_TEXT_BUFFERS {
-        assert(utf32_buffer.array[col] != UTF32_TAB_EXPANDED_SPACE);
+        assert(utf32_buffer.array[col] != TAB_EXPANDED_SPACE);
     }
     replacing_tab := utf32_buffer.array[col] == #char "\t";
     utf32_buffer.array[col] = code_point;
@@ -184,7 +184,7 @@ Insert_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64, code_point: u32) 
     assert(col <= utf32_buffer.array.count);
     #if DEBUG_TEXT_BUFFERS {
         if col < utf32_buffer.array.count {
-            assert(utf32_buffer.array[col] != UTF32_TAB_EXPANDED_SPACE);
+            assert(utf32_buffer.array[col] != TAB_EXPANDED_SPACE);
         }
     }
     Resize_Utf32_Buffer(utf32_buffer, xx (utf32_buffer.array.count + 1));
@@ -196,7 +196,7 @@ Remove_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64) {
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     assert(col < utf32_buffer.array.count);
     #if DEBUG_TEXT_BUFFERS {
-        assert(utf32_buffer.array[col] != UTF32_TAB_EXPANDED_SPACE);
+        assert(utf32_buffer.array[col] != TAB_EXPANDED_SPACE);
     }
     Collapse_Tabs_Inline_And_Remove(*utf32_buffer.array, col);
     Expand_Utf32_Buffer_Tabs(utf32_buffer);
@@ -306,9 +306,9 @@ Resize_Utf32_Buffer :: inline (utf32_buffer: *Utf32Buffer, count: u32) {
 
 // for appending into a buffer where the input and output buffer are the same.
 Inline_Append_Code_Point :: inline (buffer: *[]u32, code_point: u32, iter_index: s64) {
-    if code_point == UTF32_TAB_EXPANDED_SPACE {
+    if code_point == TAB_EXPANDED_SPACE {
         return;
-    } else if code_point == UTF32_EXPANDED_TAB {
+    } else if code_point == EXPANDED_TAB {
         Inline_Buffer_Append(buffer, #char "\t");
     } else if iter_index == buffer.count {
         // no need to copy, code point already in the right place
@@ -344,10 +344,10 @@ Collapse_Tabs_Inline_And_Insert :: (data: *[]u32, col: s64, code_point: u32) {
             Inline_Buffer_Append(*inline_buffer, code_point);
         } else {
             // from this point forward, appended code points may ovewrite the code points that are already in the buffer, so the in-buffer code points need to be copied out before appending.
-            if remember_code_point != UTF32_TAB_EXPANDED_SPACE {
+            if remember_code_point != TAB_EXPANDED_SPACE {
                 prev_remember_code_point = remember_code_point;
                 remember_code_point = data.*[i];
-                if prev_remember_code_point == UTF32_EXPANDED_TAB {
+                if prev_remember_code_point == EXPANDED_TAB {
                     Inline_Buffer_Append(*inline_buffer, #char "\t");
                 } else {
                     Inline_Buffer_Append(*inline_buffer, prev_remember_code_point);

@@ -21,7 +21,7 @@ Graphics_Backend :: struct {
         glBlendEquation(GL_FUNC_ADD);
         glEnable(GL_SCISSOR_TEST);
         // glEnable(GL_CULL_FACE);
-        glLineWidth(1); // for view layer outlines
+        glLineWidth(0.5); // for view layer outlines
 
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 1);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -152,14 +152,14 @@ Set_Shader_Parameter :: (shader: *Shader, $PARAM_NAME: string, m: Matrix4) #expa
     }
 }
 
-Render_Line :: (a: IntVector2, b: IntVector2, color := COLOR_WHITE, uv1 := Vector2.{}, uv2 := Vector2.{}, depth := DEFAULT_DEPTH) {
+Render_Line :: (a: IntVector2, b: IntVector2, color := fRGBA_WHITE, uv1 := Vector2.{}, uv2 := Vector2.{}, depth := DEFAULT_DEPTH) {
     assert(current_shader.draw_style == .LINES);
     if vertices.count + 2 > MAX_VERTICES then Flush_Draws();
     Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(a), z=depth}, xx color, .{}});
     Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(b), z=depth}, xx color, .{}});
 }
 
-Render_Quad_Lines :: (ul: IntVector2, lr: IntVector2, color := COLOR_WHITE, depth := DEFAULT_DEPTH) {
+Render_Quad_Lines :: (ul: IntVector2, lr: IntVector2, color := fRGBA_WHITE, depth := DEFAULT_DEPTH) {
     assert(current_shader.draw_style == .LINES);
     if vertices.count + 8 > MAX_VERTICES then Flush_Draws();
     // left side
@@ -176,7 +176,7 @@ Render_Quad_Lines :: (ul: IntVector2, lr: IntVector2, color := COLOR_WHITE, dept
     Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(ul), z=depth}, xx color, .{}});
 }
 
-Render_Quad :: (ul: IntVector2, lr: IntVector2, color := COLOR_WHITE, uv1 := Vector2.{}, uv2 := Vector2.{}, depth := DEFAULT_DEPTH) {
+Render_Quad :: (ul: IntVector2, lr: IntVector2, color := fRGBA_WHITE, uv1 := Vector2.{}, uv2 := Vector2.{}, depth := DEFAULT_DEPTH) {
     if vertices.count + 6 > MAX_VERTICES then Flush_Draws();
     // tri 1
     Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(ul), z=depth}, xx color, uv1});
@@ -188,7 +188,7 @@ Render_Quad :: (ul: IntVector2, lr: IntVector2, color := COLOR_WHITE, uv1 := Vec
     Inline_Buffer_Append(*vertices, .{Vector3.{xy=.{xx lr.x, xx ul.y}, z=depth}, xx color, .{uv2.x, uv1.y}});
 }
 
-Render_Quad :: (ul: Vector2, lr: Vector2, color := COLOR_WHITE, uv1 := Vector2.{}, uv2 := Vector2.{}, depth := DEFAULT_DEPTH) {
+Render_Quad :: (ul: Vector2, lr: Vector2, color := fRGBA_WHITE, uv1 := Vector2.{}, uv2 := Vector2.{}, depth := DEFAULT_DEPTH) {
     if vertices.count + 6 > MAX_VERTICES then Flush_Draws();
     // tri 1
     Inline_Buffer_Append(*vertices, .{Vector3.{xy=ul, z=depth}, xx color, uv1});
@@ -414,8 +414,9 @@ layout(location=2) in vec2 vert_uv;
 uniform mat4 mvp;
 
 void main() {
-    vec4 pos = mvp * vec4(vert_position.xyz, 1.0);
-    gl_Position = vec4(pos.x, -pos.y, pos.z, pos.w);
+    // vec4 pos = mvp * vec4(vert_position.xyz, 1.0);
+    // gl_Position = vec4(pos.x, -pos.y, pos.z, pos.w);
+    gl_Position =  mvp * vec4(vert_position.xyz, 1.0);
     f_color = vert_color;
     tex_coords = vert_uv;
 }

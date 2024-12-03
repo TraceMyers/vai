@@ -33,6 +33,10 @@ As_Vector2 :: inline (v: IntVector2) -> Vector2 {
     return .{xx v.x, xx v.y};
 }
 
+To_IntVector2 :: inline (v: Vector2) -> IntVector2 {
+    return .{xx v.x, xx v.y};
+}
+
 Div_Ceil :: inline (a: $IntType, b: IntType) -> IntType {
     return ((a - 1) / b) + 1;
 }

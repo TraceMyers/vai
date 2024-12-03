@@ -1,4 +1,15 @@
 
+bRGB :: struct {
+    r, g, b: u8;
+}
+
+bRGBA :: struct {
+    r, g, b: u8;
+    a: u8 = 255;
+
+    #place r;
+        rgb: bRGB = ---;
+}
 
 fRGB :: struct {
     r, g, b: float32;
@@ -12,8 +23,16 @@ fRGBA :: struct {
         rgb: fRGB = ---;
 }
 
-COLOR_WHITE :: fRGBA.{1, 1, 1, 1};
-RGB_WHITE :: fRGB.{1,1,1};
+fRGBA_WHITE :: fRGBA.{1,1,1,1};
+fRGB_WHITE :: fRGB.{1,1,1};
+
+bRGBA_WHITE :: bRGBA.{255,255,255,255};
+bRGB_WHITE :: bRGB.{255,255,255};
+bRGB_RED :: bRGB.{255, 0, 0};
+
+To_fRGBA :: (in: bRGB) -> fRGBA {
+    return .{xx in.r / 255.0, in.g / 255.0, in.b / 255.0, 1.0};
+}
 
 // ctor/dtor style scope-dependent resource management. not used for individual data, but rather whole systems. (there is no data tied to the call.) to use, define an empty struct with an [Initialize :: () -> bool] and a [Shutdown :: ()]. Shutdown() should be callable even if initialization fails.
 Scoped_Construct :: ($T: Type) -> bool #expand {
@@ -46,7 +65,7 @@ Read_Entire_File :: (path: string, $USE_TEMP_ALLOCATOR := false, $DEFER_FREE := 
     return file_string, success;
 }
 
-As_Array :: inline (str: string, $T: Type) -> []T {
+As_Array :: (str: string, $T: Type) -> []T {
     t_array: []T = ---;
     t_array.count = str.count / size_of(T);
     t_array.data = xx str.data;
@@ -88,67 +107,6 @@ Element_Index :: inline (item: *$T, array: []T) -> s64 {
 Expand_Tabs :: inline (str: string, indent_width: s64) -> string {
     expanded := Expand_Tabs(As_Array(str, u8), indent_width);
     return string.{expanded.count, expanded.data};
-}
-
-// for marking spaces that can be removed when collapsing tabs, and can be skipped over by a cursor
-UTF32_TAB_EXPANDED_SPACE    : u32 : 0x80_00_00_00 | #char " ";
-UTF32_EXPANDED_TAB          : u32 : 0x40_00_00_00 | #char " ";
-UTF32_TAB_OR_EXPANDED_SPACE : u32 : UTF32_TAB_EXPANDED_SPACE | UTF32_EXPANDED_TAB;
-
-Expand_Tabs :: (data: []$T, indent_width: s64, $MARK_TABS := false) -> []T {
-    #if MARK_TABS then assert(T == u32); // can only mark tabs with 32 bits per code point
-    if data.count == 0 then return T.[];
-    // indent_width := Option_Value(.INDENTATION_WIDTH, s32); // TOOD: reimplement options
-    temp_buffer_max := data.count * indent_width;
-    temp_buffer := Temp_Buffer(T, temp_buffer_max);
-    #if DEBUG_TEXT_BUFFERS memset(temp_buffer.data, 0, temp_buffer_max * size_of(T));
-    temp_buffer.count = 0;
-    for i : 0..data.count-1 {
-        if data[i] == #char "\t" {
-            space_ct := indent_width - (temp_buffer.count % indent_width);
-            #if MARK_TABS {
-                Inline_Buffer_Append(*temp_buffer, UTF32_EXPANDED_TAB);
-                if space_ct > 1 then for 1..space_ct-1 {
-                    Inline_Buffer_Append(*temp_buffer, UTF32_TAB_EXPANDED_SPACE);
-                }
-            } else {
-                for 0..space_ct-1 {
-                    Inline_Buffer_Append(*temp_buffer, xx #char " ");
-                }
-            }
-        } else {
-            Inline_Buffer_Append(*temp_buffer, xx data[i]);
-        }
-    }
-    return temp_buffer;
-}
-
-Unmark_Code_Point :: inline (code_point: u32) -> u32 {
-    return code_point & ~UTF32_TAB_OR_EXPANDED_SPACE;
-}
-
-Process_Per_Line :: (str: string, $PER_LINE: (*string, data: $T), data: T) -> s64 {
-    line_count: s64;
-    left, right: string;
-    right = str;
-    success: bool;
-    while true {
-        prev_right := right;
-        success, left, right = split_from_left(right, #char "\n");
-        if !success {
-            if prev_right.count > 0 {
-                PER_LINE(*prev_right, data); 
-                line_count += 1;
-            }
-            break;
-        }
-        if left.count > 0 && left[left.count-1] == #char "\r" {
-            left.count -= 1;
-        }
-        PER_LINE(*left, data); 
-        line_count += 1;
-    }
-    return line_count;
 }
 
 Offset_Of :: inline ($T: Type, $FIELD: string) -> s64 {

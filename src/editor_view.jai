@@ -31,7 +31,7 @@ Create_Base_Views :: () {
     transparent_blue.b = 0.95;
     vim_console_background_color = transparent_blue;
     top_bar_background_color = transparent_blue.rgb;
-    file_editor_background_color = .{};
+    file_editor_background_color = .{.1, .12, .15};
     file_editor_outline_color = .{1,1,1,0.15};
 
     // root
@@ -73,7 +73,8 @@ Create_Base_Views :: () {
 }
 
 Prepare_Intro_File :: () -> string {
-    INTRO_FILE_NAME :: "intro.txt";
+    // INTRO_FILE_NAME :: "intro.txt";
+    INTRO_FILE_NAME :: "test_files/utf8.txt";
     file_data := read_entire_file(INTRO_FILE_NAME);
     if file_data.count == 0 {
         write_entire_file(INTRO_FILE_NAME, "type ':e somefilename' to open a file");
@@ -188,7 +189,7 @@ Render_Views :: () {
     if Is_Empty(*view_pool) then return;
 
     // walking the view tree multiple times because tree traversal is pretty cheap + number of draw calls can be reduced
-    // by grouping draws into batches that can be drawn the same way
+    // by grouping draws into natural batches (background rects, lines, text, etc..)
     Set_Shader_For_Blended_Color();
     Walk_View_Tree(0, Render_View, ViewRenderPass.BACKGROUND);
     Set_Shader_For_Lines();
@@ -205,11 +206,15 @@ Render_View :: (view: *View, view_id: s64, viewport_id: s64, render_pass: ViewRe
     if view.layers.data != null {
         rect := viewport_rects[viewport_id];
         rendering_scissor_ul, rendering_scissor_lr = Viewport_Rect_Points(*rect, s32);
+
         if render_pass == {
-        case .TEXT;
         case .IMAGES;
+        case .TEXT;
         case .FOREGROUND;
+            // during these render passes, views must make sure their draws are dispatched while this scissor is set
             Set_Scissor(rendering_scissor_ul, rendering_scissor_lr);
+        case;
+            // the rest of the passes use the entire window as their scissor and their draws are dispatched at the end of the pass
         }
 
         view_layer := *view.layers[view.active_layer];
@@ -317,6 +322,21 @@ Reparent_To_Empty :: (v: *View, parent_id := -1) -> s64 {
     return empty_id;
 }
 
+View_Layer_From_Data :: (data: *ViewLayerData) -> *ViewLayer {
+    data_offset := Offset_Of(ViewLayer, "data");
+    byte_ptr := pub(data) - data_offset;
+    return xx byte_ptr;
+}
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// a view may adjust its own scissor, but if this is called during a render pass that uses the entire window as the scissor, it's the responsibility of that view to set it back.
+Set_View_Scissor :: (ul: IntVector2, lr: IntVector2) {
+    rendering_scissor_ul = ul;
+    rendering_scissor_lr = lr;
+    Set_Scissor(rendering_scissor_ul, rendering_scissor_lr);
+}
+
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ViewLayerType :: enum_flags u16 {
@@ -336,6 +356,7 @@ ViewLayerData :: union {
 
 ViewLayer :: struct {
     type: ViewLayerType;
+    view_position: Vector2; 
     using data: ViewLayerData;
 }
 
@@ -357,8 +378,6 @@ TopBar :: struct {}
 FileEditor :: CursorLayer(
     struct {
         file_buffer: s64 = -1;
-        // upper-left corner within the text file
-        view_position: Vector2; 
         // only used for mouse wheel scrolling or anything bound to use mouse wheel-like scrolling
         view_velocity: Vector2;
     }
@@ -436,6 +455,5 @@ actions_executed_this_frame: [..]Action;
 
 rendering_scissor_ul: IntVector2;
 rendering_scissor_lr: IntVector2;
-
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
