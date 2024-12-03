@@ -7,6 +7,8 @@ Render_Layer :: (using file_editor: *FileEditor, is_active: bool, render_pass: V
         Render_File_Editor_Lines(file_editor, is_active);
     case .TEXT;
         Render_File_Editor_Text(file_editor, is_active);
+    case .FOREGROUND;
+        Render_File_Editor_Foreground(file_editor, is_active);
     case;
     }
 }
@@ -33,3 +35,18 @@ Render_File_Editor_Text :: (using file_editor: *FileEditor, is_active: bool) {
     Render_Text_Buffer_Lines(*renderer, text_buffer, true);
 }
 
+Render_File_Editor_Foreground :: (using file_editor: *FileEditor, is_active: bool) {
+    if file_editor.file_buffer < 0 then return;
+    Set_Shader_For_Blended_Color();
+
+    ul := Upper_Left();
+    lr := Lower_Right();
+    diff := As_Vector2(lr - ul);
+
+    SCROLLBAR_WIDTH : s32 : 20;
+    text_buffer := *file_buffers.items[file_editor.file_buffer];
+    norm_scrollbar_y_begin, norm_scrollbar_y_end := Normalized_Text_View_Window(file_editor.view_position, buffer: *TextBuffer);
+    scrollbar_begin := IntVector2.{lr.x - SCROLLBAR_WIDTH, ul.y + xx (diff.y * norm_scrollbar_y_begin)};
+    scrollbar_end := IntVector2.{lr.x, ul.y + xx (diff.y * norm_scrollbar_y_end)};
+    Render_Quad(scrollbar_begin, scrollbar_end, fRGBA.{0.8, 0.9, 1.0, 0.3});
+}

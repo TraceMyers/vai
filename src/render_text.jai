@@ -17,6 +17,20 @@ Screen_Gutter_Width :: () -> s32 {
     return xx (screen_char_width * gutter_char_width);
 }
 
+Normalized_Text_View_Window :: (view_position: Vector2, buffer: *TextBuffer) -> start: float32, end: float32 {
+    ul := Upper_Left();
+    lr := Lower_Right();
+    viewport_height := max(lr.y - ul.y, 0);
+    if viewport_height == 0 then return;
+    screen_line_height := xx (get_baseline_height(font) * 4);
+    screen_line_height += xx (cast(float32)screen_line_height * line_spacing_factor);
+    line_count := xx max((cast(float)viewport_height / cast(float)screen_line_height + 1.0), 0.0);
+
+    total_space := cast(float32)(buffer.lines.count + renderer.line_count);
+    window_space := cast(float32)renderer.line_count;
+    return clamp(view_position.y / total_space, 0.0, 1.0), clamp((view_position.y + window_space) / total_space, 0.0, 1.0);
+}
+
 Initialize_Text_Renderer :: (using renderer: *TextRenderer, in_view_layer: *ViewLayer) {
     view_layer = in_view_layer;
 

@@ -109,7 +109,7 @@ Add_View :: (v: Viewport, top_layer: *ViewLayer = null, parent_id := -1, replace
     view.layers.data = null;
     view.layers.count = 0;
 
-    // a view only has layers if it is meant to be rendered. empty views simply house views that are rendered.
+    // a view only has layers if it is meant to be rendered. empty views are parents to other views that are rendered.
     view_layers_id := -1;
     if top_layer != null {
         view_layers_id = Request_Item(*view_layer_pool);
