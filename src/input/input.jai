@@ -72,7 +72,7 @@ Translate_Inputs_To_Actions :: () {
         action_input_timer = ACTION_BUFFER_MAX_TIME;
         
         // try execute action
-        match_count, exact_match_count := Get_Input_Buffer_Action_Matches(*action_matches, vim_mode);
+        match_count, exact_match_count := Get_Input_Buffer_Action_Matches(*action_matches, vi_mode);
         if match_count > 0 {
             if exact_match_count == match_count {
                 Dump_Action_Input_Buffer(*action_matches);
@@ -85,7 +85,7 @@ Translate_Inputs_To_Actions :: () {
     if action_input_buffer.count > 0 {
         action_input_timer -= Smoothed_Delta_Time();
         if action_input_timer <= 0 {
-            push_matches : *[..]ActionMatch = ifx Get_Input_Buffer_Action_Matches(*action_matches, vim_mode) then *action_matches else null;
+            push_matches : *[..]ActionMatch = ifx Get_Input_Buffer_Action_Matches(*action_matches, vi_mode) then *action_matches else null;
             Dump_Action_Input_Buffer(push_matches);
         }
     }
@@ -96,7 +96,7 @@ Dump_Action_Input_Buffer :: (action_matches: *[..]ActionMatch = null) {
     if action_matches {
         any_exact_action_matches = Push_Exact_Action_Matches(action_matches);
     } 
-    if (vim_mode == .COMMAND || vim_mode == .INSERT) && !any_exact_action_matches {
+    if (vi_mode == .COMMAND || vi_mode == .INSERT) && !any_exact_action_matches {
         for action_input_buffer {
             array_add(*auxiliary_input_buffer, Remove_Modifier_Flags(it));
         }
@@ -104,7 +104,7 @@ Dump_Action_Input_Buffer :: (action_matches: *[..]ActionMatch = null) {
     array_reset_keeping_memory(*action_input_buffer);
 }
 
-Get_Input_Buffer_Action_Matches :: (matches: *[..]ActionMatch, mode: VimMode) -> s64, s64 {
+Get_Input_Buffer_Action_Matches :: (matches: *[..]ActionMatch, mode: ViMode) -> s64, s64 {
     array_reset_keeping_memory(matches);
 
     exact_match_count := 0;
@@ -359,7 +359,7 @@ ActionBinding :: struct {
     code_point_string_index: s32;
     code_point_string_count: u16;
     action: Action;
-    modes: VimMode;
+    modes: ViMode;
 }
 
 ActionBindingGroupIndexer :: struct {
@@ -373,7 +373,7 @@ ActionMatch :: struct {
     exact_match: bool;
 }
 
-VimMode :: enum_flags u8{
+ViMode :: enum_flags u8{
     NONE;
     NORMAL;
     VISUAL;
@@ -384,7 +384,7 @@ VimMode :: enum_flags u8{
 
 
 ActionDataContainer :: struct {
-    modes: VimMode;
+    modes: ViMode;
     proc: Action_Executor = null;
 }
 
@@ -419,7 +419,7 @@ action_bindings: [U8_MAX]ActionBindingGroupIndexer;
 action_binding_buffer: [..]ActionBinding;
 action_code_point_strings: [..]u32;
 
-vim_mode: VimMode = .NORMAL;
+vi_mode: ViMode = .NORMAL;
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 

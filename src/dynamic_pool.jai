@@ -241,6 +241,10 @@ BinID :: struct {
     type: BinPoolAllocationType;
 }
 
+operator == :: inline (a: BinID, b: BinID) -> bool {
+    return (cast,force(*u64)*a).* == (cast,force(*u64)*b).*;
+}
+
 PoolTracker :: struct {
     in_use: [..]u8;
     top: s32 = -1;

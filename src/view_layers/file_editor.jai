@@ -28,6 +28,7 @@ Render_File_Editor_Text :: (using file_editor: *FileEditor, is_active: bool) {
 
     text_buffer := *file_buffers.items[file_editor.file_buffer];
     Render_Text_Buffer_Lines(*renderer, text_buffer, true);
+    Flush_Draws();
     Render_Text_Cursor(*renderer, *file_editor.cursor);
     Set_Shader_For_Text();
 }

@@ -261,7 +261,7 @@ Get_Utf32_Buffer :: (buffer: *TextBuffer, line_index: s64, $ALLOW_ALLOCATION := 
     utf32_buffer: *Utf32Buffer;
     buffer_index := -1;
     for temp_utf32_buffers {
-        if it.home_bin_id.index == line.bin_id.index {
+        if it.home_bin_id == line.bin_id {
             utf32_buffer = *it;
             buffer_index = it_index;
             break;

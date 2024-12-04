@@ -72,8 +72,8 @@ Clamp_X_To_Line :: (x: s32, line: []u32, $TAB_EXPANSION_SKIP: TabExpansionSkip) 
     if line.count == 0 {
         x = 0;
     } else {
-        end_x := ifx vim_mode == .INSERT then sdw(line.count) else sdw(line.count - 1);
-        x = min(x, end_x);
+        end_x := ifx vi_mode == .INSERT then sdw(line.count) else sdw(line.count - 1);
+        x = clamp(x, 0, end_x);
         #if TAB_EXPANSION_SKIP == .FORWARD {
             save_x := x;
             Scroll_Through_Tab_Expansion_Forward();

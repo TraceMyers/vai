@@ -90,11 +90,15 @@ Render_Text_Buffer_Lines :: (renderer: *TextRenderer, buffer: *TextBuffer, rende
         for 0..renderer.line_count-1 {
             line_index := renderer.text_view_clip.y + it;
             if line_index >= buffer.lines.count then break;
+            if line_index == 2 {
+                a: s32 = 0;
+            }
             marked_utf32 := Line_View(buffer, line_index);
             if marked_utf32.count > renderer.text_view_clip.x {
                 marked_utf32.data += renderer.text_view_clip.x;
                 marked_utf32.count -= renderer.text_view_clip.x;
                 Get_Unmarked_Utf8(marked_utf32, *utf8_buffer, *color_buffer);
+
                 Render_Text_Line(renderer, *renderer.align_info_main, utf8_buffer, color_buffer);
             } else {
                 renderer.rendered_line_count += 1;
@@ -161,6 +165,7 @@ Text_To_Render_Space :: inline (using renderer: *TextRenderer, text_x: s32, text
 
 Render_Text_Cursor :: (renderer: *TextRenderer, cursor: *Cursor) {
     Set_Shader_For_Color_Inversion();
+
     ul_x, ul_y := Text_To_Render_Space(renderer, cursor.x, cursor.y);
     lr_x := ul_x;
     lr_y := ul_y + renderer.screen_line_height;
