@@ -230,7 +230,7 @@ Find_Inactive :: (in_use: [..]u8, $c: string, from_index := 0, $INDEXING_INFO :=
 // ------------------------------------------------------------------------------------------------- contiguous bin pool
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-BinPoolAllocationType :: enum u8 {
+BinPoolAllocationType :: enum u16 {
     SMALL;
     MASSIVE;
 }
