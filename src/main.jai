@@ -1,7 +1,7 @@
 
-// TODO: replace input with win32 minimum necessities
-// TODO: continue refactor after that...
+// TODO: big_code.jai bug: line 3 is begin rendered as a copy of line 2 + weird visual jitter when moving to line 3. maybe bug with long line allocation?
 // TODO: font scaling in a not ugly way - how to use scale + loaded font sizes effectively
+
 quit: bool;
 
 Vai_Main :: () {
@@ -95,3 +95,4 @@ Program_Print :: #import "Program_Print";
 #load "view_layers/vim_console.jai";
 #load "editor_view.jai";
 #load "text_processing.jai";
+#load "action_execution.jai";

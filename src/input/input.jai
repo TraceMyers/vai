@@ -11,7 +11,7 @@ Input :: struct {
 
         // TODO: get overrides from vimrc and combine into one array
         for DEFAULT_ACTION_BINDINGS {
-            new_binding, success := Create_Action_Binding(it.input, As_Action(it_index), it.extension.modes);
+            new_binding, success := Create_Action_Binding(it.input, As_Action(it_index), *it.extension);
             if success then array_add(*temp_action_bindings, new_binding);
         }
 
@@ -50,7 +50,6 @@ Input :: struct {
 
     Shutdown :: () {
         Platform_Shutdown_Input();
-        array_reset(*action_buffer);
         array_reset(*action_input_buffer);
         array_reset(*action_binding_buffer);
         array_reset(*action_code_point_strings);
@@ -59,7 +58,6 @@ Input :: struct {
 }
 
 Translate_Inputs_To_Actions :: () {
-    array_reset_keeping_memory(*action_buffer);
     // TODO: use text buffer?
     auxiliary_input_buffer_prev_count = auxiliary_input_buffer.count;
 
@@ -139,11 +137,14 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
     any_exact: bool;
     for actions.* {
         if it.exact_match {
-            array_add(*action_buffer, it.action);
-            any_exact = true;
             #if DEBUG_ECHO_ACTIONS {
                 Log("action: %", it.action);
             }
+            action_executor_proc := DEFAULT_ACTION_BINDINGS[it.action].extension.proc;
+            if action_executor_proc != null {
+                action_executor_proc();
+            }
+            any_exact = true;
         }
     }
     return any_exact;
@@ -280,7 +281,7 @@ Modified_Action_Binding_String :: (utf32_str: string) -> string, bool {
     return string.{count=out_array.count * 4, data=xx out_array.data}, out_array.count > 0;
 }
 
-Create_Action_Binding :: (input: string, action: Action, modes: VimMode, input_encoding := TextEncoding.ANSI) -> ActionBinding, bool {
+Create_Action_Binding :: (input: string, action: Action, data: *ActionDataContainer, input_encoding := TextEncoding.ANSI) -> ActionBinding, bool {
     assert(input.count > 0);
 
     if input == "__INTERNAL__" then return .{}, false;
@@ -294,7 +295,7 @@ Create_Action_Binding :: (input: string, action: Action, modes: VimMode, input_e
         return .{}, false;
     }
 
-    binding := ActionBinding.{action=action, modes=modes};
+    binding := ActionBinding.{action=action, modes=data.modes};
 
     old_size := action_code_point_strings.count;
     code_point_count := modified_utf32_input.count / 4;
@@ -381,8 +382,10 @@ VimMode :: enum_flags u8{
     ALL :: NORMAL | VISUAL | INSERT | COMMAND;
 }
 
-VimModeContainer :: struct {
+
+ActionDataContainer :: struct {
     modes: VimMode;
+    proc: Action_Executor = null;
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -406,7 +409,6 @@ PLATFORM_CARRIAGE_RETURN :: #run
 modifier_keys: ModifierKeysState;
 action_input_buffer: [..]u32;
 
-action_buffer: [..]Action;
 // when input does not translate to action, it overflows into this buffer
 auxiliary_input_buffer: [..]u32;
 auxiliary_input_buffer_prev_count: s64;

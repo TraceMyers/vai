@@ -1,7 +1,7 @@
 
-DEBUG_ECHO_ACTIONS      :: false;
+DEBUG_ECHO_ACTIONS      :: true;
 DEBUG_ECHO_TEXT_INPUT   :: false;
-DEBUG_ECHO_COMMANDS     :: false;
+DEBUG_ECHO_COMMANDS     :: true;
 DEBUG_ENCODING          :: true;
 DEBUG_RENDER_PARSE      :: false;
 DEBUG_POOLS             :: false;

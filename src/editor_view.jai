@@ -76,7 +76,7 @@ Create_Base_Views :: () {
 
 Prepare_Intro_File :: () -> string {
     // INTRO_FILE_NAME :: "intro.txt";
-    INTRO_FILE_NAME :: "test_files/utf8.txt";
+    INTRO_FILE_NAME :: "test_files/big_code.jai";
     file_data := read_entire_file(INTRO_FILE_NAME);
     if file_data.count == 0 {
         write_entire_file(INTRO_FILE_NAME, "type ':e somefilename' to open a file");
@@ -92,6 +92,15 @@ Activate_Background_View :: () {
 Set_Active_View :: (id: s64) {
     active_view_id = id;
     background_view_id = -1;
+}
+
+Active_View :: inline () -> *View {
+    return *view_pool.items[active_view_id];
+}
+
+Active_View_Layer :: inline () -> *ViewLayer {
+    view := Active_View();
+    return *view.layers[view.active_layer];
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -373,6 +382,30 @@ CursorLayer :: struct($LayerDataType: Type) {
 }
 
 DummyCursorLayer :: CursorLayer(struct{});
+
+Is_Cursor_Layer_Type :: (view_layer: *ViewLayer) -> bool {
+    is_cursor_type: bool;
+    #insert #run Generate_View_Layer_Switch("is_cursor_type = Is_Subtype(cast(*Type_Info)(type_of(%)), \"CursorLayer\", true);", false);
+    return is_cursor_type;
+}
+
+Layer_Cursor :: (layer: *ViewLayer) -> *Cursor {
+    if layer == null || !Is_Cursor_Layer_Type(layer) then return null;
+    return *(cast,force(*DummyCursorLayer)(*layer.data)).cursor;
+}
+
+Layer_Text_Buffer :: (layer: *ViewLayer) -> *TextBuffer {
+    if layer.type == {
+    case .FILE_EDITOR;
+        buffer_index := layer.file_editor.file_buffer;
+        if buffer_index == -1 {
+            return null;
+        } else {
+            return *file_buffers.items[buffer_index];
+        }
+    }
+    return null;
+}
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // layer types

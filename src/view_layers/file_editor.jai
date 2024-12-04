@@ -28,6 +28,8 @@ Render_File_Editor_Text :: (using file_editor: *FileEditor, is_active: bool) {
 
     text_buffer := *file_buffers.items[file_editor.file_buffer];
     Render_Text_Buffer_Lines(*renderer, text_buffer, true);
+    Render_Text_Cursor(*renderer, *file_editor.cursor);
+    Set_Shader_For_Text();
 }
 
 Render_File_Editor_Foreground :: (using file_editor: *FileEditor, is_active: bool) {
@@ -35,5 +37,4 @@ Render_File_Editor_Foreground :: (using file_editor: *FileEditor, is_active: boo
     view_layer := View_Layer_From_Data(xx file_editor);
     text_buffer := *file_buffers.items[file_editor.file_buffer];
     Render_Scroll_Bar(view_layer, text_buffer);
-    Flush_Draws();
 }

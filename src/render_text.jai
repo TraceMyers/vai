@@ -138,6 +138,7 @@ Render_Scroll_Bar :: (view_layer: *ViewLayer, text_buffer: *TextBuffer) {
     scrollbar_begin := IntVector2.{lr.x - SCROLLBAR_WIDTH, ul.y + xx (diff.y * norm_scrollbar_y_begin)};
     scrollbar_end := IntVector2.{lr.x, ul.y + xx (diff.y * norm_scrollbar_y_end)};
     Render_Quad(scrollbar_begin, scrollbar_end, fRGBA.{0.8, 0.9, 1.0, 0.075});
+    Flush_Draws();
 }
 
 Render_Gutter_Separator_Line :: (color: fRGBA) {
@@ -147,6 +148,43 @@ Render_Gutter_Separator_Line :: (color: fRGBA) {
     gutter_line_lr := rendering_scissor_lr;
     gutter_line_lr.x = gutter_line_ul.x;
     Render_Line(gutter_line_ul, gutter_line_lr, file_editor_outline_color);
+}
+
+Text_To_Render_Space :: inline (using renderer: *TextRenderer, text_x: s32, text_y: s32) -> (render_x: s32, render_y: s32) {
+    render_x := align_info_main.screen_x + (text_x - text_view_clip.x) * screen_char_width;
+    // this is one line too far, bottom lined up with bottom of letter
+    render_y := screen_render_begin.y + (text_y - xx text_view_clip.y) * screen_line_height;
+    // center on line
+    render_y -= screen_line_height * 3 / 4;
+    return render_x, render_y;
+}
+
+Render_Text_Cursor :: (renderer: *TextRenderer, cursor: *Cursor) {
+    Set_Shader_For_Color_Inversion();
+    ul_x, ul_y := Text_To_Render_Space(renderer, cursor.x, cursor.y);
+    lr_x := ul_x;
+    lr_y := ul_y + renderer.screen_line_height;
+    if #complete cursor.style == {
+    case .BLOCK;
+        lr_x += renderer.screen_char_width;
+    case .VERTICAL_LINE;
+        lr_x += 1;
+    }
+
+    if cursor.reset_blink {
+        cursor.blink_timer = kb_cursor_blink_time;
+        cursor.reset_blink = false;
+    }
+    if cursor.blink_timer >= kb_cursor_blink_time {
+        if cursor.blink_timer >= kb_cursor_blink_time * 2 {
+            cursor.blink_timer -= kb_cursor_blink_time * 2;
+        } else {
+            Render_Quad(.{ul_x, ul_y}, .{lr_x, lr_y});
+        }
+    }
+    cursor.blink_timer += Smoothed_Delta_Time();
+
+    Flush_Draws();
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

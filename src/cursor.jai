@@ -1,4 +1,13 @@
 
+
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+CursorStyle :: enum u8 {
+    BLOCK;
+    VERTICAL_LINE;
+}
+
 CursorActionHistory :: struct {
     timestamps: [ARTIFACT_COUNT]float64;
     actions: [ARTIFACT_COUNT]Action;
@@ -13,10 +22,13 @@ Cursor :: struct {
     target_x: s32; 
     blink_timer: float32;
     scroll_timer: float32;
+    style: CursorStyle;
+    reset_blink: bool;
     history: CursorActionHistory;
 }
 
 TextSelection :: struct {
     begin: IntVector2;
     end: IntVector2;
+    cursor_at_end: bool;
 }
