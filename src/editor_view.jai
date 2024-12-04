@@ -67,6 +67,8 @@ Create_Base_Views :: () {
         layer.file_editor = .{};
         layer.file_editor.file_buffer = Get_File_Buffer_ID(intro_file_name);
         active_view_id = Add_View(.{inverted=true}, *layer, empty_id);
+        // buffer := file_buffers.items[layer.file_editor.file_buffer];
+        // view_pool.items[active_view_id].layers[0].view_position.y = xx (buffer.lines.count - 1);
     }
     // test split file editor
     Split_View(*view_pool.items[active_view_id], .VERTICAL);
@@ -192,14 +194,18 @@ Render_Views :: () {
     // by grouping draws into natural batches (background rects, lines, text, etc..)
     Set_Shader_For_Blended_Color();
     Walk_View_Tree(0, Render_View, ViewRenderPass.BACKGROUND);
+    Flush_Draws();
     Set_Shader_For_Lines();
     Walk_View_Tree(0, Render_View, ViewRenderPass.LINES);
+    Flush_Draws();
     // Set_Shader_For
     // Walk_View_Tree(0, Render_View, ViewRenderPass.IMAGES);
     Set_Shader_For_Text();
     Walk_View_Tree(0, Render_View, ViewRenderPass.TEXT);
+    Flush_Draws();
     // it's the responsibility of the render proc to set the shader when doing foreground rendering
     Walk_View_Tree(0, Render_View, ViewRenderPass.FOREGROUND);
+    Flush_Draws();
 }
 
 Render_View :: (view: *View, view_id: s64, viewport_id: s64, render_pass: ViewRenderPass) {

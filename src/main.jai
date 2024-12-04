@@ -26,6 +26,7 @@ Vai_Main :: () {
 
     // TODO: syntax highlighting
     text_colors[0] = bRGB_WHITE;
+    text_colors[1] = bRGB_RED;
 
     while !quit {
         resized := Update_Window_Dimensions();

@@ -97,7 +97,7 @@ Resize_Render_Target :: (width: s32, height: s32) {
 Set_Scissor :: (ul: IntVector2, lr: IntVector2) {
     dx := cast(u32)max(lr.x-ul.x, 0); 
     dy := cast(u32)max(lr.y-ul.y, 0);
-    glScissor(ul.x, ul.y, dx, dy);
+    glScissor(ul.x, window.height-lr.y, dx, dy);
 }
 
 Begin_Draw_Frame :: () {

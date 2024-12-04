@@ -21,13 +21,13 @@ Normalized_Text_View_Window :: (view_position: Vector2, buffer: *TextBuffer) -> 
     ul := Upper_Left();
     lr := Lower_Right();
     viewport_height := max(lr.y - ul.y, 0);
-    if viewport_height == 0 then return;
+    if viewport_height == 0 then return 0, 0;
     screen_line_height := xx (get_baseline_height(font) * 4);
     screen_line_height += xx (cast(float32)screen_line_height * line_spacing_factor);
     line_count := xx max((cast(float)viewport_height / cast(float)screen_line_height + 1.0), 0.0);
 
-    total_space := cast(float32)(buffer.lines.count + renderer.line_count);
-    window_space := cast(float32)renderer.line_count;
+    total_space := cast(float32)(buffer.lines.count + line_count);
+    window_space := cast(float32)line_count;
     return clamp(view_position.y / total_space, 0.0, 1.0), clamp((view_position.y + window_space) / total_space, 0.0, 1.0);
 }
 
@@ -104,7 +104,6 @@ Render_Text_Buffer_Lines :: (renderer: *TextRenderer, buffer: *TextBuffer, rende
 
     // TODO: check line numbers option
     if render_line_numbers {
-
         line_count := renderer.rendered_line_count;
         Render_Line_Numbers(renderer, line_count);
     }
@@ -125,6 +124,29 @@ Render_Line_Numbers :: (renderer: *TextRenderer, line_count: s32) {
         line_number_text := tprint("%", start_row + r);
         Render_Text_Line(renderer, *renderer.align_info_gutter, As_Array(line_number_text, u8), color_buffer);
     }
+}
+
+Render_Scroll_Bar :: (view_layer: *ViewLayer, text_buffer: *TextBuffer) {
+    SCROLLBAR_WIDTH : s32 : 10;
+    Set_Shader_For_Blended_Color();
+
+    ul := Upper_Left();
+    lr := Lower_Right();
+    diff := As_Vector2(lr - ul);
+
+    norm_scrollbar_y_begin, norm_scrollbar_y_end := Normalized_Text_View_Window(view_layer.view_position, text_buffer);
+    scrollbar_begin := IntVector2.{lr.x - SCROLLBAR_WIDTH, ul.y + xx (diff.y * norm_scrollbar_y_begin)};
+    scrollbar_end := IntVector2.{lr.x, ul.y + xx (diff.y * norm_scrollbar_y_end)};
+    Render_Quad(scrollbar_begin, scrollbar_end, fRGBA.{0.8, 0.9, 1.0, 0.075});
+}
+
+Render_Gutter_Separator_Line :: (color: fRGBA) {
+    gutter_width := Screen_Gutter_Width();
+    gutter_line_ul := rendering_scissor_ul;
+    gutter_line_ul.x += gutter_width;
+    gutter_line_lr := rendering_scissor_lr;
+    gutter_line_lr.x = gutter_line_ul.x;
+    Render_Line(gutter_line_ul, gutter_line_lr, file_editor_outline_color);
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -172,6 +194,7 @@ line_spacing_factor := 0.4;
 
 Render_Text_Line :: (renderer: *TextRenderer, align_info: *AlignInfo, utf8: []u8, colors: []TextColorLocation) {
     if colors.count == 0 then return;
+    total_width: s32 = 0;
     for 0..colors.count-1 {
         // single out a segment of text with the same color
         start_byte := colors[it].location;
@@ -182,15 +205,16 @@ Render_Text_Line :: (renderer: *TextRenderer, align_info: *AlignInfo, utf8: []u8
         render_x: s32 = ---;
         if align_info.alignment == {
         case .LEFT;
-            render_x = align_info.screen_x;
+            render_x = align_info.screen_x + total_width;
         case .RIGHT;
-            render_x = align_info.screen_x - text_width;
+            render_x = align_info.screen_x - (text_width + total_width);
         case .CENTER;
             assert(false); // &unsupported
         }
 
         render_y := renderer.screen_render_begin.y + renderer.screen_line_height * renderer.rendered_line_count;
         Generate_Quads_For_Prepared_Text(render_x, render_y, color = To_fRGBA(colors[it].color));
+        total_width += text_width;
     }
     renderer.rendered_line_count += 1;
 }

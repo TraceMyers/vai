@@ -16,6 +16,22 @@ Unmarked_Code_Point :: inline (marked_code_point: u32) -> ColorCodePoint {
     return .{Marked_Code_Point_Utf32(marked_code_point), Marked_Code_Point_Color_Index(marked_code_point)};
 }
 
+Strip_Markup_Inline :: inline (marked_code_point: *u32) {
+    marked_code_point.* = marked_code_point.* & TEXT_SPACE_MASK;
+}
+
+Strip_Markup :: inline (marked_code_point: u32) -> u32 {
+    return marked_code_point & TEXT_SPACE_MASK;
+}
+
+Is_Tab_Expanded_Space :: inline (marked_code_point: u32) -> bool {
+    return (marked_code_point & TAB_SPACE_MASK) == TAB_EXPANDED_SPACE;
+}
+
+Is_Expanded_Tab :: inline (marked_code_point: u32) -> bool {
+    return (marked_code_point & TAB_SPACE_MASK) == EXPANDED_TAB;
+}
+
 Get_Unmarked_Utf8 :: (in_utf32: []u32, out_utf8: *[..]u8, out_colors: *[..]TextColorLocation) {
     array_reset_keeping_memory(out_utf8);
     array_reset_keeping_memory(out_colors);
@@ -99,13 +115,14 @@ TextColorLocation :: struct {
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+TEXT_SPACE_MASK : u32 : 0x00_1f_ff_ff;
+
 // for marking spaces that can be removed when collapsing tabs, and can be skipped over by a cursor
 TAB_EXPANDED_SPACE    : u32 : 0x80_00_00_00 | #char " ";
 EXPANDED_TAB          : u32 : 0x40_00_00_00 | #char " ";
 TAB_OR_EXPANDED_SPACE : u32 : TAB_EXPANDED_SPACE | EXPANDED_TAB;
+TAB_SPACE_MASK : u32 : TAB_OR_EXPANDED_SPACE | TEXT_SPACE_MASK;
 
 COLOR_SPACE_MASK : u32 : 0x3f_c0_00_00; // 256 colors (including 0)
-
-TEXT_SPACE_MASK : u32 : 0x00_1f_ff_ff;
 
 text_colors: [256]bRGB;
