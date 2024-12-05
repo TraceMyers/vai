@@ -98,7 +98,6 @@ Render_Text_Buffer_Lines :: (renderer: *TextRenderer, buffer: *TextBuffer, rende
                 marked_utf32.data += renderer.text_view_clip.x;
                 marked_utf32.count -= renderer.text_view_clip.x;
                 Get_Unmarked_Utf8(marked_utf32, *utf8_buffer, *color_buffer);
-
                 Render_Text_Line(renderer, *renderer.align_info_main, utf8_buffer, color_buffer);
             } else {
                 renderer.rendered_line_count += 1;

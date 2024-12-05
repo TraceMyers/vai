@@ -42,8 +42,11 @@ Process_Raw_Input :: () -> []u32 {
     utf32_str := Encode(utf16_str, .UTF16, .UTF32);
     utf32_array := As_Array(utf32_str, u32);
 
+    use_modifier_keys := modifier_keys;
+    use_modifier_keys &= ~.SHIFT;
+
     for *utf32_array {
-        it.* = Pack_Modified_Code_Point(it.*, modifier_keys);
+        it.* = Pack_Modified_Code_Point(it.*, use_modifier_keys);
     }
 
     array_reset(*raw_input);

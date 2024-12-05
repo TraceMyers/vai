@@ -47,6 +47,10 @@ Cursor_Scroll_To_Top :: () {
     cursor.x = Clamp_X_To_Line(cursor.target_x, line, .BACKWARD);
 }
 
+Cursor_Scroll_To_Bottom :: () {
+    Log("executing scroll to bottom of file");
+}
+
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 Init_Cursor_Proc_Or_Return :: () #expand {
