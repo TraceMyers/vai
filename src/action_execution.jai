@@ -62,6 +62,70 @@ Cursor_Scroll_To_Line_End :: () {
     cursor.target_x = cursor.x;
 }
 
+Cursor_Scroll_To_Line_Begin :: () {
+    Init_Cursor_Proc_Or_Return();
+    cursor.x = 0;
+    line := Line_View(text_buffer, cursor.y);
+    while cursor.x < line.count - 1{
+        if Is_Whitespace(line[cursor.x]) {
+            cursor.x += 1;
+        } else {
+            break;
+        }
+    }
+    if Is_Whitespace(line[cursor.x]) {
+        cursor.x = 0;
+    }
+    cursor.target_x = cursor.x;
+}
+
+Cursor_Scroll_To_Line_Zero :: () {
+    Init_Cursor_Proc_Or_Return();
+    cursor.x = 0;
+    cursor.target_x = 0;
+}
+
+Scroll_To_Next_Editor :: () {
+    EditorSortInfo :: struct {
+        view_id: s32;
+        rect_upper_left: IntVector2;
+    }
+
+    sort_info: [..]EditorSortInfo;
+    sort_info.allocator = temp;
+
+    Collect_Sort_Info :: (view: *View, view_id: s64, viewport_id: s64, sort_info: *[..]EditorSortInfo) {
+        if view.layers.data == null then return;
+        active_layer := view.layers[view.active_layer];
+        if active_layer.type != .FILE_EDITOR then return;
+        array_add(sort_info, .{xx view_id, Upper_Left()});
+    }
+
+    Walk_View_Tree(0, Collect_Sort_Info, *sort_info);
+
+    View_Compare :: (a: EditorSortInfo, b: EditorSortInfo) -> s32 {
+        if a.rect_upper_left.x < b.rect_upper_left.x {
+            return a.rect_upper_left.x - b.rect_upper_left.x;
+        } else {
+            return a.rect_upper_left.y - b.rect_upper_left.y;
+        }
+    }
+
+    quick_sort(sort_info, View_Compare);
+
+    next_editor := -1;
+    for sort_info {
+        if it.view_id == active_view_id {
+            next_editor = it_index + 1;
+        }
+    }
+    if next_editor >= sort_info.count {
+        next_editor = 0;
+    }
+
+    active_view_id = sort_info[next_editor].view_id;
+}
+
 Enter_Insert_Mode :: (append: bool) {
     Init_Cursor_Proc_Or_Return();
     vi_mode = .INSERT;

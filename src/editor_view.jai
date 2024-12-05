@@ -300,6 +300,9 @@ Render_Partial_Update :: (view: *View, view_id: s64, viewport_id: s64, unused: *
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 // walk the tree of nodes that make up the UI and call view_proc per node. 
 // the two integers view_proc takes are the view id and the viewport id (which only matters if push_viewports is true)
 Walk_View_Tree :: (from_view_id: s64, Visit_Proc: (v: *View, view_id: s64, viewport_id: s64, user_data: T), user_data: $T, push_viewports := true) {

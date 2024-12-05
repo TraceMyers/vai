@@ -315,7 +315,6 @@ Generate_Quads_For_Prepared_Text :: (x: s64, y: s64, effect_flags: Font_Effects 
         quad.uv0.y = info.y0 / cast(float) height;
         quad.uv1.y = (cast(float) info.y0 + info.height) / height;
 
-        // todo: maybe not just move right
 		sx += cast(float) info.advance;
     }
 }

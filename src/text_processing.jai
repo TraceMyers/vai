@@ -32,6 +32,10 @@ Is_Expanded_Tab :: inline (marked_code_point: u32) -> bool {
     return (marked_code_point & TAB_SPACE_MASK) == EXPANDED_TAB;
 }
 
+Is_Whitespace :: inline (marked_code_point: u32) -> bool {
+    return ((marked_code_point & TAB_OR_EXPANDED_SPACE_MARK) != 0) || marked_code_point == #char " ";
+}
+
 Get_Unmarked_Utf8 :: (in_utf32: []u32, out_utf8: *[..]u8, out_colors: *[..]TextColorLocation) {
     array_reset_keeping_memory(out_utf8);
     array_reset_keeping_memory(out_colors);
@@ -122,6 +126,7 @@ TAB_EXPANDED_SPACE    : u32 : 0x80_00_00_00 | #char " ";
 EXPANDED_TAB          : u32 : 0x40_00_00_00 | #char " ";
 TAB_OR_EXPANDED_SPACE : u32 : TAB_EXPANDED_SPACE | EXPANDED_TAB;
 TAB_SPACE_MASK : u32 : TAB_OR_EXPANDED_SPACE | TEXT_SPACE_MASK;
+TAB_OR_EXPANDED_SPACE_MARK : u32 : 0x80_00_00_00 | 0x40_00_00_00;
 
 COLOR_SPACE_MASK : u32 : 0x3f_c0_00_00; // 256 colors (including 0)
 

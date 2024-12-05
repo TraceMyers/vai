@@ -16,7 +16,7 @@ Vai_Main :: () {
 
     if !Scoped_Construct(Text_Buffers)          then return;
     if !Scoped_Construct(Runtime_Settings)      then return;
-    if !Create_Window("vai")                    then return;
+    if !Create_Window("VAI")                    then return;
     if !Scoped_Construct(Graphics_Backend)      then return;
     if !Scoped_Construct(Input)                 then return;
     if !Scoped_Construct(Viewports)             then return;
@@ -34,11 +34,11 @@ Vai_Main :: () {
         if resized {
             Post_Resize_Window();
         }
-
         any_input := Translate_Inputs_To_Actions();
+        do_full_update := any_input | resized;
 
         Begin_Update_Text_Buffers();
-        Render_Views(any_input || resized);
+        Render_Views(do_full_update);
         Render_Text_End_Frame();
         End_Update_Text_Buffers();
 
