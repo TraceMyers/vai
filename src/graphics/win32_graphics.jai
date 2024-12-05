@@ -35,6 +35,10 @@ Graphics_Backend :: struct {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
         // glGenFramebuffers(1, *fb);
 
+        // for glBlitFramebuffer calls, which is read and which is write
+        glReadBuffer(GL_FRONT);
+        glDrawBuffer(GL_BACK);
+
         // create shaders --->
         success: bool;
         overall_success := true;
@@ -65,6 +69,8 @@ Graphics_Backend :: struct {
         line_shader.blend_style = .ALPHA_BLEND;
         line_shader.draw_style = .LINES;
 
+        text_shader.texture_sampler_loc = glGetUniformLocation(text_shader.id, "text_sampler");
+
         vertices.data = vertex_buffer.data;
 
         DumpGLErrors("context");
@@ -77,6 +83,10 @@ Graphics_Backend :: struct {
         wglDeleteContext(gl_context);
     }
 
+}
+
+Copy_Previous_Render_Target :: () {
+    glBlitFramebuffer(0, 0, window.width, window.height, 0, 0, window.width, window.height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 }
 
 Disable_Depth_Test :: inline () {
@@ -100,11 +110,15 @@ Set_Scissor :: (ul: IntVector2, lr: IntVector2) {
     glScissor(ul.x, window.height-lr.y, dx, dy);
 }
 
-Begin_Draw_Frame :: () {
+Begin_Draw_Frame :: (full_update: bool) {
     Clear_Viewports();
     Set_Scissor(.{}, .{window.width, window.height});
-    glClearColor(window.clear_color.r, window.clear_color.g, window.clear_color.b, 1.0);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    if full_update {
+        glClearColor(window.clear_color.r, window.clear_color.g, window.clear_color.b, 1.0);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    } else {
+        glClear(GL_DEPTH_BUFFER_BIT);
+    }
 }
 
 End_Draw_Frame :: () {
@@ -176,7 +190,7 @@ Render_Quad_Lines :: (ul: IntVector2, lr: IntVector2, color := fRGBA_WHITE, dept
     Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(ul), z=depth}, xx color, .{}});
 }
 
-Render_Quad :: (ul: IntVector2, lr: IntVector2, color := fRGBA_WHITE, uv1 := Vector2.{}, uv2 := Vector2.{}, depth := DEFAULT_DEPTH) {
+Render_Quad :: inline (ul: IntVector2, lr: IntVector2, color := fRGBA_WHITE, uv1 := Vector2.{}, uv2 := Vector2.{}, depth := DEFAULT_DEPTH) {
     if vertices.count + 6 > MAX_VERTICES then Flush_Draws();
     // tri 1
     Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(ul), z=depth}, xx color, uv1});
@@ -188,7 +202,7 @@ Render_Quad :: (ul: IntVector2, lr: IntVector2, color := fRGBA_WHITE, uv1 := Vec
     Inline_Buffer_Append(*vertices, .{Vector3.{xy=.{xx lr.x, xx ul.y}, z=depth}, xx color, .{uv2.x, uv1.y}});
 }
 
-Render_Quad :: (ul: Vector2, lr: Vector2, color := fRGBA_WHITE, uv1 := Vector2.{}, uv2 := Vector2.{}, depth := DEFAULT_DEPTH) {
+Render_Quad :: inline (ul: Vector2, lr: Vector2, color := fRGBA_WHITE, uv1 := Vector2.{}, uv2 := Vector2.{}, depth := DEFAULT_DEPTH) {
     if vertices.count + 6 > MAX_VERTICES then Flush_Draws();
     // tri 1
     Inline_Buffer_Append(*vertices, .{Vector3.{xy=ul, z=depth}, xx color, uv1});
@@ -252,19 +266,18 @@ Set_Vertex_Format :: (shader: *Shader) {
 Render_Quads_Generated_For_Text :: () {
     Set_Shader_For_Text();
 
-    Draw_Letter_Quad :: inline (font: *Dynamic_Font, quad: Font_Quad) {
-        page := quad.glyph.page;
+    // Draw_Letter_Quad :: inline (font: *Dynamic_Font, quad: Font_Quad) {
+    //     page := quad.glyph.page;
 
-        if page.bitmap_data.width  <= 1 return;
-        if page.bitmap_data.height <= 1 return;
+    //     // if page.bitmap_data.width  <= 1 return;
+    //     // if page.bitmap_data.height <= 1 return;
 
-        using quad;
-        Render_Quad(ul, lr, xx color, uv0, uv1);
-    }
+    //     using quad;
+    //     Render_Quad(ul, lr, xx color, uv0, uv1);
+    // }
 
     last_texture: s64 = -1;
 
-    texture_sampler_location := glGetUniformLocation(current_shader.id, "text_sampler");
     for quad, i: font.current_quads {
         page := quad.glyph.page;
         map  := *page.texture;
@@ -281,10 +294,11 @@ Render_Quads_Generated_For_Text :: () {
 
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, handle);  // Bind handle to slot 0.
-            glUniform1i(texture_sampler_location, 0);
+            glUniform1i(current_shader.texture_sampler_loc, 0);
         }
 
-        Draw_Letter_Quad(font, quad);
+        Render_Quad(quad.ul, quad.lr, xx quad.color, quad.uv0, quad.uv1);
+        // Draw_Letter_Quad(font, quad);
     }
 
     array_reset_keeping_memory(*font.current_quads);
@@ -316,6 +330,7 @@ Shader :: struct {
     uv_loc: s32 = 2;
 
     uniform_mvp_loc: s32;
+    texture_sampler_loc: s32;
 
     blend_style: ShaderBlendStyle;
     draw_style: ShaderDrawStyle;

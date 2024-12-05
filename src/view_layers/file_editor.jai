@@ -28,9 +28,13 @@ Render_File_Editor_Text :: (using file_editor: *FileEditor, is_active: bool) {
 
     text_buffer := *file_buffers.items[file_editor.file_buffer];
     Render_Text_Buffer_Lines(*renderer, text_buffer, true);
-    Flush_Draws();
-    Render_Text_Cursor(*renderer, *file_editor.cursor);
-    Set_Shader_For_Text();
+
+    if is_active {
+        Flush_Draws();
+        cursor.style = ifx vi_mode == .INSERT then .VERTICAL_LINE else .BLOCK;
+        Render_Text_Cursor(*renderer, *file_editor.cursor);
+        Set_Shader_For_Text();
+    }
 }
 
 Render_File_Editor_Foreground :: (using file_editor: *FileEditor, is_active: bool) {

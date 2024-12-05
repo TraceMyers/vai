@@ -193,28 +193,33 @@ Split_View :: (v: *View, direction: SplitDirection) {
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// TODO: passes: background, lines, images, text, foreground
-Render_Views :: () {
-    Begin_Draw_Frame();
+Render_Views :: (full_update: bool) {
+    Begin_Draw_Frame(full_update);
     defer End_Draw_Frame();
     if Is_Empty(*view_pool) then return;
-
-    // walking the view tree multiple times because tree traversal is pretty cheap + number of draw calls can be reduced
-    // by grouping draws into natural batches (background rects, lines, text, etc..)
-    Set_Shader_For_Blended_Color();
-    Walk_View_Tree(0, Render_View, ViewRenderPass.BACKGROUND);
-    Flush_Draws();
-    Set_Shader_For_Lines();
-    Walk_View_Tree(0, Render_View, ViewRenderPass.LINES);
-    Flush_Draws();
-    // Set_Shader_For
-    // Walk_View_Tree(0, Render_View, ViewRenderPass.IMAGES);
-    Set_Shader_For_Text();
-    Walk_View_Tree(0, Render_View, ViewRenderPass.TEXT);
-    Flush_Draws();
-    // it's the responsibility of the render proc to set the shader when doing foreground rendering
-    Walk_View_Tree(0, Render_View, ViewRenderPass.FOREGROUND);
-    Flush_Draws();
+    
+    if full_update {
+        // walking the view tree multiple times because tree traversal is pretty cheap + number of draw calls can be reduced
+        // by grouping draws into natural batches (background rects, lines, text, etc..)
+        Set_Shader_For_Blended_Color();
+        Walk_View_Tree(0, Render_View, ViewRenderPass.BACKGROUND);
+        Flush_Draws();
+        Set_Shader_For_Lines();
+        Walk_View_Tree(0, Render_View, ViewRenderPass.LINES);
+        Flush_Draws();
+        // Set_Shader_For
+        // Walk_View_Tree(0, Render_View, ViewRenderPass.IMAGES);
+        Set_Shader_For_Text();
+        Walk_View_Tree(0, Render_View, ViewRenderPass.TEXT);
+        Flush_Draws();
+        // it's the responsibility of the render proc to set the shader when doing foreground rendering
+        Walk_View_Tree(0, Render_View, ViewRenderPass.FOREGROUND);
+        Flush_Draws();
+    } else {
+        Copy_Previous_Render_Target();
+        Walk_View_Tree(0, Render_Partial_Update, cast(*void)null);
+        // Render_Partial_Update();
+    }
 }
 
 Render_View :: (view: *View, view_id: s64, viewport_id: s64, render_pass: ViewRenderPass) {
@@ -236,6 +241,61 @@ Render_View :: (view: *View, view_id: s64, viewport_id: s64, render_pass: ViewRe
         view_active := view_id == active_view_id;
         #insert #run Generate_View_Layer_Switch("Render_Layer(%, view_active, render_pass);");
     }
+}
+
+// when the window is receiving no new input, we just copy the old render target to the new one. however,
+// for the cursor to blink we need to redraw a few things.
+Render_Partial_Update :: (view: *View, view_id: s64, viewport_id: s64, unused: *void) {
+    if view_id != active_view_id then return;
+    if view.layers.data == null then return;
+
+    active_layer := *view.layers[view.active_layer];
+    cursor := Layer_Cursor(active_layer);
+    if cursor == null then return;
+    text_buffer := Layer_Text_Buffer(active_layer);
+
+    rect := viewport_rects[viewport_id];
+    rendering_scissor_ul, rendering_scissor_lr = Viewport_Rect_Points(*rect, s32);
+    Set_Scissor(rendering_scissor_ul, rendering_scissor_lr);
+
+    renderer: TextRenderer;
+    Initialize_Text_Renderer(*renderer, active_layer);
+
+    // draw a quad across the entire line. if we try to redraw over it, the transparent edges will get filled in and the text will look bold
+    cursor_ul, cursor_lr := Render_Text_Cursor(*renderer, cursor, true);
+    full_line_ul := cursor_ul;
+    full_line_ul.x = renderer.align_info_main.screen_x;
+    full_line_lr := cursor_lr;
+    full_line_lr.x = rendering_scissor_lr.x;
+
+    // TODO: bg color dependent on layer
+    Set_Shader_For_Color();
+    Render_Quad(full_line_ul, full_line_lr, fRGBA.{rgb=file_editor_background_color, a=1});
+
+    // redraw the line of text the cursor is on
+    visual_line_index := cursor.y - renderer.text_view_clip.y;
+    if visual_line_index >= 0 && visual_line_index < renderer.line_count {
+        renderer.rendered_line_count = visual_line_index;
+        marked_utf32 := Line_View(text_buffer, cursor.y);
+        if marked_utf32.count > renderer.text_view_clip.x {
+            Set_Shader_For_Text();
+
+            marked_utf32.data += renderer.text_view_clip.x;
+            marked_utf32.count -= renderer.text_view_clip.x;
+
+            utf8_buffer: [..]u8;
+            utf8_buffer.allocator = temp;
+            color_buffer: [..]TextColorLocation;
+            color_buffer.allocator = temp;
+
+            Get_Unmarked_Utf8(marked_utf32, *utf8_buffer, *color_buffer);
+            Render_Text_Line(*renderer, *renderer.align_info_main, utf8_buffer, color_buffer);
+            Render_Quads_Generated_For_Text();
+        }
+    }
+
+    // redraw the cursor
+    Render_Text_Cursor(*renderer, cursor);
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -408,6 +468,9 @@ Layer_Text_Buffer :: (layer: *ViewLayer) -> *TextBuffer {
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // layer types
 
 EmptyLayer :: struct {}
@@ -494,5 +557,7 @@ actions_executed_this_frame: [..]Action;
 
 rendering_scissor_ul: IntVector2;
 rendering_scissor_lr: IntVector2;
+
+render_full_update: bool;
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }

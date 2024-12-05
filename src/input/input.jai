@@ -57,7 +57,7 @@ Input :: struct {
 
 }
 
-Translate_Inputs_To_Actions :: () {
+Translate_Inputs_To_Actions :: () -> any_input: bool {
     // TODO: use text buffer?
     auxiliary_input_buffer_prev_count = auxiliary_input_buffer.count;
 
@@ -67,6 +67,10 @@ Translate_Inputs_To_Actions :: () {
     // TODO: how macro works = pump string into input queue, so it automatically gets translated into actions
     skip := false;
     modified_utf32 := Process_Raw_Input();
+    if modified_utf32.count == 0 && action_input_buffer.count == 0 {
+        return false;
+    }
+
     for modified_utf32 {
         array_add(*action_input_buffer, it);
         action_input_timer = ACTION_BUFFER_MAX_TIME;
@@ -89,6 +93,7 @@ Translate_Inputs_To_Actions :: () {
             Dump_Action_Input_Buffer(push_matches);
         }
     }
+    return true;
 }
 
 Dump_Action_Input_Buffer :: (action_matches: *[..]ActionMatch = null) {

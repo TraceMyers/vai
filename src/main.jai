@@ -35,9 +35,10 @@ Vai_Main :: () {
             Post_Resize_Window();
         }
 
+        any_input := Translate_Inputs_To_Actions();
+
         Begin_Update_Text_Buffers();
-        Translate_Inputs_To_Actions();
-        Render_Views();
+        Render_Views(any_input || resized);
         Render_Text_End_Frame();
         End_Update_Text_Buffers();
 

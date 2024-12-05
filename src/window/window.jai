@@ -27,8 +27,9 @@ Update_Window_Dimensions :: () -> resized: bool {
     window.just_resized = new_width != window.width || new_height != window.height;
     window.width = new_width;
     window.height = new_height;
+    updated_once_prev := updated_once;
     updated_once = true;
-    return window.just_resized | updated_once;
+    return window.just_resized | !updated_once_prev;
 }
 
 Window_Dimensions :: ($T1: Type) -> T1, T1

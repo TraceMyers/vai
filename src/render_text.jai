@@ -90,9 +90,6 @@ Render_Text_Buffer_Lines :: (renderer: *TextRenderer, buffer: *TextBuffer, rende
         for 0..renderer.line_count-1 {
             line_index := renderer.text_view_clip.y + it;
             if line_index >= buffer.lines.count then break;
-            if line_index == 2 {
-                a: s32 = 0;
-            }
             marked_utf32 := Line_View(buffer, line_index);
             if marked_utf32.count > renderer.text_view_clip.x {
                 marked_utf32.data += renderer.text_view_clip.x;
@@ -162,7 +159,7 @@ Text_To_Render_Space :: inline (using renderer: *TextRenderer, text_x: s32, text
     return render_x, render_y;
 }
 
-Render_Text_Cursor :: (renderer: *TextRenderer, cursor: *Cursor) {
+Render_Text_Cursor :: (renderer: *TextRenderer, cursor: *Cursor, only_preparation := false) -> (ul: IntVector2, lr: IntVector2) {
     Set_Shader_For_Color_Inversion();
 
     ul_x, ul_y := Text_To_Render_Space(renderer, cursor.x, cursor.y);
@@ -175,20 +172,23 @@ Render_Text_Cursor :: (renderer: *TextRenderer, cursor: *Cursor) {
         lr_x += 1;
     }
 
-    if cursor.reset_blink {
-        cursor.blink_timer = kb_cursor_blink_time;
-        cursor.reset_blink = false;
-    }
-    if cursor.blink_timer >= kb_cursor_blink_time {
-        if cursor.blink_timer >= kb_cursor_blink_time * 2 {
-            cursor.blink_timer -= kb_cursor_blink_time * 2;
-        } else {
-            Render_Quad(.{ul_x, ul_y}, .{lr_x, lr_y});
+    if !only_preparation {
+        if cursor.reset_blink {
+            cursor.blink_timer = kb_cursor_blink_time;
+            cursor.reset_blink = false;
         }
+        if cursor.blink_timer >= kb_cursor_blink_time {
+            if cursor.blink_timer >= kb_cursor_blink_time * 2 {
+                cursor.blink_timer -= kb_cursor_blink_time * 2;
+            } else {
+                Render_Quad(.{ul_x, ul_y}, .{lr_x, lr_y});
+                Flush_Draws();
+            }
+        }
+        cursor.blink_timer += Smoothed_Delta_Time();
     }
-    cursor.blink_timer += Smoothed_Delta_Time();
 
-    Flush_Draws();
+    return IntVector2.{ul_x, ul_y}, IntVector2.{lr_x, lr_y};
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -225,15 +225,6 @@ TextRenderer :: struct {
     selection: TextSelection;
 }
 
-// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-font: *Dynamic_Font;
-pixel_height: s32 = 12;
-gutter_char_width: s32 = 6;
-line_spacing_factor := 0.4;
-
-#scope_file // ------------------------------------------------------------------------------------------------ { FILE }
-
 Render_Text_Line :: (renderer: *TextRenderer, align_info: *AlignInfo, utf8: []u8, colors: []TextColorLocation) {
     if colors.count == 0 then return;
     total_width: s32 = 0;
@@ -260,6 +251,15 @@ Render_Text_Line :: (renderer: *TextRenderer, align_info: *AlignInfo, utf8: []u8
     }
     renderer.rendered_line_count += 1;
 }
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+font: *Dynamic_Font;
+pixel_height: s32 = 12;
+gutter_char_width: s32 = 6;
+line_spacing_factor := 0.4;
+
+#scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 
 // text rendering requires drawing within a given scissor, so we need to flush any draws that came before, then at the end of the scope, flush any text we've added.
 Scoped_Immediate_Text_Render :: () #expand {
