@@ -48,7 +48,10 @@ Cursor_Scroll_To_Top :: () {
 }
 
 Cursor_Scroll_To_Bottom :: () {
-    Log("executing scroll to bottom of file");
+    Init_Cursor_Proc_Or_Return();
+    cursor.y = ifx text_buffer.lines.count == 0 then sdw(0) else sdw(text_buffer.lines.count-1);
+    line := Line_View(text_buffer, cursor.y);
+    cursor.x = Clamp_X_To_Line(cursor.target_x, line, .BACKWARD);
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
