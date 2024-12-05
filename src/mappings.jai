@@ -7,7 +7,7 @@
     .{.["l"],                   "SCROLL_RIGHT",                                 .{modes=.NORMAL, proc=Cursor_Scroll_Right}},
     .{.["gg"],                  "SCROLL_TO_TOP_OF_FILE",                        .{modes=.NORMAL, proc=Cursor_Scroll_To_Top}},
     .{.["G"],                   "SCROLL_TO_BOTTOM_OF_FILE",                     .{modes=.NORMAL, proc=Cursor_Scroll_To_Bottom}},
-    .{.["$"],                   "SCROLL_TO_LINE_END",                           .{modes=.NORMAL}},
+    .{.["$"],                   "SCROLL_TO_LINE_END",                           .{modes=.NORMAL, proc=Cursor_Scroll_To_Line_End}},
     .{.["^"],                   "SCROLL_TO_LINE_NON_WHITESPACE_BEGIN",          .{modes=.NORMAL}},
     .{.["0"],                   "SCROLL_TO_LINE_ZERO",                          .{modes=.NORMAL}},
     .{.["<C-w><C-w>"],          "SCROLL_FILE_EDITORS",                          .{modes=.NORMAL}},

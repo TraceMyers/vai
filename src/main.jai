@@ -1,6 +1,7 @@
 
-// TODO: big_code.jai bug: line 3 is begin rendered as a copy of line 2 + weird visual jitter when moving to line 3. maybe bug with long line allocation?
+// TODO: enforce always at least one line in any file editor text buffer
 // TODO: font scaling in a not ugly way - how to use scale + loaded font sizes effectively
+// NOTE: put off options implementations for a while, because there are a lot of non-vim and vim options that could be brought together in a nice way, but it's probably hard to see until having gone without it for a bit.
 
 quit: bool;
 
