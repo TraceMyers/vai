@@ -57,7 +57,7 @@ Cursor_Scroll_To_Bottom :: () {
 Cursor_Scroll_To_Line_End :: () {
     Init_Cursor_Proc_Or_Return();
     line := Line_View(text_buffer, cursor.y);
-    cursor.x = max(sdw(line.count-1), 0);
+    cursor.x = max(sdw(ifx vi_mode == .INSERT then line.count else line.count-1), 0);
     cursor.x = Clamp_X_To_Line(cursor.x, line);
     cursor.target_x = cursor.x;
 }
@@ -126,6 +126,12 @@ Scroll_To_Next_Editor :: () {
     active_view_id = sort_info[next_editor].view_id;
 }
 
+Insert_New_Line :: () {
+    Init_Cursor_Proc_Or_Return();
+    Insert_Line(text_buffer, cursor.y);
+    cursor.y += 1;
+}
+
 Enter_Insert_Mode :: (append: bool) {
     Init_Cursor_Proc_Or_Return();
     vi_mode = .INSERT;
@@ -156,7 +162,11 @@ Backspace :: () {
         }
         Remove_Code_Point(text_buffer, cursor.y, cursor.x);
     } else if cursor.y != 0 {
-        // append current line to end of line above, delete current line, put cursor at end of where the append happened
+        Cursor_Scroll_Up();
+        Cursor_Scroll_To_Line_End();
+        src_line := Line_View(text_buffer, cursor.y+1);
+        Insert_Code_Points(text_buffer, cursor.y, cursor.x, src_line);
+        Remove_Line(text_buffer, cursor.y+1);
     }
 }
 
@@ -192,6 +202,7 @@ Clamp_X_To_Line :: (x: s32, line: []u32, $TAB_EXPANSION_SKIP: TabExpansionSkip =
         }
     }
     Scroll_Through_Tab_Expansion_Backward :: () #expand {
+        if `x == line.count then return;
         while `x > 0 && `line[`x] == TAB_EXPANDED_SPACE {
             `x -= 1;
         }

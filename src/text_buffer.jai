@@ -192,6 +192,22 @@ Insert_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64, code_point: u32) 
     Expand_Utf32_Buffer_Tabs(utf32_buffer);
 }
 
+Insert_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, code_points: []u32) {
+    if code_points.count <= 0 then return;
+    utf32_buffer := Get_Utf32_Buffer(buffer, row);
+    assert(col <= utf32_buffer.array.count);
+    #if DEBUG_TEXT_BUFFERS {
+        if col < utf32_buffer.array.count {
+            assert(!Is_Tab_Expanded_Space(utf32_buffer.array[col]));
+        }
+    }
+    prev_count := utf32_buffer.array.count;
+    Resize_Utf32_Buffer(utf32_buffer, xx (utf32_buffer.array.count + code_points.count));
+    utf32_buffer.array.count = prev_count; // below proc depends on this
+    Collapse_Tabs_Inline_And_Insert(*utf32_buffer.array, col, code_points);
+    Expand_Utf32_Buffer_Tabs(utf32_buffer);
+}
+
 Remove_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64) {
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     assert(col < utf32_buffer.array.count);
@@ -206,7 +222,12 @@ Commit_Utf32_To_Line :: (utf32_buffer: *Utf32Buffer) {
     Collapse_Tabs_Inline(*utf32_buffer.array);
     utf32_string := As_String(utf32_buffer.array);
     utf8_string := Encode(utf32_string, .UTF32, .UTF8);
-    Set_Bin_Data(*utf32_buffer.home_buffer.line_pool, *utf32_buffer.home_bin_id, As_Array(utf8_string, u8));
+    if utf32_buffer.home_bin_id.index == -1 {
+        utf32_buffer.home_bin_id = Request_Bin(*utf32_buffer.home_buffer.line_pool, utf32_buffer.array.count);
+    } 
+    if utf32_buffer.home_bin_id.index != -1 {
+        Set_Bin_Data(*utf32_buffer.home_buffer.line_pool, *utf32_buffer.home_bin_id, As_Array(utf8_string, u8));
+    }
     line := *utf32_buffer.home_buffer.lines[utf32_buffer.home_row];
     line.bin_id = utf32_buffer.home_bin_id;
     line.byte_count = xx utf8_string.count;
@@ -287,13 +308,18 @@ Get_Utf32_Buffer :: (buffer: *TextBuffer, line_index: s64, $ALLOW_ALLOCATION := 
                 return utf32_buffer;
             }
         }
-        bin := Get_Bin(*temp_utf32_buffer_pool, utf32_buffer.temp_bin_id);
-        utf32_buffer.array.data = bin.data;
+        if utf32_buffer.temp_bin_id.index != -1 {
+            bin := Get_Bin(*temp_utf32_buffer_pool, utf32_buffer.temp_bin_id);
+            utf32_buffer.array.data = bin.data;
+        } else {
+            utf32_buffer.array.data = null;
+            utf32_buffer.array.count = 0;
+        }
     }
     return utf32_buffer;
 }
 
-Resize_Utf32_Buffer :: inline (utf32_buffer: *Utf32Buffer, count: u32) {
+Resize_Utf32_Buffer :: (utf32_buffer: *Utf32Buffer, count: u32) {
     if utf32_buffer.temp_bin_id.index == -1 && count > 0 {
         utf32_buffer.temp_bin_id = Request_Bin(*temp_utf32_buffer_pool, count);
         bin := Get_Bin(*temp_utf32_buffer_pool, utf32_buffer.temp_bin_id);
@@ -316,6 +342,16 @@ Inline_Append_Code_Point :: inline (buffer: *[]u32, code_point: u32, iter_index:
         Strip_Markup_Inline(*(buffer.*[buffer.count-1]));
     } else {
         // copy back + increase count
+        Inline_Buffer_Append(buffer, Strip_Markup(code_point));
+    }
+}
+
+Inline_Append_Code_Point_No_Alias :: inline (buffer: *[]u32, code_point: u32) {
+    if Is_Tab_Expanded_Space(code_point) {
+        return;
+    } else if Is_Expanded_Tab(code_point) {
+        Inline_Buffer_Append(buffer, #char "\t");
+    } else {
         Inline_Buffer_Append(buffer, Strip_Markup(code_point));
     }
 }
@@ -358,6 +394,27 @@ Collapse_Tabs_Inline_And_Insert :: (data: *[]u32, col: s64, code_point: u32) {
             }
         }
     }
+    data.count = inline_buffer.count;
+}
+
+Collapse_Tabs_Inline_And_Insert :: (data: *[]u32, col: s64, code_points: []u32) {
+    inline_buffer := Inline_Buffer(data.*);
+    post_insert_memory := Temp_Buffer(u32, data.count-col);
+    post_insert_memory.count = 0;
+    if col > 0 then for i: 0..col-1 {
+        Inline_Append_Code_Point(*inline_buffer, data.*[i], i);
+    }
+   
+    if col < data.count then for j: col..data.count-1 {
+        Inline_Buffer_Append(*post_insert_memory, data.*[j]);
+    }
+    for code_points {
+        Inline_Append_Code_Point_No_Alias(*inline_buffer, it);
+    }
+    for post_insert_memory {
+        Inline_Append_Code_Point_No_Alias(*inline_buffer, it);
+    }
+
     data.count = inline_buffer.count;
 }
 

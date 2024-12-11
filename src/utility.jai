@@ -65,7 +65,7 @@ Read_Entire_File :: (path: string, $USE_TEMP_ALLOCATOR := false, $DEFER_FREE := 
     return file_string, success;
 }
 
-As_Array :: (str: string, $T: Type) -> []T {
+As_Array :: inline (str: string, $T: Type) -> []T {
     t_array: []T = ---;
     t_array.count = str.count / size_of(T);
     t_array.data = xx str.data;

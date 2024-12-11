@@ -247,7 +247,6 @@ operator == :: inline (a: BinID, b: BinID) -> bool {
 
 PoolTracker :: struct {
     in_use: [..]u8;
-    top: s32 = -1;
     shrink_to_min: s32 = 96;
     allow_grow_default := true;
     allow_shrink_default := true;
@@ -367,7 +366,6 @@ Request_Bin :: (using pool: *BinPool($SIZE, $T), min_size: s64, grow_behavior :=
 
     if id.index != -1 {
         mark.* = id.index;
-        if id.index > tracker.top then tracker.top = id.index;
         if id.type == .MASSIVE then array_resize(*massive_data[id.index], min_size);
         return id;
     }
@@ -394,7 +392,6 @@ Request_Bin :: (using pool: *BinPool($SIZE, $T), min_size: s64, grow_behavior :=
 
     id.index = xx prev_item_count;
     mark.* = id.index;
-    tracker.top = xx prev_item_count;
     array_add(*tracker.in_use, 0);
     tracker.in_use[tracker.in_use.count-1] |= base_alloc_flags;
 
@@ -412,6 +409,7 @@ Release_Bin :: (using pool: *BinPool($SIZE, $T), id: *BinID, shrink_behavior := 
         assert(byte < trackers[id.type].in_use.count);
     }
     trackers[id.type].in_use[byte] &= ~flags;
+    tracker_byte := trackers[id.type].in_use[byte];
 
     if id.type == .SMALL {
         #if DEBUG_POOLS {
@@ -419,16 +417,32 @@ Release_Bin :: (using pool: *BinPool($SIZE, $T), id: *BinID, shrink_behavior := 
         }
         memset(small_data.data + id.index, 0, id.bin_count * SMALL_BIN_SIZE);
 
-        Move_Mark_Back :: (mark: *s32) #expand { if `id.index < mark.* then mark.* = id.index; }
+        very_large_moved: bool;
+        large_moved: bool;
+        medium_moved: bool;
+
         if id.bin_count == {
-        case SMALL_BIN_COUNT;
-            Move_Mark_Back(*small_mark);
-        case MEDIUM_BIN_COUNT;
-            Move_Mark_Back(*medium_mark);
-        case LARGE_BIN_COUNT;
-            Move_Mark_Back(*large_mark);
         case VERY_LARGE_BIN_COUNT;
-            Move_Mark_Back(*very_large_mark);
+            very_large_moved = Move_Mark_Back(*very_large_mark);
+            #through;
+        case LARGE_BIN_COUNT;
+            large_moved = Move_Mark_Back(*large_mark);
+            if large_moved then Maybe_Move_Very_Large();
+            #through;
+        case MEDIUM_BIN_COUNT;
+            medium_moved = Move_Mark_Back(*medium_mark);
+            if medium_moved {
+                Maybe_Move_Very_Large();
+                Maybe_Move_Large();
+            }
+            #through;
+        case SMALL_BIN_COUNT;
+            small_moved := Move_Mark_Back(*small_mark);
+            if small_moved {
+                Maybe_Move_Very_Large();
+                Maybe_Move_Large();
+                Maybe_Move_Medium();
+            }
         }
     } else {
         #if DEBUG_POOLS {
@@ -445,19 +459,24 @@ Get_Bin :: (using pool: *BinPool($SIZE, $T), id: BinID) -> []T {
     #if DEBUG_POOLS {
         assert(Is_Item_In_Use(pool, id));
     }
-    if id.type == .SMALL {
-        #if DEBUG_POOLS {
-            assert(id.bin_count <= 8 && id.bin_count >= 1 && Is_Power_Of_Two(id.bin_count));
-            assert(id.index >= 0 && id.index < small_data.count);
+    if Is_Item_In_Use(pool, id) {
+        if id.type == .SMALL {
+            #if DEBUG_POOLS {
+                assert(id.bin_count <= 8 && id.bin_count >= 1 && Is_Power_Of_Two(id.bin_count));
+                assert(id.index >= 0 && id.index < small_data.count);
+            }
+            bin.data = xx (small_data.data + id.index);
+            bin.count = id.bin_count * SMALL_BIN_SIZE;
+        } else {
+            #if DEBUG_POOLS {
+                assert(id.index >= 0 && id.index < massive_data.count);
+            }
+            bin.data = massive_data[id.index].data;
+            bin.count = massive_data[id.index].count;
         }
-        bin.data = xx (small_data.data + id.index);
-        bin.count = id.bin_count * SMALL_BIN_SIZE;
-    } else {
-        #if DEBUG_POOLS {
-            assert(id.index >= 0 && id.index < massive_data.count);
-        }
-        bin.data = massive_data[id.index].data;
-        bin.count = massive_data[id.index].count;
+    }
+    #if DEBUG_POOLS {
+        assert(bin.count < 100_000 && bin.count > -1);
     }
     return bin;
 }
@@ -466,7 +485,9 @@ Get_Bin :: (using pool: *BinPool($SIZE, $T), id: BinID) -> []T {
 Set_Bin_Data :: (using pool: *BinPool($SIZE, $T), id: *BinID, new_data: []T, shrink_behavior := PoolResizeBehavior.DEFAULT, grow_behavior := PoolResizeBehavior.DEFAULT) {
     bin := Get_Bin(pool, id.*);
     if bin.count < new_data.count {
-        Release_Bin(pool, id, shrink_behavior);
+        if id.bin_count > 0 {
+            Release_Bin(pool, id, shrink_behavior);
+        }
         id.* = Request_Bin(pool, new_data.count, grow_behavior);
         assert(id.index != -1);
         bin = Get_Bin(pool, id.*);
@@ -477,15 +498,26 @@ Set_Bin_Data :: (using pool: *BinPool($SIZE, $T), id: *BinID, new_data: []T, shr
 // TODO: shrink
 Resize_Bin :: (using pool: *BinPool($SIZE, $T), id: *BinID, new_count: s64) {
     bin := Get_Bin(pool, id.*);
+    #if DEBUG_POOLS {
+        assert(bin.count < 100_000 && bin.count > -1);
+    }
     if bin.count < new_count {
         old_size := bin.count * size_of(T);
-        old_data := xx talloc(old_size);
-        memcpy(*old_data, bin.data, old_size);
-        Release_Bin(pool, id, .DEFAULT);
+        old_data: *u8;
+        do_copy := false;
+        if bin.count > 0 {
+            old_data = xx talloc(old_size);
+            memcpy(old_data, bin.data, old_size);
+            Release_Bin(pool, id, .DEFAULT);
+            do_copy = true;
+        }
         id.* = Request_Bin(pool, new_count, .DEFAULT);
         assert(id.index != -1);
         bin = Get_Bin(pool, id.*);
-        memcpy(*bin.data, old_data, old_size);
+        do_copy &= bin.count > 0;
+        if do_copy {
+            memcpy(bin.data, old_data, old_size);
+        }
     }
 }
 
@@ -516,5 +548,34 @@ PoolUsageIndexingInfo :: struct($BIN_COUNT: u8) {
 Initialize_Massive_Allocators_From :: (using pool: *BinPool($SIZE, $T), start_index: s64) {
     for i : start_index..massive_data.count - 1 {
         massive_data[i].allocator = massive_data.allocator;
+    }
+}
+
+Move_Mark_Back :: (mark: *s32) -> bool #expand { 
+    if `id.index < mark.* {
+        mark.* = `id.index; 
+        return true;
+    }
+    return false;
+}
+
+Maybe_Move_Very_Large :: () #expand {
+    if !`very_large_moved && `tracker_byte == 0x0 {
+        `very_large_mark = Multiple_Of_Floor(`id.index, 8);
+        `very_large_moved = true;
+    }
+}
+
+Maybe_Move_Large :: () #expand {
+    if !`large_moved && ( (`tracker_byte & 0xf0) == 0x0 || (`tracker_byte & 0x0f) == 0x0 ) {
+        `large_mark = Multiple_Of_Floor(`id.index, 4);
+        `large_moved = true;
+    }
+}
+
+Maybe_Move_Medium :: () #expand {
+    if !`medium_moved && ( (`tracker_byte & 0xc0) == 0x0 || (`tracker_byte & 0x30) == 0x0 || (`tracker_byte & 0x0c) == 0x0 || (`tracker_byte & 0x03) == 0x0 ) {
+        `medium_mark = Multiple_Of_Floor(`id.index, 2);
+        `medium_moved = true;
     }
 }

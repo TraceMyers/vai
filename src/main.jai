@@ -48,12 +48,16 @@ Vai_Main :: () {
         // put this at the end so we can exit the loop immediately when the window has been closed by the user
         Update_Window_Events();
     }
+
+    #if DEBUG_MEMORY {
+        report_memory_leaks();
+    }
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // std
-#import "Basic";
+#import "Basic"()(MEMORY_DEBUGGER=DEBUG_MEMORY);
 #import "Math";
 #import "File";
 #import "String";

@@ -13,7 +13,7 @@
     .{.["<C-w><C-w>"],          "SCROLL_TO_NEXT_EDITOR",                        .{modes=.NORMAL, proc=Scroll_To_Next_Editor}},
     .{.[":"],                   "ENTER_COMMAND_MODE",                           .{modes=.NORMAL}},
     .{.["<CR>"],                "EXECUTE_COMMANDS_AND_ENTER_NORMAL_MODE",       .{modes=.COMMAND}},
-    .{.["<CR>"],                "INSERT_NEW_LINE"           ,                   .{modes=.INSERT}},
+    .{.["<CR>"],                "INSERT_NEW_LINE"           ,                   .{modes=.INSERT, proc=Insert_New_Line}},
     .{.["i"],                   "ENTER_INSERT_MODE_PREPEND",                    .{modes=.NORMAL, proc=Enter_Insert_Mode_Prepend}},
     .{.["a"],                   "ENTER_INSERT_MODE_APPEND",                     .{modes=.NORMAL, proc=Enter_Insert_Mode_Append}},
     .{.["\x08"],                "BACKSPACE",                                    .{modes=.COMMAND | .INSERT, proc=Backspace}},            

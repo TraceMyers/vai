@@ -1,12 +1,13 @@
 
-DEBUG_ECHO_ACTIONS      :: true;
+DEBUG_ECHO_ACTIONS      :: false;
 DEBUG_ECHO_TEXT_INPUT   :: false;
-DEBUG_ECHO_COMMANDS     :: true;
-DEBUG_ENCODING          :: true;
+DEBUG_ECHO_COMMANDS     :: false;
+DEBUG_ENCODING          :: false;
 DEBUG_RENDER_PARSE      :: false;
-DEBUG_POOLS             :: false;
+DEBUG_POOLS             :: true;
 DEBUG_TEXT_BUFFERS      :: true;
 DEBUG_GRAPHICS          :: false;
+DEBUG_MEMORY            :: true;
 
 MSAA :: 4;
 
