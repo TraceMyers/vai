@@ -1,6 +1,4 @@
 
-
-
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 CursorStyle :: enum u8 {
@@ -8,11 +6,11 @@ CursorStyle :: enum u8 {
     VERTICAL_LINE;
 }
 
-CursorActionHistory :: struct {
-    timestamps: [ARTIFACT_COUNT]float64;
-    actions: [ARTIFACT_COUNT]Action;
-    index: u8;
-    ARTIFACT_COUNT :: 8;
+CursorMoveHistory :: struct {
+    timestamps: [TIMESTAMP_COUNT]float64;
+    actions: [TIMESTAMP_COUNT]Action;
+    current_index: u8;
+    TIMESTAMP_COUNT :: 8;
 }
 
 Cursor :: struct {
@@ -25,7 +23,7 @@ Cursor :: struct {
     begin_selection: IntVector2 = .{-1, -1};
     style: CursorStyle;
     reset_blink: bool;
-    history: CursorActionHistory;
+    move_history: CursorMoveHistory;
 }
 
 TextSelection :: struct {

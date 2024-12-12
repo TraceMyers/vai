@@ -1,13 +1,9 @@
 
 Action_Execution :: struct {
 
-    Initialize :: () {
-        // view_layer_action_execution_vtable[Action.SCROLL_DOWN] = Cursor_Scroll_Down;
-    }
+    Initialize :: () {}
 
-    Shutdown :: () {
-
-    }
+    Shutdown :: () {}
 }
 
 Cursor_Scroll_Down :: () {
@@ -218,20 +214,6 @@ Delete_Line :: () {
             Remove_Line(text_buffer, cursor.y);
         }
         Cursor_Scroll_To_Line_Begin();
-    }
-}
-
-Word_Scroll_Forward_Maybe_Go_To_Next_Line :: (force_exit := false, allow_newline := true) #expand {
-    if `cursor.y == `text_buffer.lines.count - 1 || force_exit {
-        `cursor.x = Clamp_X_To_Line(`cursor.x, `line);
-        break;
-    } else if allow_newline {
-        `cursor.x = 0;
-        `cursor.target_x = 0;
-        Cursor_Scroll_Down();
-        `reference_blob = .WHITESPACE;
-        `line = Line_View(`text_buffer, `cursor.y);
-        if `line.count == 0 then break;
     }
 }
 
@@ -505,11 +487,11 @@ Toggle_Comment_Selection :: () {
         }
     }
 
-    insert_chars := u32.[#char "/", #char "/", #char " "];
+    COMMENT_CODE_POINTS :: u32.[#char "/", #char "/", #char " "];
 
     if toggle_on then for selection_begin.y..selection_end.y {
         Y_Iterate_Maybe_Continue();
-        Insert_Code_Points(text_buffer, cursor.y, cursor.x, insert_chars);
+        Insert_Code_Points(text_buffer, cursor.y, cursor.x, COMMENT_CODE_POINTS);
     } else for selection_begin.y..selection_end.y {
         Y_Iterate_Maybe_Continue();
         if cursor.x < line.count - 2 && Code_Point_Equal_To(line[cursor.x+2], #char " ") {
@@ -547,6 +529,23 @@ Enter_Visual_Mode :: () {
     cursor.begin_selection = .{cursor.x, cursor.y};
 }
 
+Delete_Toward_Line_Zero :: () {
+    Init_Cursor_Proc_Or_Return();
+    line := Line_View(text_buffer, cursor.y);
+    if line.count == 0 || cursor.x == 0 then return;
+    end_x := cursor.x;
+    cursor.x = 0;
+    delete_ct := end_x - cursor.x;
+    Remove_Code_Points(text_buffer, cursor.y, cursor.x, delete_ct);
+}
+
+Replace_Toward_Line_Zero :: () {
+    Delete_Toward_Line_Zero();
+    Enter_Insert_Mode(false);
+}
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 Repeat_Last_Change :: () {
     if last_action_executor && last_action_executor != #this {
         last_action_executor();
@@ -565,26 +564,6 @@ Init_Cursor_Proc_Or_Return :: ($RESET_BLINK := true) #expand {
         `cursor.reset_blink = true;
     }
 }
-
-// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-Action_Executor :: #type ();
-
-TabExpansionSkip :: enum {
-    NONE;
-    FORWARD;
-    BACKWARD;
-}
-
-TextBlobType :: enum {
-    KEYWORD;
-    NON_KEYWORD;
-    WHITESPACE;
-}
-
-last_action_executor: Action_Executor;
-
-#scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 
 Clamp_X_To_Line :: (x: s32, line: []u32, $TAB_EXPANSION_SKIP: TabExpansionSkip = .BACKWARD) -> s32 {
     Scroll_Through_Tab_Expansion_Forward :: () #expand {
@@ -617,6 +596,27 @@ Clamp_X_To_Line :: (x: s32, line: []u32, $TAB_EXPANSION_SKIP: TabExpansionSkip =
     return x;
 }
 
+// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+Action_Executor :: #type ();
+
+TabExpansionSkip :: enum {
+    NONE;
+    FORWARD;
+    BACKWARD;
+}
+
+TextBlobType :: enum {
+    KEYWORD;
+    NON_KEYWORD;
+    WHITESPACE;
+}
+
+last_action_executor: Action_Executor;
+last_executor_repeat_ct: s64;
+
+#scope_file // ------------------------------------------------------------------------------------------------ { FILE }
+
 Get_Marked_Utf32_Blob_Type :: inline (marked_utf32: u32) -> TextBlobType {
     if Is_Alphanumeric_Or_Underscore(marked_utf32) {
         return .KEYWORD;
@@ -624,5 +624,19 @@ Get_Marked_Utf32_Blob_Type :: inline (marked_utf32: u32) -> TextBlobType {
         return .WHITESPACE;
     } else {
         return .NON_KEYWORD;
+    }
+}
+
+Word_Scroll_Forward_Maybe_Go_To_Next_Line :: (force_exit := false, allow_newline := true) #expand {
+    if `cursor.y == `text_buffer.lines.count - 1 || force_exit {
+        `cursor.x = Clamp_X_To_Line(`cursor.x, `line);
+        break;
+    } else if allow_newline {
+        `cursor.x = 0;
+        `cursor.target_x = 0;
+        Cursor_Scroll_Down();
+        `reference_blob = .WHITESPACE;
+        `line = Line_View(`text_buffer, `cursor.y);
+        if `line.count == 0 then break;
     }
 }

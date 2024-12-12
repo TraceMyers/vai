@@ -53,6 +53,7 @@ Input :: struct {
         array_reset(*action_input_buffer);
         array_reset(*action_binding_buffer);
         array_reset(*action_code_point_strings);
+        array_reset(*action_repeat_buffer);
     }
 
 }
@@ -67,13 +68,20 @@ Translate_Inputs_To_Actions :: () -> any_input: bool {
     // TODO: how macro works = pump string into input queue, so it automatically gets translated into actions
     skip := false;
     modified_utf32 := Process_Raw_Input();
-    if modified_utf32.count == 0 && action_input_buffer.count == 0 {
+    if modified_utf32.count == 0 && action_input_buffer.count == 0 && action_repeat_buffer.count == 0 {
         return false;
     }
 
     for modified_utf32 {
-        array_add(*action_input_buffer, it);
         action_input_timer = ACTION_BUFFER_MAX_TIME;
+
+        // intercept digits for repeating actions
+        if vi_mode != .INSERT && action_input_buffer.count == 0 && ((it >= #char "1" && it <= #char "9") || (action_repeat_buffer.count > 0 && it == #char "0")) {
+            array_add(*action_repeat_buffer, ub(it));
+            continue;
+        }
+
+        array_add(*action_input_buffer, it);
         
         // try execute action
         match_count, exact_match_count := Get_Input_Buffer_Action_Matches(*action_matches, vi_mode);
@@ -86,7 +94,7 @@ Translate_Inputs_To_Actions :: () -> any_input: bool {
         }
     }
 
-    if action_input_buffer.count > 0 {
+    if action_input_buffer.count > 0 || action_repeat_buffer.count > 0 {
         action_input_timer -= Smoothed_Delta_Time();
         if action_input_timer <= 0 {
             push_matches : *[..]ActionMatch = ifx Get_Input_Buffer_Action_Matches(*action_matches, vi_mode) then *action_matches else null;
@@ -102,17 +110,22 @@ Dump_Action_Input_Buffer :: (action_matches: *[..]ActionMatch = null) {
         any_exact_action_matches = Push_Exact_Action_Matches(action_matches);
     } 
     if (vi_mode == .COMMAND || vi_mode == .INSERT) && !any_exact_action_matches {
+        for action_repeat_buffer {
+            array_add(*auxiliary_input_buffer, it);
+        }
         for action_input_buffer {
             array_add(*auxiliary_input_buffer, Remove_Modifier_Flags(it));
         }
         Process_Text_Input(auxiliary_input_buffer);
         array_reset_keeping_memory(*auxiliary_input_buffer);
     }
+    array_reset_keeping_memory(*action_repeat_buffer);
     array_reset_keeping_memory(*action_input_buffer);
 }
 
 Get_Input_Buffer_Action_Matches :: (matches: *[..]ActionMatch, mode: ViMode) -> s64, s64 {
     array_reset_keeping_memory(matches);
+    if action_input_buffer.count == 0 then return 0, 0;
 
     exact_match_count := 0;
     first_byte := tub(action_input_buffer[0]);
@@ -149,9 +162,24 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
             }
             action_executor_proc := DEFAULT_ACTION_BINDINGS[it.action].extension.proc;
             if action_executor_proc != null {
-                action_executor_proc();
+
+                repeat_ct: s64;
+                parse_repeat_ct_success: bool;
+                if action_repeat_buffer.count > 0 {
+                    repeat_ct, parse_repeat_ct_success = parse_int(*As_String(action_repeat_buffer));
+                }
+                if !parse_repeat_ct_success {
+                    repeat_ct = 1;
+                }
+                if action_executor_proc == Repeat_Last_Change {
+                    repeat_ct *= ifx last_executor_repeat_ct == 0 then 1 else last_executor_repeat_ct;
+                }
+                for 0..repeat_ct-1 {
+                    action_executor_proc();
+                }
                 if DEFAULT_ACTION_BINDINGS[it.action].extension.is_change {
                     last_action_executor = action_executor_proc;
+                    last_executor_repeat_ct = repeat_ct;
                 }
             }
             any_exact = true;
@@ -421,6 +449,7 @@ modifier_keys: ModifierKeysState;
 action_input_buffer: [..]u32;
 
 // when input does not translate to action, it overflows into this buffer
+action_repeat_buffer: [..]u8;
 auxiliary_input_buffer: [..]u32;
 auxiliary_input_buffer_prev_count: s64;
 action_input_timer: float32;
