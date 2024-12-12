@@ -422,7 +422,7 @@ Delete_Selection :: (enter_normal_mode: bool) {
 
         line_count: s32 = xx Line_Count(text_buffer, edit_y);
         if it == selection_end.y {
-            end_x = selection_end.x;
+            end_x = ifx line_count == 0 then 0 else selection_end.x;
         } else {
             end_x = line_count;
         }

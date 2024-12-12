@@ -75,8 +75,11 @@ Translate_Inputs_To_Actions :: () -> any_input: bool {
     for modified_utf32 {
         action_input_timer = ACTION_BUFFER_MAX_TIME;
 
-        // intercept digits for repeating actions
-        if vi_mode != .INSERT && action_input_buffer.count == 0 && ((it >= #char "1" && it <= #char "9") || (action_repeat_buffer.count > 0 && it == #char "0")) {
+        // intercept digits meant for repeating actions n times
+        is_zero := it == #char "0";
+        is_num_one_to_nine := (it >= #char "1" && it <= #char "9");
+        is_pushable_repeat_digit := is_num_one_to_nine || (action_repeat_buffer.count > 0 && is_zero);
+        if vi_mode == .NORMAL && vi_mode == .VISUAL && action_input_buffer.count == 0 && is_pushable_repeat_digit {
             array_add(*action_repeat_buffer, ub(it));
             continue;
         }
@@ -162,7 +165,6 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
             }
             action_executor_proc := DEFAULT_ACTION_BINDINGS[it.action].extension.proc;
             if action_executor_proc != null {
-
                 repeat_ct: s64;
                 parse_repeat_ct_success: bool;
                 if action_repeat_buffer.count > 0 {
