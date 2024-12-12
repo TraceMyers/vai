@@ -405,7 +405,7 @@ Delete_Selection :: () {
     cursor.x = Clamp_X_To_Line(selection_begin.x, Line_View(text_buffer, cursor.y));
     cursor.target_x = cursor.x;
 
-    // if this is a multi-line delete and the first and last line both
+    // if this is a multi-line delete and the first and last line both had remaining characters
     if do_concatenate {
         Enter_Insert_Mode(false);
         Cursor_Scroll_Down();
@@ -414,6 +414,52 @@ Delete_Selection :: () {
     }
 
     Enter_Normal_Mode();
+}
+
+Toggle_Comment_Selection :: () {
+    Init_Cursor_Proc_Or_Return();
+
+    selection_begin, selection_end: IntVector2;
+    if vi_mode == .VISUAL {
+        selection_begin, selection_end = Cursor_Selection(cursor);
+    } else {
+        selection_begin = .{cursor.x, cursor.y};
+        selection_end = .{cursor.x, cursor.y};
+    }
+
+    Y_Iterate_Maybe_Continue :: () #expand {
+        `cursor.y = `it;
+        Cursor_Scroll_To_Line_Begin();
+        `line := Line_View(`text_buffer, `cursor.y);
+        if `line.count == 0 then continue;
+    }
+
+    save_cursor_x := cursor.x;
+    save_cursor_y := cursor.y;
+    toggle_on := false;
+    for selection_begin.y..selection_end.y {
+        Y_Iterate_Maybe_Continue();
+        if cursor.x >= line.count - 1 || !Code_Point_Equal_To(line[cursor.x], #char "/") || !Code_Point_Equal_To(line[cursor.x+1], #char "/") {
+            toggle_on = true;
+            break;
+        }
+    }
+
+    insert_chars := u32.[#char "/", #char "/", #char " "];
+
+    if toggle_on then for selection_begin.y..selection_end.y {
+        Y_Iterate_Maybe_Continue();
+        Insert_Code_Points(text_buffer, cursor.y, cursor.x, insert_chars);
+    } else for selection_begin.y..selection_end.y {
+        Y_Iterate_Maybe_Continue();
+        if cursor.x < line.count - 2 && Code_Point_Equal_To(line[cursor.x+2], #char " ") {
+            Remove_Code_Points(text_buffer, cursor.y, cursor.x, 3);
+        } else {
+            Remove_Code_Points(text_buffer, cursor.y, cursor.x, 2);
+        }
+    }
+    cursor.x = save_cursor_x;
+    cursor.y = save_cursor_y;
 }
 
 Enter_Visual_Mode :: () {

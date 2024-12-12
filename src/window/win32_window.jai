@@ -122,6 +122,10 @@ Receive_Window_Message :: (hwnd: HWND, message: u32, wParam: WPARAM, lParam: LPA
             last_vkey = xx wParam;
             last_vkey_modified_by_control = (modifier_keys & .CONTROL) != 0;
             last_vkey_modified_by_shift = (modifier_keys & .SHIFT) != 0;
+            // TODO:... eh something
+            if wParam == 191 {
+                Take_Raw_Input(xx #char "/");
+            }
         case WM_SYSCHAR;
               // This is here to prevent beeps when a Alt key combo is pressed. If we don't return 0, windows helpfully emits a beep sound to indicate the user that the key wasn't handled.
         case WM_CHAR;

@@ -31,6 +31,7 @@
     .{.["diw"],                 "DELETE_INSIDE_WORD",                           .{modes=.NORMAL, is_change=true,                proc=Delete_Word_Inside_Small}},
     .{.["."],                   "REPEAT_LAST_CHANGE",                           .{modes=.NORMAL,                                proc=Repeat_Last_Change}},
     .{.["d"],                   "DELETE_SELECTION",                             .{modes=.VISUAL, is_change=true,                proc=Delete_Selection}},
+    .{.["<C-/>"],               "TOGGLE_COMMENT_SELECTION"                      .{modes=.NORMAL | .VISUAL, is_change=true,      proc=Toggle_Comment_Selection}},
     .{.["__INTERNAL__"],        "CLAMP_CURSOR_X_TO_BOUNDS"                      .{modes=.NONE}},
     .{.["__INTERNAL__"],        "NONE",                                         .{modes=.NONE}}
 HERE
