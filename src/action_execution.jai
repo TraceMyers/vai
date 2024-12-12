@@ -152,7 +152,6 @@ Enter_Normal_Mode :: () {
         Cursor_Scroll_Left();
     case .VISUAL;
     }
-    cursor.begin_selection = IntVector2.{-1,-1};
     vi_mode = .NORMAL;
 }
 
@@ -222,29 +221,32 @@ Delete_Line :: () {
     }
 }
 
+Word_Scroll_Forward_Maybe_Go_To_Next_Line :: (force_exit := false, allow_newline := true) #expand {
+    if `cursor.y == `text_buffer.lines.count - 1 || force_exit {
+        `cursor.x = Clamp_X_To_Line(`cursor.x, `line);
+        break;
+    } else if allow_newline {
+        `cursor.x = 0;
+        `cursor.target_x = 0;
+        Cursor_Scroll_Down();
+        `reference_blob = .WHITESPACE;
+        `line = Line_View(`text_buffer, `cursor.y);
+        if `line.count == 0 then break;
+    }
+}
+
 Word_Scroll :: (forward: bool, small_word: bool) {
     Init_Cursor_Proc_Or_Return();
     line := Line_View(text_buffer, cursor.y);
 
-    TextBlobType :: enum {
-        KEYWORD;
-        NON_KEYWORD;
-        WHITESPACE;
-    }
-
     reference_blob: TextBlobType = ---;
-    use_x := ifx forward then cursor.x else cursor.x - 1;
+    init_x := ifx forward then cursor.x else cursor.x - 1;
+    init_y := cursor.y;
     if cursor.x >= line.count {
         reference_blob = .WHITESPACE;
     } else if !forward && cursor.x == 0 {
         reference_blob = .WHITESPACE;
-    } else if Is_Alphanumeric_Or_Underscore(line[use_x]) {
-        reference_blob = .KEYWORD;
-    } else if Is_Whitespace(line[use_x]) {
-        reference_blob = .WHITESPACE;
-    } else {
-        reference_blob = .NON_KEYWORD;
-    }
+    } else reference_blob = Get_Marked_Utf32_Blob_Type(line[init_x]);
 
     if forward {
         Cursor_Scroll_Right();
@@ -267,17 +269,7 @@ Word_Scroll :: (forward: bool, small_word: bool) {
                 cursor.x += 1;
             }
             if !found_next_blob {
-                if cursor.y == text_buffer.lines.count - 1 {
-                    cursor.x = Clamp_X_To_Line(cursor.x, line);
-                    break;
-                } else {
-                    cursor.x = 0;
-                    cursor.target_x = 0;
-                    Cursor_Scroll_Down();
-                    reference_blob = .WHITESPACE;
-                    line = Line_View(text_buffer, cursor.y);
-                    if line.count == 0 then break;
-                }
+                Word_Scroll_Forward_Maybe_Go_To_Next_Line();
             } else break;
         }
     } else {
@@ -330,7 +322,67 @@ Word_Scroll_Forward_Large :: #bake_arguments Word_Scroll(forward=true, small_wor
 Word_Scroll_Backward_Small :: #bake_arguments Word_Scroll(forward=false, small_word=true);
 Word_Scroll_Backward_Large :: #bake_arguments Word_Scroll(forward=false, small_word=false);
 
-Delete_Word :: (inside: bool, small: bool) {
+Word_Scroll_To_End :: (small: bool) {
+    Init_Cursor_Proc_Or_Return();
+    line := Line_View(text_buffer, cursor.y);
+
+    pre_scroll_x := cursor.x;
+    Cursor_Scroll_Right();
+
+    reference_blob: TextBlobType = ---;
+    init_x := cursor.x;
+    init_y := cursor.y;
+    if cursor.x >= line.count {
+        reference_blob = .WHITESPACE;
+    } else reference_blob = Get_Marked_Utf32_Blob_Type(line[init_x]);
+
+    if init_x == line.count - 1 && reference_blob != .WHITESPACE && pre_scroll_x != init_x {
+        return;
+    }
+
+    found_next_blob := false;
+    iter_ct := 0;
+    for 0..1 {
+        while cursor.x + 1 < line.count {
+            if Is_Alphanumeric_Or_Underscore(line[cursor.x+1]) {
+                if reference_blob != .KEYWORD {
+                    if reference_blob == .WHITESPACE {
+                        reference_blob = .KEYWORD;
+                    } else {
+                        found_next_blob = true;
+                        break;
+                    }
+                }
+            } else if Is_Whitespace(line[cursor.x+1]) {
+                if reference_blob != .WHITESPACE {
+                    found_next_blob = true;
+                    break;
+                }
+            } else {
+                if reference_blob != .NON_KEYWORD {
+                    if reference_blob == .WHITESPACE {
+                        reference_blob = .NON_KEYWORD;
+                    } else {
+                        found_next_blob = true;
+                        break;
+                    }
+                }
+            }
+            cursor.x += 1;
+            iter_ct += 1;
+
+        }
+        if !found_next_blob {
+            quit_early := cursor.x > init_x && reference_blob != .WHITESPACE;
+            allow_nextline := it == 0;
+            Word_Scroll_Forward_Maybe_Go_To_Next_Line(quit_early, allow_nextline);
+        } else break;
+    }
+}
+Word_Scroll_To_End_Small :: #bake_arguments Word_Scroll_To_End(small=true);
+Word_Scroll_To_End_Large :: #bake_arguments Word_Scroll_To_End(small=false);
+
+Delete_Word :: (inside: bool, small: bool, delete_trailing_whitespace: bool) {
     Init_Cursor_Proc_Or_Return();
     // 'delete inside word' = delete word the cursor is inside
     if inside {
@@ -347,7 +399,12 @@ Delete_Word :: (inside: bool, small: bool) {
 
     save_x := cursor.x;
     save_y := cursor.y;
-    Word_Scroll(true, small);
+    if delete_trailing_whitespace {
+        Word_Scroll(true, small);
+    } else {
+        Word_Scroll_To_End(small);
+        Cursor_Scroll_Right();
+    }
     if cursor.y != save_y {
         cursor.y = save_y;
         cursor.x = xx Line_Count(text_buffer, cursor.y);
@@ -360,10 +417,10 @@ Delete_Word :: (inside: bool, small: bool) {
     }
     cursor.x = Clamp_X_To_Line(cursor.x, Line_View(text_buffer, cursor.y));
 }
-Delete_Word_Small :: #bake_arguments Delete_Word(inside=false, small=true);
-Delete_Word_Inside_Small :: #bake_arguments Delete_Word(inside=true, small=true);
+Delete_Word_Small :: #bake_arguments Delete_Word(inside=false, small=true, delete_trailing_whitespace=true);
+Delete_Word_Inside_Small :: #bake_arguments Delete_Word(inside=true, small=true, delete_trailing_whitespace=true);
 
-Delete_Selection :: () {
+Delete_Selection :: (enter_normal_mode: bool) {
     Init_Cursor_Proc_Or_Return();
 
     selection_begin, selection_end := Cursor_Selection(cursor);
@@ -413,8 +470,11 @@ Delete_Selection :: () {
         Backspace();
     }
 
-    Enter_Normal_Mode();
+    if enter_normal_mode {
+        Enter_Normal_Mode();
+    }
 }
+Delete_Selection_And_Enter_Normal_Mode :: #bake_arguments Delete_Selection(enter_normal_mode=true);
 
 Toggle_Comment_Selection :: () {
     Init_Cursor_Proc_Or_Return();
@@ -462,6 +522,25 @@ Toggle_Comment_Selection :: () {
     cursor.y = save_cursor_y;
 }
 
+Replace_Selection :: () {
+    Delete_Selection(false);
+    Enter_Insert_Mode(false);
+}
+
+Replace_Line :: () {
+    Init_Cursor_Proc_Or_Return();
+    Clear_Line(text_buffer, cursor.y);
+    cursor.x = 0;
+    Enter_Insert_Mode(false);
+}
+
+Replace_Word :: (inside: bool, small: bool) {
+    Delete_Word(inside, small, false);
+    Enter_Insert_Mode(false);
+}
+Replace_Word_Small :: #bake_arguments Replace_Word(inside=false, small=true);
+Replace_Word_Inside_Small :: #bake_arguments Replace_Word(inside=true, small=true);
+
 Enter_Visual_Mode :: () {
     Init_Cursor_Proc_Or_Return();
     vi_mode = .VISUAL;
@@ -497,6 +576,12 @@ TabExpansionSkip :: enum {
     BACKWARD;
 }
 
+TextBlobType :: enum {
+    KEYWORD;
+    NON_KEYWORD;
+    WHITESPACE;
+}
+
 last_action_executor: Action_Executor;
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
@@ -530,4 +615,14 @@ Clamp_X_To_Line :: (x: s32, line: []u32, $TAB_EXPANSION_SKIP: TabExpansionSkip =
         }
     }
     return x;
+}
+
+Get_Marked_Utf32_Blob_Type :: inline (marked_utf32: u32) -> TextBlobType {
+    if Is_Alphanumeric_Or_Underscore(marked_utf32) {
+        return .KEYWORD;
+    } else if Is_Whitespace(marked_utf32) {
+        return .WHITESPACE;
+    } else {
+        return .NON_KEYWORD;
+    }
 }

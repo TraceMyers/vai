@@ -16,7 +16,7 @@ Render_Layer :: (using file_editor: *FileEditor, is_active: bool, render_pass: V
 Render_File_Editor_Background :: (using file_editor: *FileEditor, is_active: bool) {
     Render_Quad(Upper_Left(), Lower_Right(), .{rgb=file_editor_background_color, a=1.0});
 
-    if cursor.begin_selection != IntVector2.{-1, -1} {
+    if vi_mode == .VISUAL && is_active {
         renderer: TextRenderer;
         view_layer := View_Layer_From_Data(xx file_editor);
         Initialize_Text_Renderer(*renderer, view_layer);

@@ -27,11 +27,17 @@
     .(.["W"],                   "SCROLL_FORWARD_LARGE_WORD",                    .{modes=.NORMAL,                                proc=Word_Scroll_Forward_Large}),
     .(.["b"],                   "SCROLL_BACKWARD_SMALL_WORD",                   .{modes=.NORMAL,                                proc=Word_Scroll_Backward_Small}),
     .(.["B"],                   "SCROLL_BACKWARD_LARGE_WORD",                   .{modes=.NORMAL,                                proc=Word_Scroll_Backward_Large}),
+    .{.["e"],                   "SCROLL_FORWARD_TO_END_OF_SMALL_WORD",          .{modes=.NORMAL,                                proc=Word_Scroll_To_End_Small}},
+    .{.["E"],                   "SCROLL_FORWARD_TO_END_OF_LARGE_WORD",          .{modes=.NORMAL,                                proc=Word_Scroll_To_End_Large}},
     .{.["dw"],                  "DELETE_WORD",                                  .{modes=.NORMAL, is_change=true,                proc=Delete_Word_Small}},
     .{.["diw"],                 "DELETE_INSIDE_WORD",                           .{modes=.NORMAL, is_change=true,                proc=Delete_Word_Inside_Small}},
     .{.["."],                   "REPEAT_LAST_CHANGE",                           .{modes=.NORMAL,                                proc=Repeat_Last_Change}},
-    .{.["d"],                   "DELETE_SELECTION",                             .{modes=.VISUAL, is_change=true,                proc=Delete_Selection}},
+    .{.["d"],                   "DELETE_SELECTION",                             .{modes=.VISUAL, is_change=true,                proc=Delete_Selection_And_Enter_Normal_Mode}},
     .{.["<C-/>"],               "TOGGLE_COMMENT_SELECTION"                      .{modes=.NORMAL | .VISUAL, is_change=true,      proc=Toggle_Comment_Selection}},
+    .{.["c"],                   "REPLACE_SELECTION",                            .{modes=.VISUAL,                                proc=Replace_Selection}},
+    .{.["cc"],                  "REPLACE_LINE",                                 .{modes=.NORMAL, is_change=true,                proc=Replace_Line}},
+    .{.["cw"],                  "REPLACE_WORD",                                 .{modes=.NORMAL, is_change=true,                proc=Replace_Word_Small}},
+    .{.["ciw"],                 "REPLACE_INSIDE_WORD",                          .{modes=.NORMAL, is_change=true,                proc=Replace_Word_Inside_Small}},
     .{.["__INTERNAL__"],        "CLAMP_CURSOR_X_TO_BOUNDS"                      .{modes=.NONE}},
     .{.["__INTERNAL__"],        "NONE",                                         .{modes=.NONE}}
 HERE

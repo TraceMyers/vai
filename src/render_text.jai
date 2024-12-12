@@ -192,7 +192,7 @@ Render_Text_Cursor :: (renderer: *TextRenderer, cursor: *Cursor, only_preparatio
 }
 
 Render_Text_Selection_Blocks :: (renderer: *TextRenderer, text_buffer: *TextBuffer, cursor: *Cursor, y_filter := -1) {
-    if cursor.begin_selection == IntVector2.{-1, -1} then return;
+    if vi_mode != .VISUAL then return;
 
     Set_Shader_For_Blended_Color();
     start, end := Cursor_Selection(cursor);
