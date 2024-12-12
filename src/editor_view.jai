@@ -191,6 +191,17 @@ Split_View :: (v: *View, direction: SplitDirection) {
     }
 }
 
+Process_Text_Input :: (utf32: []u32) {
+    if utf32.count == 0 then return;
+    active_view_layer := Active_View_Layer();
+    if active_view_layer != null {
+        if active_view_layer.type == {
+        case .FILE_EDITOR;
+            Process_Text_Input(*active_view_layer.file_editor, utf32);
+        }
+    }
+}
+
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 Render_Views :: (full_update: bool) {
@@ -218,7 +229,6 @@ Render_Views :: (full_update: bool) {
     } else {
         Copy_Previous_Render_Target();
         Walk_View_Tree(0, Render_Partial_Update, cast(*void)null);
-        // Render_Partial_Update();
     }
 }
 
@@ -261,7 +271,7 @@ Render_Partial_Update :: (view: *View, view_id: s64, viewport_id: s64, unused: *
     renderer: TextRenderer;
     Initialize_Text_Renderer(*renderer, active_layer);
 
-    // draw a quad across the entire line. if we try to redraw over it, the transparent edges will get filled in and the text will look bold
+    // draw a bg quad across the entire line. if we try to redraw over it, the transparent edges will get filled in and the text will look bold / not blended well
     cursor_ul, cursor_lr := Render_Text_Cursor(*renderer, cursor, true);
     full_line_ul := cursor_ul;
     full_line_ul.x = renderer.align_info_main.screen_x;
@@ -271,6 +281,8 @@ Render_Partial_Update :: (view: *View, view_id: s64, viewport_id: s64, unused: *
     // TODO: bg color dependent on layer
     Set_Shader_For_Color();
     Render_Quad(full_line_ul, full_line_lr, fRGBA.{rgb=file_editor_background_color, a=1});
+
+    Render_Text_Selection_Blocks(*renderer, text_buffer, cursor, cursor.y);
 
     // redraw the line of text the cursor is on
     visual_line_index := cursor.y - renderer.text_view_clip.y;
@@ -294,7 +306,6 @@ Render_Partial_Update :: (view: *View, view_id: s64, viewport_id: s64, unused: *
         }
     }
 
-    // redraw the cursor
     Render_Text_Cursor(*renderer, cursor);
 }
 
@@ -469,8 +480,6 @@ Layer_Text_Buffer :: (layer: *ViewLayer) -> *TextBuffer {
     }
     return null;
 }
-
-// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -105,6 +105,8 @@ Dump_Action_Input_Buffer :: (action_matches: *[..]ActionMatch = null) {
         for action_input_buffer {
             array_add(*auxiliary_input_buffer, Remove_Modifier_Flags(it));
         }
+        Process_Text_Input(auxiliary_input_buffer);
+        array_reset_keeping_memory(*auxiliary_input_buffer);
     }
     array_reset_keeping_memory(*action_input_buffer);
 }
@@ -148,6 +150,9 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
             action_executor_proc := DEFAULT_ACTION_BINDINGS[it.action].extension.proc;
             if action_executor_proc != null {
                 action_executor_proc();
+                if DEFAULT_ACTION_BINDINGS[it.action].extension.is_change {
+                    last_action_executor = action_executor_proc;
+                }
             }
             any_exact = true;
         }
@@ -390,6 +395,7 @@ ViMode :: enum_flags u8{
 
 ActionDataContainer :: struct {
     modes: ViMode;
+    is_change: bool;
     proc: Action_Executor = null;
 }
 

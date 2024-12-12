@@ -7,12 +7,12 @@ DEBUG_RENDER_PARSE      :: false;
 DEBUG_POOLS             :: true;
 DEBUG_TEXT_BUFFERS      :: true;
 DEBUG_GRAPHICS          :: false;
-DEBUG_MEMORY            :: true;
+DEBUG_MEMORY            :: false;
 
 MSAA :: 4;
 
 // try force select using gpu as graphics device. less stuttering in my experience as a laptop user.
-// #program_export "NvOptimusEnablement"
-// NvOptimusEnablement: u32 = 1;
-// #program_export "AmdPowerXpressRequestHighPerformance"
-// AmdPowerXpressRequestHighPerformance: s32 = 1;
+#program_export "NvOptimusEnablement"
+NvOptimusEnablement: u32 = 1;
+#program_export "AmdPowerXpressRequestHighPerformance"
+AmdPowerXpressRequestHighPerformance: s32 = 1;

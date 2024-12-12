@@ -427,21 +427,23 @@ Release_Bin :: (using pool: *BinPool($SIZE, $T), id: *BinID, shrink_behavior := 
             #through;
         case LARGE_BIN_COUNT;
             large_moved = Move_Mark_Back(*large_mark);
-            if large_moved then Maybe_Move_Very_Large();
+            if large_moved {
+                Maybe_Move_Very_Large_Mark();
+            }
             #through;
         case MEDIUM_BIN_COUNT;
             medium_moved = Move_Mark_Back(*medium_mark);
             if medium_moved {
-                Maybe_Move_Very_Large();
-                Maybe_Move_Large();
+                Maybe_Move_Very_Large_Mark();
+                Maybe_Move_Large_Mark();
             }
             #through;
         case SMALL_BIN_COUNT;
             small_moved := Move_Mark_Back(*small_mark);
             if small_moved {
-                Maybe_Move_Very_Large();
-                Maybe_Move_Large();
-                Maybe_Move_Medium();
+                Maybe_Move_Very_Large_Mark();
+                Maybe_Move_Large_Mark();
+                Maybe_Move_Medium_Mark();
             }
         }
     } else {
@@ -502,22 +504,17 @@ Resize_Bin :: (using pool: *BinPool($SIZE, $T), id: *BinID, new_count: s64) {
         assert(bin.count < 100_000 && bin.count > -1);
     }
     if bin.count < new_count {
-        old_size := bin.count * size_of(T);
-        old_data: *u8;
-        do_copy := false;
-        if bin.count > 0 {
-            old_data = xx talloc(old_size);
-            memcpy(old_data, bin.data, old_size);
-            Release_Bin(pool, id, .DEFAULT);
-            do_copy = true;
-        }
+        old_id := id.*;
         id.* = Request_Bin(pool, new_count, .DEFAULT);
         assert(id.index != -1);
-        bin = Get_Bin(pool, id.*);
-        do_copy &= bin.count > 0;
+        new_bin := Get_Bin(pool, id.*);
+
+        do_copy := bin.count > 0 && new_bin.count > 0;
         if do_copy {
-            memcpy(bin.data, old_data, old_size);
+            memcpy(new_bin.data, bin.data, bin.count * size_of(T));
         }
+
+        Release_Bin(pool, *old_id, .DEFAULT);
     }
 }
 
@@ -559,21 +556,21 @@ Move_Mark_Back :: (mark: *s32) -> bool #expand {
     return false;
 }
 
-Maybe_Move_Very_Large :: () #expand {
+Maybe_Move_Very_Large_Mark :: () #expand {
     if !`very_large_moved && `tracker_byte == 0x0 {
         `very_large_mark = Multiple_Of_Floor(`id.index, 8);
         `very_large_moved = true;
     }
 }
 
-Maybe_Move_Large :: () #expand {
+Maybe_Move_Large_Mark :: () #expand {
     if !`large_moved && ( (`tracker_byte & 0xf0) == 0x0 || (`tracker_byte & 0x0f) == 0x0 ) {
         `large_mark = Multiple_Of_Floor(`id.index, 4);
         `large_moved = true;
     }
 }
 
-Maybe_Move_Medium :: () #expand {
+Maybe_Move_Medium_Mark :: () #expand {
     if !`medium_moved && ( (`tracker_byte & 0xc0) == 0x0 || (`tracker_byte & 0x30) == 0x0 || (`tracker_byte & 0x0c) == 0x0 || (`tracker_byte & 0x03) == 0x0 ) {
         `medium_mark = Multiple_Of_Floor(`id.index, 2);
         `medium_moved = true;

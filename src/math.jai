@@ -77,8 +77,12 @@ operator - :: inline (a: IntVector2, b: IntVector2) -> IntVector2 {
     return .{a.x - b.x, a.y - b.y};
 }
 
-operator * :: inline (a: IntVector2, scalar: s32) -> IntVector2 {
+operator * :: inline (a: IntVector2, scalar: s32) -> IntVector2 #symmetric {
     return .{a.x * scalar, a.x * scalar};
+}
+
+operator == :: inline (a: IntVector2, b: IntVector2) -> bool {
+    return (a.x == b.x) & (a.y == b.y);
 }
 
 Is_Power_Of_Two :: inline (value: s64) -> bool {

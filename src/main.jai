@@ -47,6 +47,9 @@ Vai_Main :: () {
 
         // put this at the end so we can exit the loop immediately when the window has been closed by the user
         Update_Window_Events();
+
+        // frame_rate := 1.0 / delta_time;
+        // Log("frame rate: %", frame_rate);
     }
 
     #if DEBUG_MEMORY {

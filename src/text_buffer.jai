@@ -144,12 +144,12 @@ Set_Line_Bytes :: (buffer: *TextBuffer, line_index: s64, line_str: string) {
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // line utf32 temp buffers
 
-Line_View :: inline (buffer: *TextBuffer, row: s64) -> []u32 {
+Line_View :: (buffer: *TextBuffer, row: s64) -> []u32 {
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     return utf32_buffer.array;
 }
 
-Line_Count :: inline (buffer: *TextBuffer, row: s64) -> s64 {
+Line_Count :: (buffer: *TextBuffer, row: s64) -> s64 {
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     return utf32_buffer.array.count;
 }
@@ -218,6 +218,40 @@ Remove_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64) {
     Expand_Utf32_Buffer_Tabs(utf32_buffer);
 }
 
+Remove_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, count: s64) {
+    utf32_buffer := Get_Utf32_Buffer(buffer, row);
+    assert(col < utf32_buffer.array.count);
+    #if DEBUG_TEXT_BUFFERS {
+        assert(!Is_Tab_Expanded_Space(utf32_buffer.array[col]));
+    }
+    Collapse_Tabs_Inline_And_Remove_Count(*utf32_buffer.array, col, count);
+    Expand_Utf32_Buffer_Tabs(utf32_buffer);
+}
+
+Break_Line_At :: (buffer: *TextBuffer, row: s64, col: s64) {
+    Insert_Line(buffer, row+1);
+
+    utf32_buffer := Get_Utf32_Buffer(buffer, row);
+    assert(col <= utf32_buffer.array.count);
+    #if DEBUG_TEXT_BUFFERS {
+        if col < utf32_buffer.array.count {
+            assert(!Is_Tab_Expanded_Space(utf32_buffer.array[col]));
+        }
+    }
+    if (col < utf32_buffer.array.count) {
+        copy_down: []u32 = ---;
+        copy_down.data = utf32_buffer.array.data + col;
+        copy_down.count = utf32_buffer.array.count - col;
+        Insert_Code_Points(buffer, row+1, 0, copy_down);
+        Resize_Utf32_Buffer(utf32_buffer, xx col);
+    }
+}
+
+Clear_Line :: (buffer: *TextBuffer, row: s64) {
+    utf32_buffer := Get_Utf32_Buffer(buffer, row);
+    Resize_Utf32_Buffer(utf32_buffer, 0);
+}
+
 Commit_Utf32_To_Line :: (utf32_buffer: *Utf32Buffer) {
     Collapse_Tabs_Inline(*utf32_buffer.array);
     utf32_string := As_String(utf32_buffer.array);
@@ -282,7 +316,7 @@ Get_Utf32_Buffer :: (buffer: *TextBuffer, line_index: s64, $ALLOW_ALLOCATION := 
     utf32_buffer: *Utf32Buffer;
     buffer_index := -1;
     for temp_utf32_buffers {
-        if it.home_bin_id == line.bin_id {
+        if it.home_bin_id == line.bin_id && it.home_row == line_index {
             utf32_buffer = *it;
             buffer_index = it_index;
             break;
@@ -322,11 +356,11 @@ Get_Utf32_Buffer :: (buffer: *TextBuffer, line_index: s64, $ALLOW_ALLOCATION := 
 Resize_Utf32_Buffer :: (utf32_buffer: *Utf32Buffer, count: u32) {
     if utf32_buffer.temp_bin_id.index == -1 && count > 0 {
         utf32_buffer.temp_bin_id = Request_Bin(*temp_utf32_buffer_pool, count);
-        bin := Get_Bin(*temp_utf32_buffer_pool, utf32_buffer.temp_bin_id);
-        utf32_buffer.array.data = bin.data;
     } else {
         Resize_Bin(*temp_utf32_buffer_pool, *utf32_buffer.temp_bin_id, count);
     }
+    bin := Get_Bin(*temp_utf32_buffer_pool, utf32_buffer.temp_bin_id);
+    utf32_buffer.array.data = bin.data;
     utf32_buffer.array.count = count;
 }
 
@@ -425,6 +459,18 @@ Collapse_Tabs_Inline_And_Remove :: (data: *[]u32, col: s64) {
     inline_buffer := Inline_Buffer(data.*);
     for data.* {
         if it_index == col then continue;
+        Inline_Append_Code_Point(*inline_buffer, it, it_index);
+    }
+    data.count = inline_buffer.count;
+}
+
+Collapse_Tabs_Inline_And_Remove_Count :: (data: *[]u32, col: s64, count: s64) {
+    if data.count == 0 {
+        return;
+    }
+    inline_buffer := Inline_Buffer(data.*);
+    for data.* {
+        if it_index >= col && it_index < (col + count) then continue;
         Inline_Append_Code_Point(*inline_buffer, it, it_index);
     }
     data.count = inline_buffer.count;

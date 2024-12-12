@@ -36,6 +36,14 @@ Is_Whitespace :: inline (marked_code_point: u32) -> bool {
     return ((marked_code_point & TAB_OR_EXPANDED_SPACE_MARK) != 0) || marked_code_point == #char " ";
 }
 
+Is_Alphanumeric_Or_Underscore :: inline (marked_code_point: u32) -> bool {
+    utf32 := Marked_Code_Point_Utf32(marked_code_point);
+    return (utf32 >= #char "A" && utf32 <= #char "Z") 
+        || (utf32 >= #char "a" && utf32 <= #char "z") 
+        || (utf32 >= #char "0" && utf32 <= #char "9")
+        || utf32 == #char "_";
+}
+
 Get_Unmarked_Utf8 :: (in_utf32: []u32, out_utf8: *[..]u8, out_colors: *[..]TextColorLocation) {
     array_reset_keeping_memory(out_utf8);
     array_reset_keeping_memory(out_colors);

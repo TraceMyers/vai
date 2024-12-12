@@ -191,6 +191,36 @@ Render_Text_Cursor :: (renderer: *TextRenderer, cursor: *Cursor, only_preparatio
     return IntVector2.{ul_x, ul_y}, IntVector2.{lr_x, lr_y};
 }
 
+Render_Text_Selection_Blocks :: (renderer: *TextRenderer, text_buffer: *TextBuffer, cursor: *Cursor, y_filter := -1) {
+    if cursor.begin_selection == IntVector2.{-1, -1} then return;
+
+    Set_Shader_For_Blended_Color();
+    start, end := Cursor_Selection(cursor);
+
+    for start.y..end.y {
+        if y_filter != -1 && it != y_filter {
+            continue;
+        }
+        highlight_begin_x: s32;
+        highlight_end_x: s32;
+        if it == start.y {
+            highlight_begin_x = start.x;
+        } else {
+            highlight_begin_x = 0;
+        }
+        if it == end.y {
+            highlight_end_x = end.x;
+        } else {
+            highlight_end_x = xx Line_Count(text_buffer, it);
+        }
+
+        ul_x, ul_y := Text_To_Render_Space(renderer, highlight_begin_x, it);
+        lr_x, _ := Text_To_Render_Space(renderer, highlight_end_x, it);
+        lr_y := ul_y + renderer.screen_line_height;
+        Render_Quad(.{ul_x, ul_y}, .{lr_x, lr_y}, color=.{rgb=fRGB_WHITE, a=0.2});
+    }
+}
+
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 Alignment :: enum {
