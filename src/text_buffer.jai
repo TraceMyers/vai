@@ -107,7 +107,6 @@ Load_File_Into_Buffer :: (path: string) -> s64 {
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // add/remove lines and get/set line bytes
 
-
 Append_Line :: (buffer: *TextBuffer, line_str: string) {
     Commit_And_Empty_Utf32_Buffers();
     array_add(*buffer.lines, .{});
@@ -494,14 +493,39 @@ Utf8_From_Modified_Utf32_Array :: (bin: []u32, true_count: s64) -> string {
 // types
 
 Push_Deleted_Text_Section_To_Current_Change :: (buffer: *TextBuffer, row: s64, start_col := -1, end_col := -1) {
+    utf32_buffer := Get_Utf32_Buffer(buffer, row);
+
+    adjusted_start_col, adjusted_end_col: s64;
+    if start_col != -1 {
+        for utf32_buffer.array {
+            exit_loop := true;
+            if !Is_Tab_Expanded_Space(it) {
+                if it_index < start_col {
+                    adjusted_start_col += 1;
+                    exit_loop = false;
+                }
+                if it_index < end_col {
+                    adjusted_end_col += 1;
+                    exit_loop = false;
+                }
+                if exit_loop then break;
+            }
+        }
+    } else {
+        adjusted_end_col = -1;
+    }
+    if end_col == -1 {
+        adjusted_end_col = -1;
+    }
+
     raw_view := Raw_Line_View(buffer, row);    
-    if start_col == -1 {
+    if adjusted_start_col == -1 {
         // whole line
         Push_Deleted_Text_To_Current_Change(raw_view, true);
-    } else if end_col == -1 {
+    } else if adjusted_end_col == -1 {
         // one code point
-        raw_view.data += start_col;
-        raw_view.count = 1;
+        raw_view.data += adjusted_start_col;
+        raw_view.count = min(1, raw_view.count);
         Push_Deleted_Text_To_Current_Change(raw_view, false);
     } /*else if end_col == raw_view.count + 1{
         // to the end of the line + newline
@@ -511,9 +535,9 @@ Push_Deleted_Text_Section_To_Current_Change :: (buffer: *TextBuffer, row: s64, s
         Push_Deleted_Text_To_Current_Change(raw_view, true);
     }*/ else {
         // section of line
-        assert(end_col > start_col);
-        raw_view.data += start_col;
-        raw_view.count = end_col - start_col;
+        assert(end_col > adjusted_start_col);
+        raw_view.data += adjusted_start_col;
+        raw_view.count = adjusted_end_col - adjusted_start_col;
         Push_Deleted_Text_To_Current_Change(raw_view, false);
     }
 }
@@ -540,7 +564,7 @@ Push_Input_Text_To_Current_Change :: (text: []$T) {
 
 Push_Deleted_Text_To_Current_Change :: (text: []u32, newline_at_end: bool) {
     Init_Cursor_Proc_Or_Return();
-    if text.count <= 0 return;
+    if text.count <= 0 && !newline_at_end then return;
     if text_buffer.change_history.count == 0 {
         Push_Back(*text_buffer.change_history, .{});
     }
@@ -580,7 +604,7 @@ Add_Text_To_Change :: (using change_tack: *BinTack, text: []$T, add_newline_at_e
         Resize_Bin(*undo_redo_text, *bin_id, new_count);
     }
     bin := Get_Bin(*undo_redo_text, bin_id);
-    for 0..text.count - 1 {
+    if text.count > 0 then for 0..text.count - 1 {
         bin[count + it] = text[it];
     }
     if add_newline_at_end {
