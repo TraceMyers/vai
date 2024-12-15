@@ -1,4 +1,14 @@
 
+// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// data
+
+file_buffers: DynamicPool(TextBuffer);
+general_text_buffer: TextBuffer;
+
+temp_utf32_buffer_pool: BinPool(24, u32); 
+temp_utf32_buffers: [..]Utf32Buffer;
+undo_redo_text: BinPool(16, u32);
+
 // NOTE TO SELF: be careful not to alias data when working with bins inline then copying into the bin
 // NOTE TO SELF: tab-expanded column is the only real column outside this file, but tab-expanded spaces are invalid to edit
 
@@ -12,6 +22,7 @@ Text_Buffers :: struct {
         Initialize(*file_buffers, 32);
         Initialize_Text_Buffer(*general_text_buffer, "", 1024, 1024);
         Assign_Bin_Pool_Allocator(*temp_utf32_buffer_pool, temp);
+        Bin_Pool_Initialize(*undo_redo_text);
         temp_utf32_buffers.allocator = temp;
         return true;
     }
@@ -19,6 +30,7 @@ Text_Buffers :: struct {
     Shutdown :: () {
         Shutdown(*file_buffers, Shutdown_Text_Buffer);
         Shutdown_Text_Buffer(*general_text_buffer);
+        Bin_Pool_Shutdown(*undo_redo_text);
     }
 
 }
@@ -42,12 +54,16 @@ Initialize_Text_Buffer :: (buffer: *TextBuffer, path: string, prealloc_lines := 
         array_reserve(*buffer.lines, prealloc_lines);
     }
     buffer.file_path = path;
+    Circular_Buffer_Initialize(*buffer.change_history, settings_file_data.change_history_count, true);
+    Circular_Buffer_Initialize(*buffer.redo_history, settings_file_data.change_history_count, true);
 }
 
 Shutdown_Text_Buffer :: (buffer: *TextBuffer) {
     Bin_Pool_Shutdown(*buffer.line_pool);
     array_reset(*buffer.lines);
     String_Reset(*buffer.file_path);
+    Circular_Buffer_Reset(*buffer.change_history);
+    Circular_Buffer_Reset(*buffer.redo_history);
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -278,37 +294,6 @@ Remove_Utf32_Buffer :: (buffer: *TextBuffer, row: s64) {
     }
 }
 
-// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// types
-
-LineBuffer :: struct {
-    bin_id: BinID;
-    byte_count: u32;
-}
-
-TextBuffer :: struct {
-    lines: [..]LineBuffer;
-    line_pool: BinPool(24, u8);
-    file_path: string;
-}
-
-Utf32Buffer :: struct {
-    home_buffer: *TextBuffer;
-    home_row: u32;
-    home_bin_id: BinID;
-    temp_bin_id: BinID;
-    array: []u32;
-}
-
-// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// data
-
-file_buffers: DynamicPool(TextBuffer);
-general_text_buffer: TextBuffer;
-
-temp_utf32_buffer_pool: BinPool(24, u32); 
-temp_utf32_buffers: [..]Utf32Buffer;
-
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 
 Get_Utf32_Buffer :: (buffer: *TextBuffer, line_index: s64, $ALLOW_ALLOCATION := true) -> *Utf32Buffer {
@@ -481,4 +466,96 @@ Commit_And_Empty_Utf32_Buffers :: () {
         Commit_Utf32_To_Line(*it);
     }
     array_reset(*temp_utf32_buffers);
+}
+
+#scope_export // -------------------------------------------------------------------------------------------- { EXPORT }
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// types
+
+Start_New_Change :: (inciting_text: []u32) {
+    Init_Cursor_Proc_Or_Return();
+    if text_buffer.change_history.count == 0 {
+        Push_Back(*text_buffer.change_history, .{});
+    }
+
+    change := Peek_Back(*text_buffer.change_history);
+    assert(change.raw_text_id.index == -1);
+    Add_Text_To_Change(change, inciting_text);
+}
+
+Push_Raw_Text_To_Current_Change :: (text: []$T) {
+    Init_Cursor_Proc_Or_Return();
+    if text.count <= 0 return;
+    assert(text_buffer.change_history.count > 0);
+
+    change := Peek_Back(*text_buffer.change_history);
+    assert(change.raw_text_id.index != -1);
+    Add_Text_To_Change(change, text);
+}
+
+End_Current_Change :: (ending_text: []u32) {
+    Init_Cursor_Proc_Or_Return();
+    if text_buffer.change_history.count == 0 {
+        return;
+    }
+
+    change := Peek_Back(*text_buffer.change_history);
+    change.end_position = .{cursor.x, cursor.y};
+    Add_Text_To_Change(change, ending_text);
+
+    if Is_Full(*text_buffer.change_history) {
+        oldest_change := Peek_Front(*text_buffer.change_history);
+        if oldest_change.raw_text_id.index != -1 {
+            Release_Bin(*undo_redo_text, *oldest_change.raw_text_id);
+        }
+    }
+    Push_Back(*text_buffer.change_history, .{});
+} 
+
+Add_Text_To_Change :: (change: *ChangeArtifact, text: []$T) {
+    if change.raw_text_id.index == -1 {
+        change.raw_text_id = Request_Bin(*undo_redo_text, text.count);
+    } else {
+        Resize_Bin(*undo_redo_text, *change.raw_text_id, change.raw_text_count + text.count);
+    }
+    bin := Get_Bin(*undo_redo_text, change.raw_text_id);
+    for 0..text.count - 1 {
+        bin[change.raw_text_count + it] = text[it];
+    }
+    change.raw_text_count += xx text.count;
+}
+
+LineBuffer :: struct {
+    bin_id: BinID;
+    byte_count: u32;
+}
+
+SpecialTextArtifact :: enum {
+    NONE;
+    GO_TO_NEW_LINE_ABOVE;
+    GO_TO_NEW_LINE_BELOW;
+}
+
+ChangeArtifact :: struct {
+    id: u64;
+    end_position: IntVector2;
+    raw_text_id: BinID;
+    raw_text_count: s32;
+}
+
+TextBuffer :: struct {
+    lines: [..]LineBuffer;
+    line_pool: BinPool(24, u8);
+    file_path: string;
+    change_history: CircularBuffer(ChangeArtifact);
+    redo_history: CircularBuffer(ChangeArtifact);
+}
+
+Utf32Buffer :: struct {
+    home_buffer: *TextBuffer;
+    home_row: u32;
+    home_bin_id: BinID;
+    temp_bin_id: BinID;
+    array: []u32;
 }

@@ -32,6 +32,7 @@ SettingsFileData :: struct {
     view_max_speed := 600.0;
     key_repeat_delay := 0.3;
     key_repeat_rate := 40.0;
+    change_history_count: s32 = 8;
 
     #place window_width;
         window_info: WindowInfo = ---;

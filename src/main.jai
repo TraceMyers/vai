@@ -1,8 +1,18 @@
 
-// TODO: undo
 // TODO: enforce always at least one line in any file editor text buffer
 // TODO: font scaling in a not ugly way - how to use scale + loaded font sizes effectively
 // NOTE: put off options implementations for a while, because there are a lot of non-vim and vim options that could be brought together in a nice way, but it's probably hard to see until having gone without it for a bit.
+
+// TODO: undo
+// - make note of the vi mode before and after each action
+// - if an action is a change, start a change. if the action entered insert mode, leave the change open.
+// - while in insert mode, store all text added as part of that change 
+// - on the action that exits insert mode, close the change. 
+
+// a change is:
+// - inciting action
+// - ending row and column
+// - any text added during insert mode
 
 quit: bool;
 
@@ -36,7 +46,7 @@ Vai_Main :: () {
             Post_Resize_Window();
         }
         any_input := Translate_Inputs_To_Actions();
-        do_full_update := any_input | resized;
+        do_full_update := any_input | resized | ALWAYS_FULL_UPDATE;
 
         Begin_Update_Text_Buffers();
         Render_Views(do_full_update);
@@ -57,7 +67,7 @@ Vai_Main :: () {
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// std
+// whatever you got
 #import "Basic"()(MEMORY_DEBUGGER=DEBUG_MEMORY);
 #import "Math";
 #import "File";
@@ -100,6 +110,8 @@ Program_Print :: #import "Program_Print";
 #load "view_layers/file_editor.jai";
 #load "view_layers/top_bar.jai";
 #load "view_layers/vim_console.jai";
+#load "view_layers/debug.jai";
 #load "editor_view.jai";
 #load "text_processing.jai";
 #load "action_execution.jai";
+#load "circular_buffer.jai";

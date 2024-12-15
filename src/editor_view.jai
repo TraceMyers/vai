@@ -70,8 +70,16 @@ Create_Base_Views :: () {
         // buffer := file_buffers.items[layer.file_editor.file_buffer];
         // view_pool.items[active_view_id].layers[0].view_position.y = xx (buffer.lines.count - 1);
     }
+
+    // viewport: Viewport;
+    // layers: []ViewLayer;
+    // children_buffer: [VIEW_CHILDREN_MAX]s16;
+    // children: []s16;
+    // active_layer: s8 = -1;
+
     // test split file editor
-    Split_View(*view_pool.items[active_view_id], .VERTICAL);
+    split := Split_View(*view_pool.items[active_view_id], .VERTICAL, false);
+    split.layers[0].type = .DEBUG;
 }
 
 Prepare_Intro_File :: () -> string {
@@ -158,7 +166,7 @@ Add_View_Layer :: (v: *View, layer: *ViewLayer) {
     v.layers[i] = layer.*;
 }
 
-Split_View :: (v: *View, direction: SplitDirection) {
+Split_View :: (v: *View, direction: SplitDirection, set_as_active := true) -> *View {
     parent_id := Find_Parent(v);
     assert(parent_id != -1);
     parent := Get_Item(*view_pool, parent_id);
@@ -179,7 +187,9 @@ Split_View :: (v: *View, direction: SplitDirection) {
     }
 
     new_view_id = Add_View(.{}, *layer_copy, parent_id);
-    Set_Active_View(new_view_id);
+    if set_as_active {
+        Set_Active_View(new_view_id);
+    }
     new_view := Get_Item(*view_pool, new_view_id);
 
     if direction == .HORIZONTAL {
@@ -189,6 +199,7 @@ Split_View :: (v: *View, direction: SplitDirection) {
         v.viewport.left = 0.5;
         new_view.viewport.right = 0.5;
     }
+    return new_view;
 }
 
 Process_Text_Input :: (utf32: []u32) {
@@ -263,6 +274,7 @@ Render_Partial_Update :: (view: *View, view_id: s64, viewport_id: s64, unused: *
     cursor := Layer_Cursor(active_layer);
     if cursor == null then return;
     text_buffer := Layer_Text_Buffer(active_layer);
+    if text_buffer == null then return;
 
     rect := viewport_rects[viewport_id];
     rendering_scissor_ul, rendering_scissor_lr = Viewport_Rect_Points(*rect, s32);
@@ -433,6 +445,7 @@ ViewLayerType :: enum_flags u16 {
     TOP_BAR :: 0x01;
     FILE_EDITOR;
     VIM_CONSOLE;
+    DEBUG;
     ALL :: TOP_BAR | FILE_EDITOR | VIM_CONSOLE;
 }
 
@@ -441,6 +454,7 @@ ViewLayerData :: union {
     top_bar: TopBar = ---;
     file_editor: FileEditor = ---;
     vim_console: VimConsole = ---;
+    debug: DebugView = ---;
 }
 
 ViewLayer :: struct {
@@ -477,10 +491,22 @@ Layer_Text_Buffer :: (layer: *ViewLayer) -> *TextBuffer {
         } else {
             return *file_buffers.items[buffer_index];
         }
+    case .DEBUG;
+        if layer.debug.type == .REDO_TEXT {
+            if Active_View_Layer().type == .FILE_EDITOR {
+                buffer := *file_buffers.items[Active_View_Layer().file_editor.file_buffer];
+                return Temp_Text_Buffer(*buffer.change_history);
+            }
+        }
+        // buffer_index := layer.debug.text_buffer;
+        // if buffer_index == -1 {
+        //     return null;
+        // } else {
+        //     return 
+        // }
     }
     return null;
 }
-
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // layer types
@@ -502,6 +528,16 @@ VimConsole :: CursorLayer(
         display_only: bool;
     }
 );
+
+DebugView :: CursorLayer(
+    struct {
+        type: DebugViewType;
+    }   
+);
+
+DebugViewType :: enum u8 {
+    REDO_TEXT;
+}
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

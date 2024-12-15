@@ -144,3 +144,9 @@ Arrays_Equal :: (a: []$T, b: []T) -> bool {
     for a { if it != b[it_index] then return false; }
     return true;
 }
+
+Array_Append :: (a: *[]$T, b: []T) {
+    prev_count := a.count;
+    array_resize(a, a.count + b.count);
+    memcpy(a.data + prev_count, b.data, (a.count - prev_count) * size_of(T));
+}

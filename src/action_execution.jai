@@ -124,6 +124,11 @@ Scroll_To_Next_Editor :: () {
 }
 
 Insert_New_Line :: () {
+    Insert_New_Line_Impl();
+    Push_Raw_Text_To_Current_Change(PLATFORM_CARRIAGE_RETURN);
+}
+
+Insert_New_Line_Impl :: inline () {
     Init_Cursor_Proc_Or_Return();
     // Insert_Line(text_buffer, cursor.y);
     Break_Line_At(text_buffer, cursor.y, cursor.x);
@@ -152,6 +157,11 @@ Enter_Normal_Mode :: () {
 }
 
 Backspace :: () {
+    Backspace_Impl();
+    Push_Raw_Text_To_Current_Change(u32.[#char "\x08"]);
+}
+
+Backspace_Impl :: inline () {
     Init_Cursor_Proc_Or_Return();
     if cursor.x > 0 {
         // search backward for valid character to delete
@@ -449,7 +459,7 @@ Delete_Selection :: (enter_normal_mode: bool) {
         Enter_Insert_Mode(false);
         Cursor_Scroll_Down();
         Cursor_Scroll_To_Line_Zero();
-        Backspace();
+        Backspace_Impl();
     }
 
     if enter_normal_mode {
@@ -547,9 +557,22 @@ Replace_Toward_Line_Zero :: () {
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 Repeat_Last_Change :: () {
-    if last_action_executor && last_action_executor != #this {
-        last_action_executor();
+    Init_Cursor_Proc_Or_Return();
+
+    if text_buffer.change_history.count < 2 {
+        return;
     }
+    change := Peek_Back_Minus(*text_buffer.change_history, 1);
+    if change.raw_text_id.index == -1 {
+        return;
+    }
+
+    bin := Get_Bin(*undo_redo_text, change.raw_text_id);
+    Log("bin[0] = %", bin[0]);
+    bin.count = change.raw_text_count;
+    // change.inciting_executor();
+    Inject_Modified_Utf32_Into_Frame_Input(bin);
+    // TODO: get back to normal mode
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

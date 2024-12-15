@@ -7,6 +7,7 @@ sb  :: inline (val: s64) -> s8  #expand { return cast(s8)val;  }
 sw  :: inline (val: s64) -> s16 #expand { return cast(s16)val; }
 sdw :: inline (val: s64) -> s32 #expand { return cast(s32)val; }
 sqw :: inline (val: s64) -> s64 #expand { return cast(s64)val; }
+sqw :: inline (val: u64) -> s64 #expand { return cast(s64)val; }
 
 pub  :: inline (val: s64) -> *u8  #expand { return cast(*u8)val;  }
 puw  :: inline (val: s64) -> *u16 #expand { return cast(*u16)val; }

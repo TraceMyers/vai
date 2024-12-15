@@ -1,4 +1,7 @@
 
+NO_OP : u32 : ~cast(u32)0; 
+DIRECT_ACTION_FLAG : u32 : 0x08_00_00_00;
+
 // for used with Scoped_Construct
 Input :: struct {
 
@@ -58,6 +61,22 @@ Input :: struct {
 
 }
 
+Inject_Modified_Utf32_Into_Frame_Input :: (input: []u32) {
+    if input.count == 0 {
+        return;
+    }
+    old_count := frame_input_stream.count;
+    new_count := frame_input_stream.count + input.count;
+    array_resize(*frame_input_stream, new_count);
+    next_stream_index := frame_input_stream_index + 1;
+    if next_stream_index < old_count {
+        for #v2 < next_stream_index..old_count-1 {
+            frame_input_stream[it+input.count] = frame_input_stream[it];
+        }
+    }
+    memcpy(frame_input_stream.data + next_stream_index, input.data, input.count * size_of(u32));
+}
+
 Translate_Inputs_To_Actions :: () -> any_input: bool {
     // TODO: use text buffer?
     auxiliary_input_buffer_prev_count = auxiliary_input_buffer.count;
@@ -67,35 +86,56 @@ Translate_Inputs_To_Actions :: () -> any_input: bool {
 
     // TODO: how macro works = pump string into input queue, so it automatically gets translated into actions
     skip := false;
-    modified_utf32 := Process_Raw_Input();
-    if modified_utf32.count == 0 && action_input_buffer.count == 0 && action_repeat_buffer.count == 0 {
+    processed_input := Process_Raw_Input();
+    if processed_input.count == 0 && action_input_buffer.count == 0 && action_repeat_buffer.count == 0 {
         return false;
     }
 
-    for modified_utf32 {
-        action_input_timer = ACTION_BUFFER_MAX_TIME;
+    frame_input_stream_index = 0;
+    Array_Append(*frame_input_stream, processed_input);
 
-        // intercept digits meant for repeating actions n times
-        is_zero := it == #char "0";
-        is_num_one_to_nine := (it >= #char "1" && it <= #char "9");
-        is_pushable_repeat_digit := is_num_one_to_nine || (action_repeat_buffer.count > 0 && is_zero);
-        if vi_mode == .NORMAL && vi_mode == .VISUAL && action_input_buffer.count == 0 && is_pushable_repeat_digit {
-            array_add(*action_repeat_buffer, ub(it));
-            continue;
-        }
+    while frame_input_stream_index < frame_input_stream.count {
+        modified_utf32 := frame_input_stream[frame_input_stream_index];
 
-        array_add(*action_input_buffer, it);
-        
-        // try execute action
-        match_count, exact_match_count := Get_Input_Buffer_Action_Matches(*action_matches, vi_mode);
-        if match_count > 0 {
-            if exact_match_count == match_count {
-                Dump_Action_Input_Buffer(*action_matches);
+        skip := false;
+        // if modified_utf32 == NO_OP {
+        //     skip = true;
+        // }
+
+        if !skip {
+            action_input_timer = ACTION_BUFFER_MAX_TIME;
+
+            // intercept digits meant for repeating actions n times
+            is_zero := modified_utf32 == #char "0";
+            is_num_one_to_nine := (modified_utf32 >= #char "1" && modified_utf32 <= #char "9");
+            is_pushable_repeat_digit := is_num_one_to_nine || (action_repeat_buffer.count > 0 && is_zero);
+
+            if vi_mode == .NORMAL && vi_mode == .VISUAL && action_input_buffer.count == 0 && is_pushable_repeat_digit {
+                array_add(*action_repeat_buffer, ub(modified_utf32));
+                skip = true;
             }
-        } else {
-            Dump_Action_Input_Buffer();
+
+            if !skip {
+                array_add(*action_input_buffer, modified_utf32);
+                
+                // try execute action
+                match_count, exact_match_count := Get_Input_Buffer_Action_Matches(*action_matches, vi_mode);
+                if match_count > 0 {
+                    if exact_match_count == match_count {
+                        Dump_Action_Input_Buffer(*action_matches);
+                    }
+                } else {
+                    Dump_Action_Input_Buffer();
+                }
+            }
         }
+
+        frame_input_stream_index += 1;
     }
+
+    Log("action input: %", action_input_buffer);
+
+    array_reset_keeping_memory(*frame_input_stream);
 
     if action_input_buffer.count > 0 || action_repeat_buffer.count > 0 {
         action_input_timer -= Smoothed_Delta_Time();
@@ -108,6 +148,7 @@ Translate_Inputs_To_Actions :: () -> any_input: bool {
 }
 
 Dump_Action_Input_Buffer :: (action_matches: *[..]ActionMatch = null) {
+    Log("dump");
     any_exact_action_matches: bool;
     if action_matches {
         any_exact_action_matches = Push_Exact_Action_Matches(action_matches);
@@ -119,6 +160,11 @@ Dump_Action_Input_Buffer :: (action_matches: *[..]ActionMatch = null) {
         for action_input_buffer {
             array_add(*auxiliary_input_buffer, Remove_Modifier_Flags(it));
         }
+        if vi_mode == .INSERT {
+            Push_Raw_Text_To_Current_Change(action_repeat_buffer);
+            Push_Raw_Text_To_Current_Change(action_input_buffer);
+        }
+
         Process_Text_Input(auxiliary_input_buffer);
         array_reset_keeping_memory(*auxiliary_input_buffer);
     }
@@ -146,7 +192,7 @@ Get_Input_Buffer_Action_Matches :: (matches: *[..]ActionMatch, mode: ViMode) -> 
         }
         if match {
             exact_match := action_input_buffer.count == it.code_point_string_count;
-            array_add(matches, .{it.action, exact_match});
+            array_add(matches, .{it.action, code_point_string, exact_match});
             if exact_match {
                 exact_match_count += 1;
             }
@@ -176,12 +222,16 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
                 if action_executor_proc == Repeat_Last_Change {
                     repeat_ct *= ifx last_executor_repeat_ct == 0 then 1 else last_executor_repeat_ct;
                 }
+
+                prev_vi_mode := vi_mode;
                 for 0..repeat_ct-1 {
                     action_executor_proc();
                 }
-                if DEFAULT_ACTION_BINDINGS[it.action].extension.is_change {
-                    last_action_executor = action_executor_proc;
-                    last_executor_repeat_ct = repeat_ct;
+
+                if prev_vi_mode == .NORMAL && vi_mode == .INSERT {
+                    Start_New_Change(it.input);
+                } else if prev_vi_mode == .INSERT && vi_mode == .NORMAL {
+                    End_Current_Change(it.input);
                 }
             }
             any_exact = true;
@@ -410,6 +460,7 @@ ActionBindingGroupIndexer :: struct {
 
 ActionMatch :: struct {
     action: Action;
+    input: []u32;
     exact_match: bool;
 }
 
@@ -460,6 +511,9 @@ ACTION_BUFFER_MAX_TIME :: 0.5; // todo: this should be a setting (prob is a vim 
 action_bindings: [U8_MAX]ActionBindingGroupIndexer;
 action_binding_buffer: [..]ActionBinding;
 action_code_point_strings: [..]u32;
+
+frame_input_stream: [..]u32;
+frame_input_stream_index: s64;
 
 vi_mode: ViMode = .NORMAL;
 

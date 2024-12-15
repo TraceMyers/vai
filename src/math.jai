@@ -93,6 +93,24 @@ Add_Wrap :: inline (val: $T, amount: T, min: T, max: T) -> T {
     val += amount;
     if val > max {
         val = min;
+    } else if val < min {
+        val = max;
+    }
+    return val;
+}
+
+Increment_Wrap :: inline (val: $T, min: T, max: T) -> T {
+    val += 1;
+    if val > max {
+        val = min;
+    }
+    return val;
+}
+
+Decrement_Wrap :: inline (val: $T, min: T, max: T) -> T {
+    val -= 1;
+    if val < min {
+        val = max;
     }
     return val;
 }
