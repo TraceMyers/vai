@@ -150,3 +150,10 @@ Array_Append :: (a: *[]$T, b: []T) {
     array_resize(a, a.count + b.count);
     memcpy(a.data + prev_count, b.data, (a.count - prev_count) * size_of(T));
 }
+
+Prefix_String :: (str: string, prefix: string) -> string {
+    new_str := talloc_string(prefix.count + str.count);
+    memcpy(new_str.data, prefix.data, prefix.count);
+    memcpy(new_str.data + prefix.count, str.data, str.count);
+    return new_str;
+}

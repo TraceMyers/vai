@@ -125,12 +125,11 @@ Scroll_To_Next_Editor :: () {
 
 Insert_New_Line :: () {
     Insert_New_Line_Impl();
-    Push_Raw_Text_To_Current_Change(PLATFORM_CARRIAGE_RETURN);
+    Push_Input_Text_To_Current_Change(PLATFORM_CARRIAGE_RETURN);
 }
 
 Insert_New_Line_Impl :: inline () {
     Init_Cursor_Proc_Or_Return();
-    // Insert_Line(text_buffer, cursor.y);
     Break_Line_At(text_buffer, cursor.y, cursor.x);
     cursor.y += 1;
     cursor.x = 0;
@@ -158,7 +157,7 @@ Enter_Normal_Mode :: () {
 
 Backspace :: () {
     Backspace_Impl();
-    Push_Raw_Text_To_Current_Change(u32.[#char "\x08"]);
+    Push_Input_Text_To_Current_Change(u32.[#char "\x08"]);
 }
 
 Backspace_Impl :: inline () {
@@ -563,13 +562,12 @@ Repeat_Last_Change :: () {
         return;
     }
     change := Peek_Back_Minus(*text_buffer.change_history, 1);
-    if change.raw_text_id.index == -1 {
+    if change.input_text.bin_id.index == -1 {
         return;
     }
 
-    bin := Get_Bin(*undo_redo_text, change.raw_text_id);
-    Log("bin[0] = %", bin[0]);
-    bin.count = change.raw_text_count;
+    bin := Get_Bin(*undo_redo_text, change.input_text.bin_id);
+    bin.count = change.input_text.count;
     // change.inciting_executor();
     Inject_Modified_Utf32_Into_Frame_Input(bin);
     // TODO: get back to normal mode
@@ -583,6 +581,17 @@ Init_Cursor_Proc_Or_Return :: ($RESET_BLINK := true) #expand {
     if `cursor == null then `return;
     `text_buffer := Layer_Text_Buffer(`active_layer);
     if `text_buffer == null then `return;
+    #if RESET_BLINK {
+        `cursor.reset_blink = true;
+    }
+}
+
+Init_Cursor_Proc_Or_Return_Value :: (value: $T, $RESET_BLINK := true) -> T #expand {
+    `active_layer := Active_View_Layer();
+    `cursor := Layer_Cursor(`active_layer);
+    if `cursor == null then `return value;
+    `text_buffer := Layer_Text_Buffer(`active_layer);
+    if `text_buffer == null then `return value;
     #if RESET_BLINK {
         `cursor.reset_blink = true;
     }

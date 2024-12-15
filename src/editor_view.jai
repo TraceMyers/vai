@@ -267,10 +267,19 @@ Render_View :: (view: *View, view_id: s64, viewport_id: s64, render_pass: ViewRe
 // when the window is receiving no new input, we just copy the old render target to the new one. however,
 // for the cursor to blink we need to redraw a few things.
 Render_Partial_Update :: (view: *View, view_id: s64, viewport_id: s64, unused: *void) {
-    if view_id != active_view_id then return;
     if view.layers.data == null then return;
-
     active_layer := *view.layers[view.active_layer];
+    if view_id != active_view_id {
+        active_view_layer := Active_View_Layer();
+        if active_layer.type == .FILE_EDITOR 
+        && active_view_layer.type == .FILE_EDITOR
+        && active_layer.file_editor.file_buffer == active_view_layer.file_editor.file_buffer {
+            // it's ok
+            // TODO: there are more reasons to draw stuff here
+        } else {
+            return;
+        }
+    }
     cursor := Layer_Cursor(active_layer);
     if cursor == null then return;
     text_buffer := Layer_Text_Buffer(active_layer);

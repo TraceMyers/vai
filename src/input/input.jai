@@ -110,7 +110,7 @@ Translate_Inputs_To_Actions :: () -> any_input: bool {
             is_num_one_to_nine := (modified_utf32 >= #char "1" && modified_utf32 <= #char "9");
             is_pushable_repeat_digit := is_num_one_to_nine || (action_repeat_buffer.count > 0 && is_zero);
 
-            if vi_mode == .NORMAL && vi_mode == .VISUAL && action_input_buffer.count == 0 && is_pushable_repeat_digit {
+            if (vi_mode == .NORMAL || vi_mode == .VISUAL) && action_input_buffer.count == 0 && is_pushable_repeat_digit {
                 array_add(*action_repeat_buffer, ub(modified_utf32));
                 skip = true;
             }
@@ -133,8 +133,6 @@ Translate_Inputs_To_Actions :: () -> any_input: bool {
         frame_input_stream_index += 1;
     }
 
-    Log("action input: %", action_input_buffer);
-
     array_reset_keeping_memory(*frame_input_stream);
 
     if action_input_buffer.count > 0 || action_repeat_buffer.count > 0 {
@@ -148,7 +146,6 @@ Translate_Inputs_To_Actions :: () -> any_input: bool {
 }
 
 Dump_Action_Input_Buffer :: (action_matches: *[..]ActionMatch = null) {
-    Log("dump");
     any_exact_action_matches: bool;
     if action_matches {
         any_exact_action_matches = Push_Exact_Action_Matches(action_matches);
@@ -161,8 +158,8 @@ Dump_Action_Input_Buffer :: (action_matches: *[..]ActionMatch = null) {
             array_add(*auxiliary_input_buffer, Remove_Modifier_Flags(it));
         }
         if vi_mode == .INSERT {
-            Push_Raw_Text_To_Current_Change(action_repeat_buffer);
-            Push_Raw_Text_To_Current_Change(action_input_buffer);
+            Push_Input_Text_To_Current_Change(action_repeat_buffer);
+            Push_Input_Text_To_Current_Change(action_input_buffer);
         }
 
         Process_Text_Input(auxiliary_input_buffer);
@@ -228,10 +225,12 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
                     action_executor_proc();
                 }
 
-                if prev_vi_mode == .NORMAL && vi_mode == .INSERT {
-                    Start_New_Change(it.input);
-                } else if prev_vi_mode == .INSERT && vi_mode == .NORMAL {
-                    End_Current_Change(it.input);
+                if vi_mode == .INSERT && Is_Current_Change_Empty() {
+                    assert(prev_vi_mode != .INSERT);
+                    Push_Input_Text_To_Current_Change(it.input);
+                } else if vi_mode != .INSERT && !Is_Current_Change_Empty() {
+                    end_with_input := ifx it.action == .ENTER_NORMAL_MODE then it.input else u32.[];
+                    End_Current_Change(end_with_input);
                 }
             }
             any_exact = true;
@@ -482,6 +481,7 @@ ActionDataContainer :: struct {
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+ESCAPE_CODE_SEQUENCE :: u32.[#char "\x1b"]; // esc key
 SPECIAL_SEQUENCE_OPEN :: u32.[xx #char "<"];
 SPECIAL_SEQUENCE_CLOSE :: u32.[xx #char ">"];
 MODIFIER_SEQUENCE_SEPARATOR :: u32.[xx #char "-"];
