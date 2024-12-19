@@ -233,7 +233,7 @@ Insert_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, code_points: []u
 }
 
 Remove_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64) {
-    Push_Deleted_Text_Section_To_Current_Change(buffer, row, .[], .[], col);
+    Push_Deleted_Text_Section_To_Current_Change(buffer, row, enter_insert_mode_sequence, enter_normal_mode_sequence, col);
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     assert(col < utf32_buffer.array.count);
     #if DEBUG_TEXT_BUFFERS {
@@ -518,7 +518,7 @@ Push_Deleted_Text_Section_To_Current_Change :: (buffer: *TextBuffer, row: s64, p
         // adjusted_start_col -= prepend.count;
         adjusted_end_col := adjusted_start_col + end_col_offset;
         raw_view.data += adjusted_start_col;
-        raw_view.count = end_col_offset;
+        raw_view.count = max(end_col_offset, 1);
         if prepend.count > 0 || append.count > 0 {
             raw_view = Temp_Array_Prepend_Append(raw_view, prepend, append);
         }
