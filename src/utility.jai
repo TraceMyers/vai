@@ -158,6 +158,18 @@ Prefix_String :: (str: string, prefix: string) -> string {
     return new_str;
 }
 
+Prefix_Postfix_String :: (str: string, prefix: string, postfix: string) -> string {
+    new_str := talloc_string(prefix.count + str.count + postfix.count);
+    if prefix.count > 0 {
+        memcpy(new_str.data, prefix.data, prefix.count);
+    }
+    memcpy(new_str.data + prefix.count, str.data, str.count);
+    if postfix.count > 0 {
+        memcpy(new_str.data + prefix.count + str.count, postfix.data, postfix.count);
+    }
+    return new_str;
+}
+
 Temp_Array_Prepend_Append :: (arr: []$T, prefix: []T, suffix: []T) -> []T {
     t := Temp_Buffer(T, prefix.count + arr.count + suffix.count);
     if prefix.count > 0 {

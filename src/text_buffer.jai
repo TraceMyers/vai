@@ -244,7 +244,7 @@ Remove_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64) {
 }
 
 Remove_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, count: s64) {
-    Push_Deleted_Text_Section_To_Current_Change(buffer, row, .[], .[], col, col + count);
+    Push_Deleted_Text_Section_To_Current_Change(buffer, row, enter_insert_mode_sequence, enter_normal_mode_sequence, col, col + count);
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     assert(col < utf32_buffer.array.count);
     #if DEBUG_TEXT_BUFFERS {
@@ -494,11 +494,11 @@ Utf8_From_Modified_Utf32_Array :: (bin: []u32, true_count: s64) -> string {
 
 Push_Deleted_Text_Section_To_Current_Change :: (buffer: *TextBuffer, row: s64, prepend: []u32, append: []u32, start_col := -1, end_col := -1) {
     raw_view := Raw_Line_View(buffer, row);
-    if prepend.count > 0 {
-        raw_view = Temp_Array_Prepend_Append(raw_view, prepend, append);
-    }
     if start_col == -1 {
         // whole line
+        if prepend.count > 0 || append.count > 0 {
+            raw_view = Temp_Array_Prepend_Append(raw_view, prepend, append);
+        }
         Push_Deleted_Text_To_Current_Change(raw_view, false);
     } else {
         // adjust column numbers with collapsed tabs
@@ -511,14 +511,33 @@ Push_Deleted_Text_Section_To_Current_Change :: (buffer: *TextBuffer, row: s64, p
                 } else if it_index < end_col {
                     end_col_offset += 1;
                 } else break;
+            } else {
+                Log("DETECTED TAB EXPANDED SPACE");
             }
         }
+        // adjusted_start_col -= prepend.count;
         adjusted_end_col := adjusted_start_col + end_col_offset;
+        raw_view.data += adjusted_start_col;
+        raw_view.count = end_col_offset;
+        if prepend.count > 0 || append.count > 0 {
+            raw_view = Temp_Array_Prepend_Append(raw_view, prepend, append);
+        }
+
+        raw_str := Encode(As_String(raw_view), .UTF32, .UTF8);
+        for *raw_str {
+            if it.* == 27 {
+                it.* = #char "Z";
+            }
+        }
+        Log("raw view: (%)", raw_str);
+        Log("prepend: %, append: %", prepend, append);
+        Log("start col: %, end col: %", start_col, end_col);
+        Log("adjusted start col: %, adjusted end col: %", adjusted_start_col, adjusted_end_col);
 
         if end_col == -1 {
             // one code point
-            raw_view.data += adjusted_start_col;
-            raw_view.count = min(1, raw_view.count);
+            // raw_view.data += adjusted_start_col;
+            // raw_view.count = min(1, raw_view.count);
             Push_Deleted_Text_To_Current_Change(raw_view, false);
         } /*else if end_col == raw_view.count + 1{
             // to the end of the line + newline
@@ -529,8 +548,8 @@ Push_Deleted_Text_Section_To_Current_Change :: (buffer: *TextBuffer, row: s64, p
         }*/ else {
             // section of line
             assert(end_col > adjusted_start_col);
-            raw_view.data += adjusted_start_col;
-            raw_view.count = adjusted_end_col - adjusted_start_col;
+            // raw_view.data += adjusted_start_col;
+            // raw_view.count = adjusted_end_col - adjusted_start_col;
             Push_Deleted_Text_To_Current_Change(raw_view, false);
         }
     }
