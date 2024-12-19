@@ -89,16 +89,6 @@ Is_Power_Of_Two :: inline (value: s64) -> bool {
     return ((value >> 1) & value) == 0;
 }
 
-Add_Wrap :: inline (val: $T, amount: T, min: T, max: T) -> T {
-    val += amount;
-    if val > max {
-        val = min;
-    } else if val < min {
-        val = max;
-    }
-    return val;
-}
-
 Increment_Wrap :: inline (val: $T, min: T, max: T) -> T {
     val += 1;
     if val > max {

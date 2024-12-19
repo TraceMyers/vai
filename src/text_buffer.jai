@@ -119,7 +119,7 @@ Insert_Line :: (buffer: *TextBuffer, i: s64) {
 }
 
 Remove_Line :: (buffer: *TextBuffer, line_index: s64) {
-    Push_Deleted_Text_Section_To_Current_Change(buffer, line_index);
+    Push_Deleted_Text_Section_To_Current_Change(buffer, line_index, prepend_new_line_sequence, enter_normal_mode_sequence);
     Commit_And_Empty_Utf32_Buffers();
     line := *buffer.lines[line_index];
     if line.bin_id.index != -1 {
@@ -233,7 +233,7 @@ Insert_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, code_points: []u
 }
 
 Remove_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64) {
-    Push_Deleted_Text_Section_To_Current_Change(buffer, row, col);
+    Push_Deleted_Text_Section_To_Current_Change(buffer, row, .[], .[], col);
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     assert(col < utf32_buffer.array.count);
     #if DEBUG_TEXT_BUFFERS {
@@ -244,7 +244,7 @@ Remove_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64) {
 }
 
 Remove_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, count: s64) {
-    Push_Deleted_Text_Section_To_Current_Change(buffer, row, col, col + count);
+    Push_Deleted_Text_Section_To_Current_Change(buffer, row, .[], .[], col, col + count);
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     assert(col < utf32_buffer.array.count);
     #if DEBUG_TEXT_BUFFERS {
@@ -274,7 +274,7 @@ Break_Line_At :: (buffer: *TextBuffer, row: s64, col: s64) {
 }
 
 Clear_Line :: (buffer: *TextBuffer, row: s64) {
-    Push_Deleted_Text_Section_To_Current_Change(buffer, row, 0, buffer.lines[row].byte_count);
+    Push_Deleted_Text_Section_To_Current_Change(buffer, row, .[], .[], 0, buffer.lines[row].byte_count);
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     Resize_Utf32_Buffer(utf32_buffer, 0);
 }
@@ -492,53 +492,47 @@ Utf8_From_Modified_Utf32_Array :: (bin: []u32, true_count: s64) -> string {
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // types
 
-Push_Deleted_Text_Section_To_Current_Change :: (buffer: *TextBuffer, row: s64, start_col := -1, end_col := -1) {
-    utf32_buffer := Get_Utf32_Buffer(buffer, row);
-
-    adjusted_start_col, adjusted_end_col: s64;
-    if start_col != -1 {
+Push_Deleted_Text_Section_To_Current_Change :: (buffer: *TextBuffer, row: s64, prepend: []u32, append: []u32, start_col := -1, end_col := -1) {
+    raw_view := Raw_Line_View(buffer, row);
+    if prepend.count > 0 {
+        raw_view = Temp_Array_Prepend_Append(raw_view, prepend, append);
+    }
+    if start_col == -1 {
+        // whole line
+        Push_Deleted_Text_To_Current_Change(raw_view, false);
+    } else {
+        // adjust column numbers with collapsed tabs
+        utf32_buffer := Get_Utf32_Buffer(buffer, row);
+        adjusted_start_col, end_col_offset: s64;
         for utf32_buffer.array {
-            exit_loop := true;
             if !Is_Tab_Expanded_Space(it) {
                 if it_index < start_col {
                     adjusted_start_col += 1;
-                    exit_loop = false;
-                }
-                if it_index < end_col {
-                    adjusted_end_col += 1;
-                    exit_loop = false;
-                }
-                if exit_loop then break;
+                } else if it_index < end_col {
+                    end_col_offset += 1;
+                } else break;
             }
         }
-    } else {
-        adjusted_end_col = -1;
-    }
-    if end_col == -1 {
-        adjusted_end_col = -1;
-    }
+        adjusted_end_col := adjusted_start_col + end_col_offset;
 
-    raw_view := Raw_Line_View(buffer, row);    
-    if adjusted_start_col == -1 {
-        // whole line
-        Push_Deleted_Text_To_Current_Change(raw_view, true);
-    } else if adjusted_end_col == -1 {
-        // one code point
-        raw_view.data += adjusted_start_col;
-        raw_view.count = min(1, raw_view.count);
-        Push_Deleted_Text_To_Current_Change(raw_view, false);
-    } /*else if end_col == raw_view.count + 1{
-        // to the end of the line + newline
-        assert(end_col > start_col);
-        raw_view.data += start_col;
-        raw_view.count = (end_col - 1) - start_col;
-        Push_Deleted_Text_To_Current_Change(raw_view, true);
-    }*/ else {
-        // section of line
-        assert(end_col > adjusted_start_col);
-        raw_view.data += adjusted_start_col;
-        raw_view.count = adjusted_end_col - adjusted_start_col;
-        Push_Deleted_Text_To_Current_Change(raw_view, false);
+        if end_col == -1 {
+            // one code point
+            raw_view.data += adjusted_start_col;
+            raw_view.count = min(1, raw_view.count);
+            Push_Deleted_Text_To_Current_Change(raw_view, false);
+        } /*else if end_col == raw_view.count + 1{
+            // to the end of the line + newline
+            assert(end_col > start_col);
+            raw_view.data += start_col;
+            raw_view.count = (end_col - 1) - start_col;
+            Push_Deleted_Text_To_Current_Change(raw_view, true);
+        }*/ else {
+            // section of line
+            assert(end_col > adjusted_start_col);
+            raw_view.data += adjusted_start_col;
+            raw_view.count = adjusted_end_col - adjusted_start_col;
+            Push_Deleted_Text_To_Current_Change(raw_view, false);
+        }
     }
 }
 
@@ -573,17 +567,19 @@ Push_Deleted_Text_To_Current_Change :: (text: []u32, newline_at_end: bool) {
     Add_Text_To_Change(*change.deleted_text, text, newline_at_end);
 }
 
-End_Current_Change :: (ending_text: []u32) {
+End_Current_Change :: (ending_text: []u32, no_modify := false) {
     Init_Cursor_Proc_Or_Return();
     if text_buffer.change_history.count == 0 {
         return;
     }
 
     change := Peek_Back(*text_buffer.change_history);
-    change.end_position = .{cursor.x, cursor.y};
-    if ending_text.count > 0 {
-        change.flags |= .ADD_TEXT;
-        Add_Text_To_Change(*change.input_text, ending_text);
+    if !no_modify {
+        change.end_position = .{cursor.x, cursor.y};
+        if ending_text.count > 0 {
+            change.flags |= .ADD_TEXT;
+            Add_Text_To_Change(*change.input_text, ending_text);
+        }
     }
 
     if Is_Full(*text_buffer.change_history) {

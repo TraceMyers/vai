@@ -1,6 +1,5 @@
 
 NO_OP : u32 : ~cast(u32)0; 
-DIRECT_ACTION_FLAG : u32 : 0x08_00_00_00;
 
 // for used with Scoped_Construct
 Input :: struct {
@@ -91,46 +90,35 @@ Translate_Inputs_To_Actions :: () -> any_input: bool {
         return false;
     }
 
-    frame_input_stream_index = 0;
+    frame_input_stream_index = -1;
     Array_Append(*frame_input_stream, processed_input);
 
-    while frame_input_stream_index < frame_input_stream.count {
+    while frame_input_stream_index + 1 < frame_input_stream.count {
+        frame_input_stream_index += 1;
         modified_utf32 := frame_input_stream[frame_input_stream_index];
 
-        skip := false;
-        // if modified_utf32 == NO_OP {
-        //     skip = true;
-        // }
+        action_input_timer = ACTION_BUFFER_MAX_TIME;
 
-        if !skip {
-            action_input_timer = ACTION_BUFFER_MAX_TIME;
-
-            // intercept digits meant for repeating actions n times
-            is_zero := modified_utf32 == #char "0";
-            is_num_one_to_nine := (modified_utf32 >= #char "1" && modified_utf32 <= #char "9");
-            is_pushable_repeat_digit := is_num_one_to_nine || (action_repeat_buffer.count > 0 && is_zero);
-
-            if (vi_mode == .NORMAL || vi_mode == .VISUAL) && action_input_buffer.count == 0 && is_pushable_repeat_digit {
-                array_add(*action_repeat_buffer, ub(modified_utf32));
-                skip = true;
-            }
-
-            if !skip {
-                array_add(*action_input_buffer, modified_utf32);
-                
-                // try execute action
-                match_count, exact_match_count := Get_Input_Buffer_Action_Matches(*action_matches, vi_mode);
-                if match_count > 0 {
-                    if exact_match_count == match_count {
-                        Dump_Action_Input_Buffer(*action_matches);
-                    }
-                } else {
-                    Dump_Action_Input_Buffer();
-                }
-            }
+        // intercept digits meant for repeating actions n times
+        is_zero := modified_utf32 == #char "0";
+        is_num_one_to_nine := (modified_utf32 >= #char "1" && modified_utf32 <= #char "9");
+        is_pushable_repeat_digit := is_num_one_to_nine || (action_repeat_buffer.count > 0 && is_zero);
+        if (vi_mode == .NORMAL || vi_mode == .VISUAL) && action_input_buffer.count == 0 && is_pushable_repeat_digit {
+            array_add(*action_repeat_buffer, ub(modified_utf32));
+            continue;
         }
 
-        frame_input_stream_index += 1;
+        array_add(*action_input_buffer, modified_utf32);
+        
+        // try execute action
+        match_count, exact_match_count := Get_Input_Buffer_Action_Matches(*action_matches, vi_mode);
+        if match_count > 0 {
+            if exact_match_count == match_count {
+                Dump_Action_Input_Buffer(*action_matches);
+            }
+        } else {
+            Dump_Action_Input_Buffer();
+        }
     }
 
     array_reset_keeping_memory(*frame_input_stream);
@@ -151,13 +139,16 @@ Dump_Action_Input_Buffer :: (action_matches: *[..]ActionMatch = null) {
         any_exact_action_matches = Push_Exact_Action_Matches(action_matches);
     } 
     if (vi_mode == .COMMAND || vi_mode == .INSERT) && !any_exact_action_matches {
+        detected_change_ignore := false;
         for action_repeat_buffer {
+            detected_change_ignore |= (it & NOT_CHANGE) != 0;
             array_add(*auxiliary_input_buffer, it);
         }
         for action_input_buffer {
+            detected_change_ignore |= (it & NOT_CHANGE) != 0;
             array_add(*auxiliary_input_buffer, Remove_Modifier_Flags(it));
         }
-        if vi_mode == .INSERT {
+        if vi_mode == .INSERT && !detected_change_ignore {
             Push_Input_Text_To_Current_Change(action_repeat_buffer);
             Push_Input_Text_To_Current_Change(action_input_buffer);
         }
@@ -167,6 +158,7 @@ Dump_Action_Input_Buffer :: (action_matches: *[..]ActionMatch = null) {
     }
     array_reset_keeping_memory(*action_repeat_buffer);
     array_reset_keeping_memory(*action_input_buffer);
+
 }
 
 Get_Input_Buffer_Action_Matches :: (matches: *[..]ActionMatch, mode: ViMode) -> s64, s64 {
@@ -182,14 +174,21 @@ Get_Input_Buffer_Action_Matches :: (matches: *[..]ActionMatch, mode: ViMode) -> 
         code_point_string := Action_Code_Point_String(it);
         match := true;
         for action_input_buffer {
-            if it != code_point_string[it_index] {
+            if Remove_Flags_For_Comparison(it) != code_point_string[it_index] {
                 match = false;
                 break;
             }
         }
         if match {
             exact_match := action_input_buffer.count == it.code_point_string_count;
-            array_add(matches, .{it.action, code_point_string, exact_match});
+
+            is_change: bool;
+            if exact_match {
+                is_change = DEFAULT_ACTION_BINDINGS[it.action].extension.is_change;
+            }
+            is_change &= (action_input_buffer[0] & NOT_CHANGE) == 0;
+
+            array_add(matches, .{it.action, code_point_string, exact_match, is_change});
             if exact_match {
                 exact_match_count += 1;
             }
@@ -225,12 +224,13 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
                     action_executor_proc();
                 }
 
-                if vi_mode == .INSERT && Is_Current_Change_Empty() {
-                    assert(prev_vi_mode != .INSERT);
+                if it.is_change {
                     Push_Input_Text_To_Current_Change(it.input);
-                } else if vi_mode != .INSERT && !Is_Current_Change_Empty() {
-                    end_with_input := ifx it.action == .ENTER_NORMAL_MODE then it.input else u32.[];
-                    End_Current_Change(end_with_input);
+                    if vi_mode != .INSERT && !Is_Current_Change_Empty() {
+                        End_Current_Change(.[]);
+                    }
+                } else if it.action == .ENTER_NORMAL_MODE && !Is_Current_Change_Empty() {
+                    End_Current_Change(it.input);
                 }
             }
             any_exact = true;
@@ -417,12 +417,18 @@ Set_Action_Bindings :: (first_byte: u8, bindings: []ActionBinding) {
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // modifier keys
 
+NOT_CHANGE : u32: 0x08_00_00_00;
+
 Get_Modifiers :: inline (code_point: u32) -> ModifierKeysState {
     return xx ((code_point & xx (ModifierKeysState.ALL << 28)) >> 28);
 }
 
+Remove_Flags_For_Comparison :: inline (code_point: u32) -> u32 {
+    return code_point & ~NOT_CHANGE;
+}
+
 Remove_Modifier_Flags :: inline (code_point: u32) -> u32 {
-    return code_point & xx ~(ModifierKeysState.ALL << 28);
+    return code_point & ~((cast(u32)(ModifierKeysState.ALL << 28)) | NOT_CHANGE);
 }
 
 Pack_Modified_Code_Point :: inline (code_point: u32, modifiers: ModifierKeysState) -> u32 {
@@ -461,6 +467,7 @@ ActionMatch :: struct {
     action: Action;
     input: []u32;
     exact_match: bool;
+    is_change: bool;
 }
 
 ViMode :: enum_flags u8{
@@ -516,6 +523,11 @@ frame_input_stream: [..]u32;
 frame_input_stream_index: s64;
 
 vi_mode: ViMode = .NORMAL;
+
+// TODO: dynamic
+enter_insert_mode_sequence := u32.[#char "i"];
+enter_normal_mode_sequence := ESCAPE_CODE_SEQUENCE;
+prepend_new_line_sequence := u32.[#char "O"];
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 

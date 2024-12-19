@@ -25,8 +25,10 @@ Temp_Text_Buffer :: (history: *CircularBuffer(ChangeArtifact)) -> *TextBuffer {
     buf.lines.allocator = temp;
     Bin_Pool_Initialize(*buf.line_pool);
 
+    if history.count == 0 then return buf;
+
+    artifact := Peek_Back(history);
     if history.count > 0 then for 0..history.count-1 {
-        artifact := Peek_Back_Minus(history, xx it);
         if artifact.input_text.count == 0 && artifact.deleted_text.count == 0 {
             Append_Line(buf, "");
         } else {
@@ -34,16 +36,17 @@ Temp_Text_Buffer :: (history: *CircularBuffer(ChangeArtifact)) -> *TextBuffer {
             if artifact.input_text.count > 0 {
                 bin = Get_Bin(*undo_redo_text, artifact.input_text.bin_id);
                 input_utf8 := Utf8_From_Modified_Utf32_Array(bin, artifact.input_text.count);
-                input_prefixed := Prefix_String(input_utf8,     tprint("input   [%]: ", it));
+                input_prefixed := Prefix_String(input_utf8,     tprint("input   [%], cursor (%, %): ", it, artifact.end_position.x, artifact.end_position.y));
                 Append_Line(buf, input_prefixed);
             }
             if artifact.deleted_text.count > 0 {
                 bin = Get_Bin(*undo_redo_text, artifact.deleted_text.bin_id);
                 deleted_utf8 := Utf8_From_Modified_Utf32_Array(bin, artifact.deleted_text.count);
-                deleted_prefixed := Prefix_String(deleted_utf8, tprint("deleted [%]: ", it));
+                deleted_prefixed := Prefix_String(deleted_utf8, tprint("deleted [%], cursor (%, %): ", it, artifact.end_position.x, artifact.end_position.y));
                 Append_Line(buf, deleted_prefixed);
             }
         }
+        artifact = Seek_Back(history, artifact);
     }
 
     return buf;

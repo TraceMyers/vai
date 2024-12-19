@@ -117,6 +117,30 @@ Process_Per_Line :: (str: string, $PER_LINE: (*string, data: $T), data: T) -> s6
     return line_count;
 }
 
+Modified_Utf32_Array_Split :: (array: []u32, pattern: []u32) -> (left: []u32, right: []u32, success: bool) {
+    success: bool;
+    left, right: []u32;
+    for array {
+        array_code_point := Strip_Markup(it);
+        match := true;
+        for pattern {
+            if it != array_code_point {
+                match = false;
+                break;
+            }
+        }
+        if match {
+            success = true;
+            left.count = it_index;
+            left.data = array.data;
+            right.count = array.count - (it_index + 1);
+            right.data = array.data + (it_index + 1);
+            break;
+        }
+    }
+    return left, right, success;
+}
+
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ColorCodePoint :: struct {

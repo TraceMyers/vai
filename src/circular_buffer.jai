@@ -76,11 +76,13 @@ Peek_Back :: inline (using buffer: *CircularBuffer($T)) -> *T {
     return *items[end];
 }
 
-Peek_Back_Minus :: inline (using buffer: *CircularBuffer($T), decrement: u64) -> *T {
-    assert(count > xx decrement);
-    neg_decrement: s64 = -sqw(decrement);
-    index := Add_Wrap(end, neg_decrement, 0, items.count-1);
-    return *items[index];
+Seek_Back :: inline (using buffer: *CircularBuffer($T), item_in_array: *T) -> *T {
+    current_index := Element_Index(item_in_array, items);
+    if current_index == begin {
+        return null;
+    }
+    prev_index := Decrement_Wrap(current_index, 0, items.count-1);
+    return *items[prev_index];
 }
 
 Peek_Front :: inline (using buffer: *CircularBuffer($T)) -> *T {

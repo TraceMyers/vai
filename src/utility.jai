@@ -157,3 +157,15 @@ Prefix_String :: (str: string, prefix: string) -> string {
     memcpy(new_str.data + prefix.count, str.data, str.count);
     return new_str;
 }
+
+Temp_Array_Prepend_Append :: (arr: []$T, prefix: []T, suffix: []T) -> []T {
+    t := Temp_Buffer(T, prefix.count + arr.count + suffix.count);
+    if prefix.count > 0 {
+        memcpy(t.data, prefix.data, prefix.count * size_of(T));
+    }
+    memcpy(t.data + prefix.count, arr.data, arr.count * size_of(T));
+    if suffix.count > 0 {
+        memcpy(t.data + prefix.count + arr.count, suffix.data, suffix.count * size_of(T));
+    }
+    return t;
+}

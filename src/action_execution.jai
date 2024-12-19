@@ -561,16 +561,88 @@ Repeat_Last_Change :: () {
     if text_buffer.change_history.count < 2 {
         return;
     }
-    change := Peek_Back_Minus(*text_buffer.change_history, 1);
-    if change.input_text.bin_id.index == -1 {
+    current_change := Peek_Back(*text_buffer.change_history);
+    change := Seek_Back(*text_buffer.change_history, current_change);
+    // TODO: bleh
+    // if change.input_text.bin_id.index == -1 {
+    //     return;
+    // }
+
+    // 1
+    bin := Get_Bin(*undo_redo_text, change.input_text.bin_id);
+    bin.count = change.input_text.count;
+    // for bin {
+    //     input_data[it_index] = it | NOT_CHANGE;
+    // }
+    Inject_Modified_Utf32_Into_Frame_Input(bin);
+
+    // 2
+    // bin := Get_Bin(*undo_redo_text, change.deleted_text.bin_id);
+    // bin.count = change.deleted_text.count;
+    // input_data := Temp_Buffer(u32, bin.count);
+    // for bin {
+    //     input_data[it_index] = it | NOT_CHANGE;
+    // }
+    // Inject_Modified_Utf32_Into_Frame_Input(input_data);
+    
+    // 
+    // TODO: get back to normal mode
+}
+
+Undo :: () {
+    Init_Cursor_Proc_Or_Return();
+
+    if text_buffer.change_history.count < 2 {
+        return;
+    }
+    _ := Pop_Back(*text_buffer.change_history); // ignore current change
+    last_change := Pop_Back(*text_buffer.change_history);
+    End_Current_Change(.[], true);
+
+    // TODO: bleh
+    if last_change.deleted_text.bin_id.index == -1 {
         return;
     }
 
-    bin := Get_Bin(*undo_redo_text, change.input_text.bin_id);
-    bin.count = change.input_text.count;
-    // change.inciting_executor();
-    Inject_Modified_Utf32_Into_Frame_Input(bin);
-    // TODO: get back to normal mode
+    bin := Get_Bin(*undo_redo_text, last_change.deleted_text.bin_id);
+    bin.count = last_change.deleted_text.count;
+    cursor.x = last_change.end_position.x;
+    cursor.y = last_change.end_position.y;
+
+    input_data := Temp_Buffer(u32, bin.count);
+    i := 0;
+    // for enter_insert_mode_string {
+    //     input_data[i] = it;
+    //     i += 1;
+    // }
+    for bin {
+        input_data[i] = it | NOT_CHANGE;
+        i += 1;
+    }
+    // for enter_normal_mode_string {
+    //     input_data[i] = it | NOT_CHANGE;
+    //     i += 1;
+    // }
+
+    Inject_Modified_Utf32_Into_Frame_Input(input_data);
+    // left, right: []u32;
+    // success: bool;
+    // right = bin;
+
+
+    // while true {
+    //     left, right, success = Modified_Utf32_Array_Split(right, PLATFORM_CARRIAGE_RETURN);
+    //     if success {
+    //         if left.count > 0 {
+    //             Insert_Code_Points(text_buffer, cursor.y, cursor.x, left);
+    //         }
+    //         cursor.x += 
+    //         Insert_New_Line_Impl();
+    //     } 
+    //     if right.count > 0 {
+    //         Insert_Code_Points(text_buffer, cursor.y, cursor.x, right);
+    //     } else break;
+    // }
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

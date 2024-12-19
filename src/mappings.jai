@@ -40,6 +40,7 @@
     .{.["ciw"],                 "REPLACE_INSIDE_WORD",                          .{modes=.NORMAL, is_change=true,                proc=Replace_Word_Inside_Small}},
     .{.["d0"],                  "DELETE_TOWARD_LINE_ZERO",                      .{modes=.NORMAL, is_change=true,                proc=Delete_Toward_Line_Zero}},
     .{.["c0"],                  "REPLACE_TOWARD_LINE_ZERO",                     .{modes=.NORMAL, is_change=true,                proc=Replace_Toward_Line_Zero}},
+    .{.["u"],                   "UNDO",                                         .{modes=.NORMAL,                                proc=Undo}},
     .{.["__INTERNAL__"],        "CLAMP_CURSOR_X_TO_BOUNDS"                      .{modes=.NONE}},
     .{.["__INTERNAL__"],        "NONE",                                         .{modes=.NONE}}
 HERE
