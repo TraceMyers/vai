@@ -169,49 +169,49 @@ Set_Shader_Parameter :: (shader: *Shader, $PARAM_NAME: string, m: Matrix4) #expa
 Render_Line :: (a: IntVector2, b: IntVector2, color := fRGBA_WHITE, uv1 := Vector2.{}, uv2 := Vector2.{}, depth := DEFAULT_DEPTH) {
     assert(current_shader.draw_style == .LINES);
     if vertices.count + 2 > MAX_VERTICES then Flush_Draws();
-    Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(a), z=depth}, xx color, .{}});
-    Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(b), z=depth}, xx color, .{}});
+    Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(a), z=depth}, xx,force color, .{}});
+    Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(b), z=depth}, xx,force color, .{}});
 }
 
 Render_Quad_Lines :: (ul: IntVector2, lr: IntVector2, color := fRGBA_WHITE, depth := DEFAULT_DEPTH) {
     assert(current_shader.draw_style == .LINES);
     if vertices.count + 8 > MAX_VERTICES then Flush_Draws();
     // left side
-    Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(ul), z=depth}, xx color, .{}});
-    Inline_Buffer_Append(*vertices, .{Vector3.{xy=.{xx ul.x, xx lr.y}, z=depth}, xx color, .{}});
+    Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(ul), z=depth}, xx,force color, .{}});
+    Inline_Buffer_Append(*vertices, .{Vector3.{xy=.{xx ul.x, xx lr.y}, z=depth}, xx,force color, .{}});
     // bottom side
-    Inline_Buffer_Append(*vertices, .{Vector3.{xy=.{xx ul.x, xx lr.y}, z=depth}, xx color, .{}});
-    Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(lr), z=depth}, xx color, .{}});
+    Inline_Buffer_Append(*vertices, .{Vector3.{xy=.{xx ul.x, xx lr.y}, z=depth}, xx,force color, .{}});
+    Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(lr), z=depth}, xx,force color, .{}});
     // right side
-    Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(lr), z=depth}, xx color, .{}});
-    Inline_Buffer_Append(*vertices, .{Vector3.{xy=.{xx lr.x, xx ul.y}, z=depth}, xx color, .{}});
+    Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(lr), z=depth}, xx,force color, .{}});
+    Inline_Buffer_Append(*vertices, .{Vector3.{xy=.{xx lr.x, xx ul.y}, z=depth}, xx,force color, .{}});
     // top side
-    Inline_Buffer_Append(*vertices, .{Vector3.{xy=.{xx lr.x, xx ul.y}, z=depth}, xx color, .{}});
-    Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(ul), z=depth}, xx color, .{}});
+    Inline_Buffer_Append(*vertices, .{Vector3.{xy=.{xx lr.x, xx ul.y}, z=depth}, xx,force color, .{}});
+    Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(ul), z=depth}, xx,force color, .{}});
 }
 
 Render_Quad :: inline (ul: IntVector2, lr: IntVector2, color := fRGBA_WHITE, uv1 := Vector2.{}, uv2 := Vector2.{}, depth := DEFAULT_DEPTH) {
     if vertices.count + 6 > MAX_VERTICES then Flush_Draws();
     // tri 1
-    Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(ul), z=depth}, xx color, uv1});
-    Inline_Buffer_Append(*vertices, .{Vector3.{xy=.{xx ul.x, xx lr.y}, z=depth}, xx color, .{uv1.x, uv2.y}});
-    Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(lr), z=depth}, xx color, uv2});
+    Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(ul), z=depth}, xx,force color, uv1});
+    Inline_Buffer_Append(*vertices, .{Vector3.{xy=.{xx ul.x, xx lr.y}, z=depth}, xx,force color, .{uv1.x, uv2.y}});
+    Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(lr), z=depth}, xx,force color, uv2});
     // tri 2
-    Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(ul), z=depth}, xx color, uv1});
-    Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(lr), z=depth}, xx color, uv2});
-    Inline_Buffer_Append(*vertices, .{Vector3.{xy=.{xx lr.x, xx ul.y}, z=depth}, xx color, .{uv2.x, uv1.y}});
+    Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(ul), z=depth}, xx,force color, uv1});
+    Inline_Buffer_Append(*vertices, .{Vector3.{xy=As_Vector2(lr), z=depth}, xx,force color, uv2});
+    Inline_Buffer_Append(*vertices, .{Vector3.{xy=.{xx lr.x, xx ul.y}, z=depth}, xx,force color, .{uv2.x, uv1.y}});
 }
 
 Render_Quad :: inline (ul: Vector2, lr: Vector2, color := fRGBA_WHITE, uv1 := Vector2.{}, uv2 := Vector2.{}, depth := DEFAULT_DEPTH) {
     if vertices.count + 6 > MAX_VERTICES then Flush_Draws();
     // tri 1
-    Inline_Buffer_Append(*vertices, .{Vector3.{xy=ul, z=depth}, xx color, uv1});
-    Inline_Buffer_Append(*vertices, .{Vector3.{xy=.{ul.x, lr.y}, z=depth}, xx color, .{uv1.x, uv2.y}});
-    Inline_Buffer_Append(*vertices, .{Vector3.{xy=lr, z=depth}, xx color, uv2});
+    Inline_Buffer_Append(*vertices, .{Vector3.{xy=ul, z=depth}, xx,force color, uv1});
+    Inline_Buffer_Append(*vertices, .{Vector3.{xy=.{ul.x, lr.y}, z=depth}, xx,force color, .{uv1.x, uv2.y}});
+    Inline_Buffer_Append(*vertices, .{Vector3.{xy=lr, z=depth}, xx,force color, uv2});
     // tri 2
-    Inline_Buffer_Append(*vertices, .{Vector3.{xy=ul, z=depth}, xx color, uv1});
-    Inline_Buffer_Append(*vertices, .{Vector3.{xy=lr, z=depth}, xx color, uv2});
-    Inline_Buffer_Append(*vertices, .{Vector3.{xy=.{lr.x, ul.y}, z=depth}, xx color, .{uv2.x, uv1.y}});
+    Inline_Buffer_Append(*vertices, .{Vector3.{xy=ul, z=depth}, xx,force color, uv1});
+    Inline_Buffer_Append(*vertices, .{Vector3.{xy=lr, z=depth}, xx,force color, uv2});
+    Inline_Buffer_Append(*vertices, .{Vector3.{xy=.{lr.x, ul.y}, z=depth}, xx,force color, .{uv2.x, uv1.y}});
 }
 
 Flush_Draws :: () {
@@ -297,7 +297,7 @@ Render_Quads_Generated_For_Text :: () {
             glUniform1i(current_shader.texture_sampler_loc, 0);
         }
 
-        Render_Quad(quad.ul, quad.lr, xx quad.color, quad.uv0, quad.uv1);
+        Render_Quad(quad.ul, quad.lr, xx,force quad.color, quad.uv0, quad.uv1);
         // Draw_Letter_Quad(font, quad);
     }
 

@@ -327,7 +327,7 @@ Generate_Quads_For_Prepared_Text :: (x: s64, y: s64, effect_flags: Font_Effects 
         quad.ul.y = (sy + cast(float) info.ascent) - cast(float) info.height;
         quad.lr.x = (sx + cast(float) info.offset_x) + cast(float) info.width;
         quad.lr.y = sy + cast(float) info.ascent;
-        quad.color = xx color;
+        quad.color = xx,force color;
         
         if maybe_offset && is_latin(info.utf32) {
             // e.g. our Chinese font did not seem to make characters

@@ -381,7 +381,7 @@ Generate_View_Layer_Switch :: (with_code: string, layer_as_pointer := true) -> s
             format_string := tprint("case .%; %\n", it, with_code);
             context_alloc := context.allocator;
             context.allocator = temp;
-            field_name := to_lower_copy_new(it);
+            field_name := to_lower_copy(it);
             context.allocator = context_alloc;
             fully_qualified_name: string;
             if layer_as_pointer {

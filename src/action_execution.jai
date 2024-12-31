@@ -125,7 +125,9 @@ Scroll_To_Next_Editor :: () {
 
 Insert_New_Line :: () {
     Insert_New_Line_Impl();
-    Push_Input_Text_To_Current_Change(PLATFORM_CARRIAGE_RETURN);
+    if action_executor_data.is_change {
+        Push_Input_Text_To_Current_Change(PLATFORM_CARRIAGE_RETURN);
+    }
 }
 
 Insert_New_Line_Impl :: inline () {
@@ -149,6 +151,8 @@ Enter_Normal_Mode :: () {
     Init_Cursor_Proc_Or_Return();
     if vi_mode == {
     case .INSERT;
+        line_count := Line_Count(text_buffer, cursor.y);
+        action_executor_data.entered_normal_mode_past_line_end = cursor.x >= line_count; 
         Cursor_Scroll_Left();
     case .VISUAL;
     }
@@ -160,7 +164,7 @@ Backspace :: () {
     Push_Input_Text_To_Current_Change(u32.[#char "\x08"]);
 }
 
-Backspace_Impl :: inline () {
+Backspace_Impl :: inline (is_change := true) {
     Init_Cursor_Proc_Or_Return();
     if cursor.x > 0 {
         // search backward for valid character to delete
@@ -178,7 +182,7 @@ Backspace_Impl :: inline () {
         Cursor_Scroll_To_Line_End();
         src_line := Line_View(text_buffer, cursor.y+1);
         Insert_Code_Points(text_buffer, cursor.y, cursor.x, src_line);
-        Remove_Line(text_buffer, cursor.y+1);
+        Remove_Line(text_buffer, cursor.y+1, is_change);
     }
 }
 
@@ -458,11 +462,14 @@ Delete_Selection :: (enter_normal_mode: bool) {
         Enter_Insert_Mode(false);
         Cursor_Scroll_Down();
         Cursor_Scroll_To_Line_Zero();
-        Backspace_Impl();
+        Backspace_Impl(false);
     }
 
     if enter_normal_mode {
         Enter_Normal_Mode();
+        if do_concatenate {
+            Cursor_Scroll_Right();
+        }
     }
 }
 Delete_Selection_And_Enter_Normal_Mode :: #bake_arguments Delete_Selection(enter_normal_mode=true);
@@ -588,6 +595,7 @@ Repeat_Last_Change :: () {
     // 
     // TODO: get back to normal mode
 }
+// [is32;.o y: s3.]
 
 Undo :: () {
     Init_Cursor_Proc_Or_Return();
@@ -597,7 +605,7 @@ Undo :: () {
     }
     _ := Pop_Back(*text_buffer.change_history); // ignore current change
     last_change := Pop_Back(*text_buffer.change_history);
-    End_Current_Change(.[], true);
+    End_Current_Change(.[], .[], true);
 
     // TODO: bleh
     if last_change.deleted_text.bin_id.index == -1 {
@@ -643,6 +651,12 @@ Undo :: () {
     //         Insert_Code_Points(text_buffer, cursor.y, cursor.x, right);
     //     } else break;
     // }
+}
+
+Internal_Move_Cursor_To_Position :: () {
+    Init_Cursor_Proc_Or_Return();
+    // cursor.x = move_cursor_to_position.x;
+    // cursor.y = move_cursor_to_position.y;
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

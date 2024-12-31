@@ -220,6 +220,9 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
                 }
 
                 prev_vi_mode := vi_mode;
+
+                action_executor_data.is_change = it.is_change;
+
                 for 0..repeat_ct-1 {
                     action_executor_proc();
                 }
@@ -227,11 +230,14 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
                 if it.is_change {
                     Push_Input_Text_To_Current_Change(it.input);
                     if vi_mode != .INSERT && !Is_Current_Change_Empty() {
-                        End_Current_Change(.[]);
+                        End_Current_Change(.[], enter_normal_mode_sequence);
                     }
                 } else if it.action == .ENTER_NORMAL_MODE && !Is_Current_Change_Empty() {
-                    End_Current_Change(it.input);
+                    End_Current_Change(it.input, .[]);
                 }
+
+                Log("scrolled left: %", action_executor_data.entered_normal_mode_past_line_end);
+                action_executor_data.entered_normal_mode_past_line_end = false;
             }
             any_exact = true;
         }
@@ -479,11 +485,16 @@ ViMode :: enum_flags u8{
     ALL :: NORMAL | VISUAL | INSERT | COMMAND;
 }
 
-
 ActionDataContainer :: struct {
     modes: ViMode;
     is_change: bool;
     proc: Action_Executor = null;
+}
+
+ActionExecutorData :: struct {
+    is_change: bool;
+    entered_normal_mode_past_line_end: bool;
+    move_cursor_to_position: IntVector2;
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -526,8 +537,12 @@ vi_mode: ViMode = .NORMAL;
 
 // TODO: dynamic
 enter_insert_mode_sequence := u32.[#char "i"];
+enter_insert_mode_append_sequence := u32.[#char "a"];
 enter_normal_mode_sequence := ESCAPE_CODE_SEQUENCE;
 prepend_new_line_sequence := u32.[#char "O"];
+append_new_line_sequence := u32.[#char "o"];
+
+action_executor_data: ActionExecutorData;
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 

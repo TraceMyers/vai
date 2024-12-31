@@ -92,9 +92,9 @@ Load_File_Into_Buffer :: (path: string) -> s64 {
     Count_Len_Total :: inline (line: *string, total: *s64) { total.* += line.count; }
     line_count := Process_Per_Line(file_string, Count_Len_Total, *line_len_total);
 
-    INNEFICIENCY_FACTOR :: 1.25;
+    INEFFICIENCY_FACTOR :: 1.25;
     avg_line_len := line_len_total / line_count;
-    expected_bin_ct: s64 = xx (cast(float32)(Div_Ceil(avg_line_len, 32) * line_count) * INNEFICIENCY_FACTOR);
+    expected_bin_ct: s64 = xx (cast(float32)(Div_Ceil(avg_line_len, 32) * line_count) * INEFFICIENCY_FACTOR);
     buf_index := Request_Item(*file_buffers);
     buffer := Get_Item(*file_buffers, buf_index);
     Initialize_Text_Buffer(buffer, copy_string(path), line_count, expected_bin_ct);
@@ -118,8 +118,11 @@ Insert_Line :: (buffer: *TextBuffer, i: s64) {
     array_insert_at(*buffer.lines, .{}, i);
 }
 
-Remove_Line :: (buffer: *TextBuffer, line_index: s64) {
-    Push_Deleted_Text_Section_To_Current_Change(buffer, line_index, prepend_new_line_sequence, enter_normal_mode_sequence);
+Remove_Line :: (buffer: *TextBuffer, line_index: s64, is_change := true) {
+    if is_change {
+        new_line_sequence := ifx Is_Current_Change_Empty() then prepend_new_line_sequence else PLATFORM_CARRIAGE_RETURN;
+        Push_Deleted_Text_Section_To_Current_Change(buffer, line_index, new_line_sequence, .[]);
+    }
     Commit_And_Empty_Utf32_Buffers();
     line := *buffer.lines[line_index];
     if line.bin_id.index != -1 {
@@ -233,7 +236,7 @@ Insert_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, code_points: []u
 }
 
 Remove_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64) {
-    Push_Deleted_Text_Section_To_Current_Change(buffer, row, enter_insert_mode_sequence, enter_normal_mode_sequence, col);
+    Push_Deleted_Text_Section_To_Current_Change(buffer, row, enter_insert_mode_sequence, .[], col);
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     assert(col < utf32_buffer.array.count);
     #if DEBUG_TEXT_BUFFERS {
@@ -244,7 +247,8 @@ Remove_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64) {
 }
 
 Remove_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, count: s64) {
-    Push_Deleted_Text_Section_To_Current_Change(buffer, row, enter_insert_mode_sequence, enter_normal_mode_sequence, col, col + count);
+    prepend_sequence := ifx Is_Current_Change_Empty() then enter_insert_mode_sequence else PLATFORM_CARRIAGE_RETURN;
+    Push_Deleted_Text_Section_To_Current_Change(buffer, row, prepend_sequence, .[], col, col + count);
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     assert(col < utf32_buffer.array.count);
     #if DEBUG_TEXT_BUFFERS {
@@ -493,6 +497,8 @@ Utf8_From_Modified_Utf32_Array :: (bin: []u32, true_count: s64) -> string {
 // types
 
 Push_Deleted_Text_Section_To_Current_Change :: (buffer: *TextBuffer, row: s64, prepend: []u32, append: []u32, start_col := -1, end_col := -1) {
+    // TODO: this is wrong, because its the old line view, as opposed to the current, temp frame view
+    // need to use utf32 buffer with collapsed tabs
     raw_view := Raw_Line_View(buffer, row);
     if start_col == -1 {
         // whole line
@@ -503,22 +509,21 @@ Push_Deleted_Text_Section_To_Current_Change :: (buffer: *TextBuffer, row: s64, p
     } else {
         // adjust column numbers with collapsed tabs
         utf32_buffer := Get_Utf32_Buffer(buffer, row);
-        adjusted_start_col, end_col_offset: s64;
+        adjusted_start_col, adjusted_count: s64;
         for utf32_buffer.array {
             if !Is_Tab_Expanded_Space(it) {
                 if it_index < start_col {
                     adjusted_start_col += 1;
                 } else if it_index < end_col {
-                    end_col_offset += 1;
+                    adjusted_count += 1;
                 } else break;
             } else {
                 Log("DETECTED TAB EXPANDED SPACE");
             }
         }
         // adjusted_start_col -= prepend.count;
-        adjusted_end_col := adjusted_start_col + end_col_offset;
         raw_view.data += adjusted_start_col;
-        raw_view.count = max(end_col_offset, 1);
+        raw_view.count = max(adjusted_count, 1);
         if prepend.count > 0 || append.count > 0 {
             raw_view = Temp_Array_Prepend_Append(raw_view, prepend, append);
         }
@@ -532,7 +537,7 @@ Push_Deleted_Text_Section_To_Current_Change :: (buffer: *TextBuffer, row: s64, p
         Log("raw view: (%)", raw_str);
         Log("prepend: %, append: %", prepend, append);
         Log("start col: %, end col: %", start_col, end_col);
-        Log("adjusted start col: %, adjusted end col: %", adjusted_start_col, adjusted_end_col);
+        Log("adjusted start col: %, adjusted count: %", adjusted_start_col, adjusted_count);
 
         if end_col == -1 {
             // one code point
@@ -566,68 +571,72 @@ Is_Current_Change_Empty :: () -> bool {
 
 Push_Input_Text_To_Current_Change :: (text: []$T) {
     Init_Cursor_Proc_Or_Return();
-    if text.count <= 0 return;
-    if text_buffer.change_history.count == 0 {
-        Push_Back(*text_buffer.change_history, .{});
-    }
-    change := Peek_Back(*text_buffer.change_history);
-    change.flags |= .ADD_TEXT;
-    Add_Text_To_Change(*change.input_text, text);
+    // if text.count <= 0 return;
+    // if text_buffer.change_history.count == 0 {
+    //     Push_Back(*text_buffer.change_history, .{});
+    // }
+    // change := Peek_Back(*text_buffer.change_history);
+    // change.flags |= .ADD_TEXT;
+    // Add_Text_To_Change(*change.input_text, text);
 }
 
 Push_Deleted_Text_To_Current_Change :: (text: []u32, newline_at_end: bool) {
     Init_Cursor_Proc_Or_Return();
-    if text.count <= 0 && !newline_at_end then return;
-    if text_buffer.change_history.count == 0 {
-        Push_Back(*text_buffer.change_history, .{});
-    }
-    change := Peek_Back(*text_buffer.change_history);
-    change.flags |= .DELETE_TEXT;
-    Add_Text_To_Change(*change.deleted_text, text, newline_at_end);
+    // if text.count <= 0 && !newline_at_end then return;
+    // if text_buffer.change_history.count == 0 {
+    //     Push_Back(*text_buffer.change_history, .{});
+    // }
+    // change := Peek_Back(*text_buffer.change_history);
+    // change.flags |= .DELETE_TEXT;
+    // Add_Text_To_Change(*change.deleted_text, text, newline_at_end);
 }
 
-End_Current_Change :: (ending_text: []u32, no_modify := false) {
+End_Current_Change :: (ending_input_text: []u32, ending_deleted_text: []u32, no_modify := false) {
     Init_Cursor_Proc_Or_Return();
-    if text_buffer.change_history.count == 0 {
-        return;
-    }
+    // if text_buffer.change_history.count == 0 {
+    //     return;
+    // }
 
-    change := Peek_Back(*text_buffer.change_history);
-    if !no_modify {
-        change.end_position = .{cursor.x, cursor.y};
-        if ending_text.count > 0 {
-            change.flags |= .ADD_TEXT;
-            Add_Text_To_Change(*change.input_text, ending_text);
-        }
-    }
+    // change := Peek_Back(*text_buffer.change_history);
+    // if !no_modify {
+    //     change.end_position = .{cursor.x + ifx action_executor_data.entered_normal_mode_past_line_end then sdw(1) else sdw(0), cursor.y};
+    //     if ending_input_text.count > 0 {
+    //         change.flags |= .ADD_TEXT;
+    //         Add_Text_To_Change(*change.input_text, ending_input_text);
+    //     }
+    //     if ending_deleted_text.count > 0 {
+    //         change.flags |= .DELETE_TEXT;
+    //         Add_Text_To_Change(*change.deleted_text, ending_deleted_text);
+    //     }
+    // }
 
-    if Is_Full(*text_buffer.change_history) {
-        oldest_change := Peek_Front(*text_buffer.change_history);
-        if oldest_change.input_text.bin_id.index != -1 {
-            Release_Bin(*undo_redo_text, *oldest_change.input_text.bin_id);
-        }
-    }
-    Push_Back(*text_buffer.change_history, .{});
+    // if Is_Full(*text_buffer.change_history) {
+    //     oldest_change := Peek_Front(*text_buffer.change_history);
+    //     if oldest_change.input_text.bin_id.index != -1 {
+    //         Release_Bin(*undo_redo_text, *oldest_change.input_text.bin_id);
+    //     }
+    // }
+    // Push_Back(*text_buffer.change_history, .{});
 } 
 
 Add_Text_To_Change :: (using change_tack: *BinTack, text: []$T, add_newline_at_end := false) {
-    additional_code_pt_ct := text.count + (ifx add_newline_at_end then PLATFORM_CARRIAGE_RETURN.count else 0);
-    new_count := count + additional_code_pt_ct;
-    if bin_id.index == -1 {
-        bin_id = Request_Bin(*undo_redo_text, additional_code_pt_ct);
-    } else {
-        Resize_Bin(*undo_redo_text, *bin_id, new_count);
-    }
-    bin := Get_Bin(*undo_redo_text, bin_id);
-    if text.count > 0 then for 0..text.count - 1 {
-        bin[count + it] = text[it];
-    }
-    if add_newline_at_end {
-        for 0..PLATFORM_CARRIAGE_RETURN.count-1 {
-            bin[count + text.count + it] = PLATFORM_CARRIAGE_RETURN[it];
-        }
-    }
-    count += xx additional_code_pt_ct;
+    // additional_code_pt_ct := text.count + (ifx add_newline_at_end then PLATFORM_CARRIAGE_RETURN.count else 0);
+    // new_count := count + additional_code_pt_ct;
+    // if bin_id.index == -1 {
+    //     bin_id = Request_Bin(*undo_redo_text, additional_code_pt_ct);
+    // } else {
+    //     Resize_Bin(*undo_redo_text, *bin_id, new_count);
+    // }
+    // bin := Get_Bin(*undo_redo_text, bin_id);
+    // if text.count > 0 then for 0..text.count - 1 {
+    //     bin[count + it] = text[it];
+    // }
+    // if add_newline_at_end {
+    //     for 0..PLATFORM_CARRIAGE_RETURN.count-1 {
+    //         bin[count + text.count + it] = PLATFORM_CARRIAGE_RETURN[it];
+    //     }
+    // }
+    // count += xx additional_code_pt_ct;
 }
 
 LineBuffer :: struct {
@@ -646,24 +655,36 @@ BinTack :: struct {
     count: s64;
 }
 
-ChangeArtifact :: struct {
+// ChangeArtifact :: struct {
+//     id: u64;
+//     end_position: IntVector2;
+//     input_text: BinTack;
+//     deleted_text: BinTack;
+//     flags: enum_flags u8 {
+//         NONE :: 0;
+//         ADD_TEXT :: 1;
+//         DELETE_TEXT;
+//     };
+// }
+
+LineChange :: struct {
+    row: s64;
+    using bin_tack: BinTack;
+}
+
+TextChange :: struct {
     id: u64;
-    end_position: IntVector2;
-    input_text: BinTack;
-    deleted_text: BinTack;
-    flags: enum_flags u8 {
-        NONE :: 0;
-        ADD_TEXT :: 1;
-        DELETE_TEXT;
-    };
+    cursor_position: IntVector2;
+    lines: [..]LineChange;    
 }
 
 TextBuffer :: struct {
     lines: [..]LineBuffer;
     line_pool: BinPool(24, u8);
     file_path: string;
-    change_history: CircularBuffer(ChangeArtifact);
-    redo_history: CircularBuffer(ChangeArtifact);
+    // change_history: CircularBuffer(ChangeArtifact);
+    // redo_history: CircularBuffer(ChangeArtifact);
+    change_history: CircularBuffer(TextChange);
 }
 
 Utf32Buffer :: struct {

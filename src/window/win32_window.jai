@@ -88,8 +88,7 @@ Receive_Window_Message :: (hwnd: HWND, message: u32, wParam: WPARAM, lParam: LPA
     dwmapi   :: #system_library "Dwmapi";
     DwmExtendFrameIntoClientArea :: (window: HWND, margins: *MARGINS) -> HRESULT #foreign dwmapi;
 
-    new_context: Context;
-    push_context new_context {
+    push_context {
         if message == {
         //   case WM_CREATE;
             // push the window that we draw to into the upper left of the Windows window, so we're drawing to the whole window I guess -Trace
