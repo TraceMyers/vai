@@ -63,7 +63,7 @@ Temp_Text_Buffer :: (history: *CircularBuffer(TextChange)) -> *TextBuffer {
             if it.count > 0 {
                 bin := Get_Bin(*undo_redo_text, *it.bin_id);
                 bin.count = it.count;
-                fixed := Prefix_Postfix_String(As_String(bin), tprint("[%] : [", i), "]");
+                fixed := Prefix_Postfix_String(As_String(bin), tprint("[%] (%) : [", i, it.flags), "]");
                 Append_Line(buf, fixed);
             }
         }
