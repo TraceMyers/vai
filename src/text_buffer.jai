@@ -7,7 +7,7 @@ general_text_buffer: TextBuffer;
 
 temp_utf32_buffer_pool: BinPool(24, u32); 
 temp_utf32_buffers: [..]Utf32Buffer;
-undo_redo_text: BinPool(16, u32);
+undo_redo_text: BinPool(16, u8);
 
 // NOTE TO SELF: be careful not to alias data when working with bins inline then copying into the bin
 // NOTE TO SELF: tab-expanded column is the only real column outside this file, but tab-expanded spaces are invalid to edit
@@ -55,7 +55,6 @@ Initialize_Text_Buffer :: (buffer: *TextBuffer, path: string, prealloc_lines := 
     }
     buffer.file_path = path;
     Circular_Buffer_Initialize(*buffer.change_history, settings_file_data.change_history_count, true);
-    Circular_Buffer_Initialize(*buffer.redo_history, settings_file_data.change_history_count, true);
 }
 
 Shutdown_Text_Buffer :: (buffer: *TextBuffer) {
@@ -63,7 +62,6 @@ Shutdown_Text_Buffer :: (buffer: *TextBuffer) {
     array_reset(*buffer.lines);
     String_Reset(*buffer.file_path);
     Circular_Buffer_Reset(*buffer.change_history);
-    Circular_Buffer_Reset(*buffer.redo_history);
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -120,8 +118,7 @@ Insert_Line :: (buffer: *TextBuffer, i: s64) {
 
 Remove_Line :: (buffer: *TextBuffer, line_index: s64, is_change := true) {
     if is_change {
-        new_line_sequence := ifx Is_Current_Change_Empty() then prepend_new_line_sequence else PLATFORM_CARRIAGE_RETURN;
-        Push_Deleted_Text_Section_To_Current_Change(buffer, line_index, new_line_sequence, .[]);
+        Add_Line_To_Deletion_Change(buffer, line_index, true);
     }
     Commit_And_Empty_Utf32_Buffers();
     line := *buffer.lines[line_index];
@@ -236,7 +233,8 @@ Insert_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, code_points: []u
 }
 
 Remove_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64) {
-    Push_Deleted_Text_Section_To_Current_Change(buffer, row, enter_insert_mode_sequence, .[], col);
+    // TODO: check if line deletion
+    Add_Line_To_Deletion_Change(buffer, row, false);
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     assert(col < utf32_buffer.array.count);
     #if DEBUG_TEXT_BUFFERS {
@@ -247,8 +245,8 @@ Remove_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64) {
 }
 
 Remove_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, count: s64) {
-    prepend_sequence := ifx Is_Current_Change_Empty() then enter_insert_mode_sequence else PLATFORM_CARRIAGE_RETURN;
-    Push_Deleted_Text_Section_To_Current_Change(buffer, row, prepend_sequence, .[], col, col + count);
+    // TODO: check if line deletion
+    Add_Line_To_Deletion_Change(buffer, row, false);
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     assert(col < utf32_buffer.array.count);
     #if DEBUG_TEXT_BUFFERS {
@@ -278,9 +276,26 @@ Break_Line_At :: (buffer: *TextBuffer, row: s64, col: s64) {
 }
 
 Clear_Line :: (buffer: *TextBuffer, row: s64) {
-    Push_Deleted_Text_Section_To_Current_Change(buffer, row, .[], .[], 0, buffer.lines[row].byte_count);
+    // Push_Deleted_Text_Section_To_Current_Change(buffer, row, .[], .[], 0, buffer.lines[row].byte_count);
+    Add_Line_To_Deletion_Change(buffer, row, false);
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     Resize_Utf32_Buffer(utf32_buffer, 0);
+}
+
+// gets the line in its current form, whether it is currently being edited (and thus has a utf32 buffer representing the changed version) or not
+Get_Current_Utf8_For_Line :: (buffer: *TextBuffer, row: s64) -> string {
+    utf32_buffer := Get_Utf32_Buffer(buffer, row, false);
+    utf8_string: string;
+    if utf32_buffer == null {
+        utf8_string = Get_Line_Bytes(buffer, row);
+    } else {
+        // if we collapse  the tabs inline before copying, it will fuck up the temp buffer, which should have expanded tabs
+        utf32_copy := Temp_Copy_Array(utf32_buffer.array);
+        Collapse_Tabs_Inline(*utf32_copy);
+        utf32_string := As_String(utf32_copy);
+        utf8_string = Encode(utf32_string, .UTF32, .UTF8);
+    }
+    return utf8_string;
 }
 
 Commit_Utf32_To_Line :: (utf32_buffer: *Utf32Buffer) {
@@ -496,69 +511,152 @@ Utf8_From_Modified_Utf32_Array :: (bin: []u32, true_count: s64) -> string {
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // types
 
-Push_Deleted_Text_Section_To_Current_Change :: (buffer: *TextBuffer, row: s64, prepend: []u32, append: []u32, start_col := -1, end_col := -1) {
-    // TODO: this is wrong, because its the old line view, as opposed to the current, temp frame view
-    // need to use utf32 buffer with collapsed tabs
-    raw_view := Raw_Line_View(buffer, row);
-    if start_col == -1 {
-        // whole line
-        if prepend.count > 0 || append.count > 0 {
-            raw_view = Temp_Array_Prepend_Append(raw_view, prepend, append);
-        }
-        Push_Deleted_Text_To_Current_Change(raw_view, false);
+
+// LineChange :: struct {
+//     row: s64;
+//     using bin_tack: BinTack;
+    // flags: enum_flags {
+    //     NONE = 0;
+    //     INSERTION;
+    //     DELETION;
+    // }
+// }
+
+// TextChange :: struct {
+//     id: u64;
+//     cursor_position: IntVector2;
+//     lines: [..]LineChange;    
+// }
+
+// TextBuffer :: struct {
+//     lines: [..]LineBuffer;
+//     line_pool: BinPool(24, u8);
+//     file_path: string;
+//     // change_history: CircularBuffer(ChangeArtifact);
+//     change_history: CircularBuffer(TextChange);
+// }
+
+Get_Current_Change :: (buffer: *TextBuffer) -> *TextChange {
+    if buffer.change_history.count == 0 {
+        Push_Back(*buffer.change_history, .{});
+    }
+    return Peek_Back(*buffer.change_history);   
+}
+
+Add_Line_To_Deletion_Change :: (buffer: *TextBuffer, row: s64, delete_line: bool) {
+    current_change := Get_Current_Change(buffer);
+    line_change: *LineChange;
+
+    flags: LineChangeFlags = ---;
+    if delete_line {
+        flags = .DELETION | .DELETE_LINE;
     } else {
-        // adjust column numbers with collapsed tabs
-        utf32_buffer := Get_Utf32_Buffer(buffer, row);
-        adjusted_start_col, adjusted_count: s64;
-        for utf32_buffer.array {
-            if !Is_Tab_Expanded_Space(it) {
-                if it_index < start_col {
-                    adjusted_start_col += 1;
-                } else if it_index < end_col {
-                    adjusted_count += 1;
-                } else break;
-            } else {
-                Log("DETECTED TAB EXPANDED SPACE");
-            }
-        }
-        // adjusted_start_col -= prepend.count;
-        raw_view.data += adjusted_start_col;
-        raw_view.count = max(adjusted_count, 1);
-        if prepend.count > 0 || append.count > 0 {
-            raw_view = Temp_Array_Prepend_Append(raw_view, prepend, append);
-        }
+        flags = .DELETION;
+    }
 
-        raw_str := Encode(As_String(raw_view), .UTF32, .UTF8);
-        for *raw_str {
-            if it.* == 27 {
-                it.* = #char "Z";
+    for current_change.lines {
+        if it.row == row {
+            line_change = *it;
+            if line_change.flags & flags == flags {
+                return;
             }
+            line_change.flags |= flags;
+            break;
         }
-        Log("raw view: (%)", raw_str);
-        Log("prepend: %, append: %", prepend, append);
-        Log("start col: %, end col: %", start_col, end_col);
-        Log("adjusted start col: %, adjusted count: %", adjusted_start_col, adjusted_count);
+    }
+    if line_change == null {
+        line_change = array_add(*current_change.lines);
+    }
 
-        if end_col == -1 {
-            // one code point
-            // raw_view.data += adjusted_start_col;
-            // raw_view.count = min(1, raw_view.count);
-            Push_Deleted_Text_To_Current_Change(raw_view, false);
-        } /*else if end_col == raw_view.count + 1{
-            // to the end of the line + newline
-            assert(end_col > start_col);
-            raw_view.data += start_col;
-            raw_view.count = (end_col - 1) - start_col;
-            Push_Deleted_Text_To_Current_Change(raw_view, true);
-        }*/ else {
-            // section of line
-            assert(end_col > adjusted_start_col);
-            // raw_view.data += adjusted_start_col;
-            // raw_view.count = adjusted_end_col - adjusted_start_col;
-            Push_Deleted_Text_To_Current_Change(raw_view, false);
+    line_str := Get_Current_Utf8_For_Line(buffer, row);
+    if line_str.count > 0 {
+        if line_change.bin_id.index == -1 {
+            line_change.bin_id = Request_Bin(*undo_redo_text, line_str.count);
+            Set_Bin_Data(*undo_redo_text, *line_change.bin_id, As_Array(line_str, u8));
+            line_change.count = line_str.count;
         }
     }
 }
+
+End_Current_Change :: () {
+    Init_Cursor_Proc_Or_Return();
+    if text_buffer.change_history.count == 0 {
+        return;
+    }
+    if Is_Full(*text_buffer.change_history) {
+        oldest_change := Peek_Front(*text_buffer.change_history);
+        for oldest_change.lines {
+            if it.bin_id.index != -1 {
+                Release_Bin(*undo_redo_text, *it.bin_id);
+            }
+        }
+    }
+    Push_Back(*text_buffer.change_history, .{});
+}
+
+// Push_Deleted_Text_Section_To_Current_Change :: (buffer: *TextBuffer, row: s64, prepend: []u32, append: []u32, start_col := -1, end_col := -1) {
+    // TODO: this is wrong, because its the old line view, as opposed to the current, temp frame view
+    // need to use utf32 buffer with collapsed tabs
+    // raw_view := Raw_Line_View(buffer, row);
+    // if start_col == -1 {
+    //     // whole line
+    //     if prepend.count > 0 || append.count > 0 {
+    //         raw_view = Temp_Array_Prepend_Append(raw_view, prepend, append);
+    //     }
+    //     Push_Deleted_Text_To_Current_Change(raw_view, false);
+    // } else {
+    //     // adjust column numbers with collapsed tabs
+    //     utf32_buffer := Get_Utf32_Buffer(buffer, row);
+    //     adjusted_start_col, adjusted_count: s64;
+    //     for utf32_buffer.array {
+    //         if !Is_Tab_Expanded_Space(it) {
+    //             if it_index < start_col {
+    //                 adjusted_start_col += 1;
+    //             } else if it_index < end_col {
+    //                 adjusted_count += 1;
+    //             } else break;
+    //         } else {
+    //             Log("DETECTED TAB EXPANDED SPACE");
+    //         }
+    //     }
+    //     // adjusted_start_col -= prepend.count;
+    //     raw_view.data += adjusted_start_col;
+    //     raw_view.count = max(adjusted_count, 1);
+    //     if prepend.count > 0 || append.count > 0 {
+    //         raw_view = Temp_Array_Prepend_Append(raw_view, prepend, append);
+    //     }
+
+    //     raw_str := Encode(As_String(raw_view), .UTF32, .UTF8);
+    //     for *raw_str {
+    //         if it.* == 27 {
+    //             it.* = #char "Z";
+    //         }
+    //     }
+    //     Log("raw view: (%)", raw_str);
+    //     Log("prepend: %, append: %", prepend, append);
+    //     Log("start col: %, end col: %", start_col, end_col);
+    //     Log("adjusted start col: %, adjusted count: %", adjusted_start_col, adjusted_count);
+
+    //     if end_col == -1 {
+    //         // one code point
+    //         // raw_view.data += adjusted_start_col;
+    //         // raw_view.count = min(1, raw_view.count);
+    //         Push_Deleted_Text_To_Current_Change(raw_view, false);
+    //     } /*else if end_col == raw_view.count + 1{
+    //         // to the end of the line + newline
+    //         assert(end_col > start_col);
+    //         raw_view.data += start_col;
+    //         raw_view.count = (end_col - 1) - start_col;
+    //         Push_Deleted_Text_To_Current_Change(raw_view, true);
+    //     }*/ else {
+    //         // section of line
+    //         assert(end_col > adjusted_start_col);
+    //         // raw_view.data += adjusted_start_col;
+    //         // raw_view.count = adjusted_end_col - adjusted_start_col;
+    //         Push_Deleted_Text_To_Current_Change(raw_view, false);
+    //     }
+    // }
+// }
 
 Is_Current_Change_Empty :: () -> bool {
     Init_Cursor_Proc_Or_Return_Value(false);
@@ -566,11 +664,11 @@ Is_Current_Change_Empty :: () -> bool {
         return true;
     }
     change := Peek_Back(*text_buffer.change_history);
-    return change.flags == .NONE;
+    return change.lines.count == 0;
 }
 
-Push_Input_Text_To_Current_Change :: (text: []$T) {
-    Init_Cursor_Proc_Or_Return();
+// Push_Input_Text_To_Current_Change :: (text: []$T) {
+//     Init_Cursor_Proc_Or_Return();
     // if text.count <= 0 return;
     // if text_buffer.change_history.count == 0 {
     //     Push_Back(*text_buffer.change_history, .{});
@@ -578,10 +676,10 @@ Push_Input_Text_To_Current_Change :: (text: []$T) {
     // change := Peek_Back(*text_buffer.change_history);
     // change.flags |= .ADD_TEXT;
     // Add_Text_To_Change(*change.input_text, text);
-}
+// }
 
-Push_Deleted_Text_To_Current_Change :: (text: []u32, newline_at_end: bool) {
-    Init_Cursor_Proc_Or_Return();
+// Push_Deleted_Text_To_Current_Change :: (text: []u32, newline_at_end: bool) {
+//     Init_Cursor_Proc_Or_Return();
     // if text.count <= 0 && !newline_at_end then return;
     // if text_buffer.change_history.count == 0 {
     //     Push_Back(*text_buffer.change_history, .{});
@@ -589,37 +687,10 @@ Push_Deleted_Text_To_Current_Change :: (text: []u32, newline_at_end: bool) {
     // change := Peek_Back(*text_buffer.change_history);
     // change.flags |= .DELETE_TEXT;
     // Add_Text_To_Change(*change.deleted_text, text, newline_at_end);
-}
+// }
+ 
 
-End_Current_Change :: (ending_input_text: []u32, ending_deleted_text: []u32, no_modify := false) {
-    Init_Cursor_Proc_Or_Return();
-    // if text_buffer.change_history.count == 0 {
-    //     return;
-    // }
-
-    // change := Peek_Back(*text_buffer.change_history);
-    // if !no_modify {
-    //     change.end_position = .{cursor.x + ifx action_executor_data.entered_normal_mode_past_line_end then sdw(1) else sdw(0), cursor.y};
-    //     if ending_input_text.count > 0 {
-    //         change.flags |= .ADD_TEXT;
-    //         Add_Text_To_Change(*change.input_text, ending_input_text);
-    //     }
-    //     if ending_deleted_text.count > 0 {
-    //         change.flags |= .DELETE_TEXT;
-    //         Add_Text_To_Change(*change.deleted_text, ending_deleted_text);
-    //     }
-    // }
-
-    // if Is_Full(*text_buffer.change_history) {
-    //     oldest_change := Peek_Front(*text_buffer.change_history);
-    //     if oldest_change.input_text.bin_id.index != -1 {
-    //         Release_Bin(*undo_redo_text, *oldest_change.input_text.bin_id);
-    //     }
-    // }
-    // Push_Back(*text_buffer.change_history, .{});
-} 
-
-Add_Text_To_Change :: (using change_tack: *BinTack, text: []$T, add_newline_at_end := false) {
+// Add_Text_To_Change :: (using change_tack: *BinTack, text: []$T, add_newline_at_end := false) {
     // additional_code_pt_ct := text.count + (ifx add_newline_at_end then PLATFORM_CARRIAGE_RETURN.count else 0);
     // new_count := count + additional_code_pt_ct;
     // if bin_id.index == -1 {
@@ -637,7 +708,7 @@ Add_Text_To_Change :: (using change_tack: *BinTack, text: []$T, add_newline_at_e
     //     }
     // }
     // count += xx additional_code_pt_ct;
-}
+// }
 
 LineBuffer :: struct {
     bin_id: BinID;
@@ -667,9 +738,17 @@ BinTack :: struct {
 //     };
 // }
 
+LineChangeFlags :: enum_flags u8 {
+    NONE :: 0;
+    INSERTION :: 1;
+    DELETION;
+    DELETE_LINE;
+}
+
 LineChange :: struct {
     row: s64;
     using bin_tack: BinTack;
+    flags: LineChangeFlags;
 }
 
 TextChange :: struct {
@@ -683,7 +762,6 @@ TextBuffer :: struct {
     line_pool: BinPool(24, u8);
     file_path: string;
     // change_history: CircularBuffer(ChangeArtifact);
-    // redo_history: CircularBuffer(ChangeArtifact);
     change_history: CircularBuffer(TextChange);
 }
 

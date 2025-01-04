@@ -83,6 +83,18 @@ String_Append :: inline (str: *string, char: u8) {
     str.*[str.count-1] = char;
 }
 
+Temp_Copy_String :: inline (str: string) -> string {
+    out_str := talloc_string(str.count);
+    memcpy(out_str.data, str.data, out_str.count);
+    return out_str;
+}
+
+Temp_Copy_Array :: inline (array: []$T) -> []T {
+    out_array := Temp_Buffer(T, array.count);
+    memcpy(out_array.data, array.data, out_array.count * size_of(T));
+    return out_array;
+}
+
 Temp_Resize_Array :: inline ($T: Type, reserve_count := 0) -> [..]T {
     array: [..]T;
     array.allocator = temp;
