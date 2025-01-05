@@ -557,6 +557,9 @@ Get_Current_Change :: (buffer: *TextBuffer) -> *TextChange {
 Add_Line_To_Deletion_Change :: (buffer: *TextBuffer, row: s64, delete_line: bool) {
     Init_Cursor_Proc_Or_Return();
     current_change := Get_Current_Change(buffer);
+    if current_change.need_overwrite {
+        Reset_Back(*buffer.change_history);
+    }
     if current_change.lines.count == 0 {
         current_change.cursor_position.x = cursor.x;
         current_change.cursor_position.y = cursor.y;
@@ -774,7 +777,8 @@ Cleanup_Text_Change :: (using change: *TextChange) {
 TextChange :: struct {
     id: u64;
     cursor_position: IntVector2;
-    lines: [..]LineChange;    
+    lines: [..]LineChange;   
+    need_overwrite: bool;
 }
 
 TextBuffer :: struct {

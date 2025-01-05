@@ -141,12 +141,27 @@ Push_Middle :: (using buffer: *OpposingCircularBuffer($T), item: T) {
             if item_cleanup_proc != null {
                 item_cleanup_proc(*items[middle]);
             }
+            count += 1;
         } else {
             count += 1;
         }
         end = middle;
     }
     items[middle] = item;
+}
+
+Reset_Back :: inline (using buffer: *OpposingCircularBuffer($T)) {
+    item := *items[end];
+    while end != middle {
+        if item_cleanup_proc {
+            item_cleanup_proc(item);
+        }
+        end = Decrement_Wrap(end, 0, items.count-1);
+        item = *items[end];
+    }
+    if item_cleanup_proc {
+        item_cleanup_proc(item);
+    }
 }
 
 Pop_Middle :: inline (using buffer: *OpposingCircularBuffer($T)) -> T {

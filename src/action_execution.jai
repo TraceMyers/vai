@@ -624,6 +624,9 @@ Undo :: () {
     // array_reset(*last_change.lines);
     cursor.x = last_change.cursor_position.x;
     cursor.y = last_change.cursor_position.y;
+
+    current_change := Get_Current_Change(text_buffer);
+    current_change.need_overwrite = true;
 }
 
 Internal_Move_Cursor_To_Position :: () {
