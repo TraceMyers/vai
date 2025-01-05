@@ -599,7 +599,7 @@ Add_Line_To_Deletion_Change :: (buffer: *TextBuffer, row: s64, delete_line: bool
 
 End_Current_Change :: () {
     Init_Cursor_Proc_Or_Return();
-    if text_buffer.change_history.count == 0 {
+    if Totally_Empty(*text_buffer.change_history) {
         return;
     }
     Push_Middle(*text_buffer.change_history);
