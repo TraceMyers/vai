@@ -584,8 +584,8 @@ Undo :: () {
     if text_buffer.change_history.count < 2 {
         return;
     }
-    _ := Pop_Back(*text_buffer.change_history); // ignore current change
-    last_change := Pop_Back(*text_buffer.change_history);
+    _ := Pop_Middle(*text_buffer.change_history); // ignore current change
+    last_change := Pop_Middle(*text_buffer.change_history);
     End_Current_Change();
 
     cursor.x = last_change.cursor_position.x;
@@ -613,14 +613,15 @@ Undo :: () {
             Insert_Code_Points(text_buffer, cursor.y, 0, utf32);
 
             // cleanup
-            if it.bin_id.index != -1 {
-                Release_Bin(*undo_redo_text, *it.bin_id);
-                it.count = 0;
-                it.flags = .NONE;
-            }
+            // if it.bin_id.index != -1 {
+            //     Release_Bin(*undo_redo_text, *it.bin_id);
+            //     it.count = 0;
+            //     it.flags = .NONE;
+            // }
         }
     }
 
+    // array_reset(*last_change.lines);
     cursor.x = last_change.cursor_position.x;
     cursor.y = last_change.cursor_position.y;
 }

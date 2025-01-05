@@ -86,6 +86,7 @@ Program_Print :: #import "Program_Print";
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#load "math.jai";
 #load "static_params.jai";
 #load "logging.jai";
 #load "utility.jai";
@@ -94,7 +95,6 @@ Program_Print :: #import "Program_Print";
 #load "text_buffer.jai";
 #load "number_interpretation.jai";
 #load "dynamic_pool.jai";
-#load "math.jai";
 #load "struct_file.jai";
 #load "runtime_params.jai";
 #load "window/window.jai";

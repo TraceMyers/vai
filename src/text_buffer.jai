@@ -54,14 +54,14 @@ Initialize_Text_Buffer :: (buffer: *TextBuffer, path: string, prealloc_lines := 
         array_reserve(*buffer.lines, prealloc_lines);
     }
     buffer.file_path = path;
-    Circular_Buffer_Initialize(*buffer.change_history, settings_file_data.change_history_count, true);
+    Opposing_Circular_Buffer_Initialize(*buffer.change_history, settings_file_data.change_history_count, Cleanup_Text_Change, true);
 }
 
 Shutdown_Text_Buffer :: (buffer: *TextBuffer) {
     Bin_Pool_Shutdown(*buffer.line_pool);
     array_reset(*buffer.lines);
     String_Reset(*buffer.file_path);
-    Circular_Buffer_Reset(*buffer.change_history);
+    Opposing_Circular_Buffer_Reset(*buffer.change_history);
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -549,9 +549,9 @@ Utf8_From_Modified_Utf32_Array :: (bin: []u32, true_count: s64) -> string {
 
 Get_Current_Change :: (buffer: *TextBuffer) -> *TextChange {
     if buffer.change_history.count == 0 {
-        Push_Back(*buffer.change_history, .{});
+        Push_Middle(*buffer.change_history, .{});
     }
-    return Peek_Back(*buffer.change_history);   
+    return Peek_Middle(*buffer.change_history);   
 }
 
 Add_Line_To_Deletion_Change :: (buffer: *TextBuffer, row: s64, delete_line: bool) {
@@ -599,15 +599,7 @@ End_Current_Change :: () {
     if text_buffer.change_history.count == 0 {
         return;
     }
-    if Is_Full(*text_buffer.change_history) {
-        oldest_change := Peek_Front(*text_buffer.change_history);
-        for oldest_change.lines {
-            if it.bin_id.index != -1 {
-                Release_Bin(*undo_redo_text, *it.bin_id);
-            }
-        }
-    }
-    Push_Back(*text_buffer.change_history, .{});
+    Push_Middle(*text_buffer.change_history);
 }
 
 // Push_Deleted_Text_Section_To_Current_Change :: (buffer: *TextBuffer, row: s64, prepend: []u32, append: []u32, start_col := -1, end_col := -1) {
@@ -679,7 +671,7 @@ Is_Current_Change_Empty :: () -> bool {
      if text_buffer.change_history.count == 0 {
         return true;
     }
-    change := Peek_Back(*text_buffer.change_history);
+    change := Peek_Middle(*text_buffer.change_history);
     return change.lines.count == 0;
 }
 
@@ -754,6 +746,7 @@ BinTack :: struct {
 //     };
 // }
 
+// TODO: INSERTION and DELETION don't need to be tracked with different flags. whatever the line was will be restored. the only extra information needed: line was added/deleted?
 LineChangeFlags :: enum_flags u8 {
     NONE :: 0;
     INSERTION :: 1;
@@ -768,6 +761,16 @@ LineChange :: struct {
     flags: LineChangeFlags;
 }
 
+Cleanup_Text_Change :: (using change: *TextChange) {
+    for *lines {
+        if it.bin_id.index != -1 {
+            Release_Bin(*undo_redo_text, *it.bin_id);
+        }
+    }
+    array_reset(*lines);
+    change.* =.{};
+}
+
 TextChange :: struct {
     id: u64;
     cursor_position: IntVector2;
@@ -778,8 +781,7 @@ TextBuffer :: struct {
     lines: [..]LineBuffer;
     line_pool: BinPool(24, u8);
     file_path: string;
-    // change_history: CircularBuffer(ChangeArtifact);
-    change_history: CircularBuffer(TextChange);
+    change_history: OpposingCircularBuffer(TextChange);
 }
 
 Utf32Buffer :: struct {

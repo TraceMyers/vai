@@ -19,28 +19,41 @@ Render_Debug_View_Text :: (using tb_view: *DebugView, is_active: bool, render_pa
     Render_Text_Buffer_Lines(*renderer, text_buffer, true);
 }
 
-Temp_Text_Buffer :: (history: *CircularBuffer(TextChange)) -> *TextBuffer {
+Temp_Text_Buffer :: (history: *OpposingCircularBuffer(TextChange)) -> *TextBuffer {
     buf: *TextBuffer = xx talloc(size_of(TextBuffer));
     Assign_Bin_Pool_Allocator(*buf.line_pool, temp);
     buf.lines.allocator = temp;
     Bin_Pool_Initialize(*buf.line_pool);
 
-    if history.count == 0 then return buf;
+    if Totally_Empty(history) then return buf;
 
     i := 0;
+    found_middle := false;
     artifact := Peek_Back(history);
-    if history.count > 0 then for 0..history.count-1 {
-        for artifact.lines {
+    middle_artifact := Peek_Middle(history);
+    front_artifact := Peek_Front(history);
+    for 0..history.items.count-1 {
+        is_middle := artifact == middle_artifact;
+        prefix := ifx found_middle then " past " else "future";
+        mid := ifx is_middle then "M" else " ";
+        if artifact.lines.count == 0 {
+            fixed := tprint("[%/%/%] (%) : []", i, prefix, mid, "");
+            Append_Line(buf, fixed);
+        } else for artifact.lines {
             bin: []u8;
             if it.count > 0 {
                 bin = Get_Bin(*undo_redo_text, *it.bin_id);
                 bin.count = it.count;
             }
-            fixed := Prefix_Postfix_String(As_String(bin), tprint("[%] (%) : [", i, it.flags), "]");
+            fixed := Prefix_Postfix_String(As_String(bin), tprint("[%/%/%] (%) : [", i, prefix, mid, it.flags), "]");
             Append_Line(buf, fixed);
         }
         Append_Line(buf, "");
+        if artifact == front_artifact {
+            break;
+        }
         artifact = Seek_Back(history, artifact);
+        found_middle |= is_middle;
         i += 1;
     }
 
