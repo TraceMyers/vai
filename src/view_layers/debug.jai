@@ -30,7 +30,6 @@ Temp_Text_Buffer :: (history: *OpposingCircularBuffer(TextChange)) -> *TextBuffe
     i := 0;
     found_middle := false;
 
-    artifact := Peek_Back(history);
     back_artifact := Peek_Back(history);
     middle_artifact := Peek_Middle(history);
     front_artifact := Peek_Front(history);
@@ -43,16 +42,16 @@ Temp_Text_Buffer :: (history: *OpposingCircularBuffer(TextChange)) -> *TextBuffe
     Append_Line(buf, "");
 
     place_buffer: [3]u8;
-    place_str := string.{0, place_buffer.data};
+    place_str := string.{3, place_buffer.data};
 
     for 0..history.items.count-1 {
+        artifact := *history.items[it];
         is_front := artifact == front_artifact;
         is_middle := artifact == middle_artifact;
         is_back := artifact == back_artifact;
-        place_str.count = 0;
-        if is_front then String_Append(*place_str, #char "F");
-        if is_middle then String_Append(*place_str, #char "M");
-        if is_back then String_Append(*place_str, #char "B");
+        place_str[0] = ub(ifx is_front then #char "F" else #char " ");
+        place_str[1] = ub(ifx is_middle then #char "M" else #char " ");
+        place_str[2] = ub(ifx is_back then #char "B" else #char " ");
         artifact_index := Element_Index(artifact, history.items);
 
         prefix := ifx found_middle then " past " else "future";
@@ -69,10 +68,6 @@ Temp_Text_Buffer :: (history: *OpposingCircularBuffer(TextChange)) -> *TextBuffe
             Append_Line(buf, fixed);
         }
         Append_Line(buf, "");
-        if is_front {
-            break;
-        }
-        artifact = Seek_Back(history, artifact);
         found_middle |= is_middle;
         i += 1;
     }

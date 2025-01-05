@@ -585,8 +585,7 @@ Undo :: () {
         return;
     }
     _ := Pop_Middle(*text_buffer.change_history); // ignore current change
-    last_change := Pop_Middle(*text_buffer.change_history);
-    End_Current_Change();
+    last_change := Peek_Middle(*text_buffer.change_history);
 
     cursor.x = last_change.cursor_position.x;
     cursor.y = last_change.cursor_position.y;
@@ -611,17 +610,9 @@ Undo :: () {
             Clear_Line_Impl(text_buffer, cursor.y);
             utf32 := As_Array(Encode(restore_text, .UTF8, .UTF32), u32);
             Insert_Code_Points(text_buffer, cursor.y, 0, utf32);
-
-            // cleanup
-            // if it.bin_id.index != -1 {
-            //     Release_Bin(*undo_redo_text, *it.bin_id);
-            //     it.count = 0;
-            //     it.flags = .NONE;
-            // }
         }
     }
 
-    // array_reset(*last_change.lines);
     cursor.x = last_change.cursor_position.x;
     cursor.y = last_change.cursor_position.y;
 

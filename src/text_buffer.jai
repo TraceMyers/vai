@@ -602,6 +602,7 @@ End_Current_Change :: () {
     if Totally_Empty(*text_buffer.change_history) {
         return;
     }
+    Log("pushing");
     Push_Middle(*text_buffer.change_history);
 }
 
