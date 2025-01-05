@@ -276,8 +276,11 @@ Break_Line_At :: (buffer: *TextBuffer, row: s64, col: s64) {
 }
 
 Clear_Line :: (buffer: *TextBuffer, row: s64) {
-    // Push_Deleted_Text_Section_To_Current_Change(buffer, row, .[], .[], 0, buffer.lines[row].byte_count);
     Add_Line_To_Deletion_Change(buffer, row, false);
+    Clear_Line_Impl(buffer, row);
+}
+
+Clear_Line_Impl :: (buffer: *TextBuffer, row: s64) {
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     Resize_Utf32_Buffer(utf32_buffer, 0);
 }
@@ -369,14 +372,22 @@ Get_Utf32_Buffer :: (buffer: *TextBuffer, line_index: s64, $ALLOW_ALLOCATION := 
 }
 
 Resize_Utf32_Buffer :: (utf32_buffer: *Utf32Buffer, count: u32) {
-    if utf32_buffer.temp_bin_id.index == -1 && count > 0 {
-        utf32_buffer.temp_bin_id = Request_Bin(*temp_utf32_buffer_pool, count);
+    if utf32_buffer.temp_bin_id.index == -1 {
+        if count > 0 {
+            utf32_buffer.temp_bin_id = Request_Bin(*temp_utf32_buffer_pool, count);
+        }
     } else {
         Resize_Bin(*temp_utf32_buffer_pool, *utf32_buffer.temp_bin_id, count);
     }
-    bin := Get_Bin(*temp_utf32_buffer_pool, utf32_buffer.temp_bin_id);
-    utf32_buffer.array.data = bin.data;
-    utf32_buffer.array.count = count;
+
+    if utf32_buffer.temp_bin_id.index != -1 {
+        bin := Get_Bin(*temp_utf32_buffer_pool, utf32_buffer.temp_bin_id);
+        utf32_buffer.array.data = bin.data;
+        utf32_buffer.array.count = count;
+    } else {
+        utf32_buffer.array.data = null;
+        utf32_buffer.array.count = 0;
+    }
 }
 
 // for appending into a buffer where the input and output buffer are the same.
@@ -544,7 +555,12 @@ Get_Current_Change :: (buffer: *TextBuffer) -> *TextChange {
 }
 
 Add_Line_To_Deletion_Change :: (buffer: *TextBuffer, row: s64, delete_line: bool) {
+    Init_Cursor_Proc_Or_Return();
     current_change := Get_Current_Change(buffer);
+    if current_change.lines.count == 0 {
+        current_change.cursor_position.x = cursor.x;
+        current_change.cursor_position.y = cursor.y;
+    }
     line_change: *LineChange;
 
     flags: LineChangeFlags = ---;
@@ -560,13 +576,13 @@ Add_Line_To_Deletion_Change :: (buffer: *TextBuffer, row: s64, delete_line: bool
             if line_change.flags & flags == flags {
                 return;
             }
-            line_change.flags |= flags;
             break;
         }
     }
     if line_change == null {
         line_change = array_add(*current_change.lines);
     }
+    line_change.flags |= flags;
 
     line_str := Get_Current_Utf8_For_Line(buffer, row);
     if line_str.count > 0 {

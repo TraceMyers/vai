@@ -581,32 +581,50 @@ Repeat_Last_Change :: () {
 Undo :: () {
     Init_Cursor_Proc_Or_Return();
 
-    // if text_buffer.change_history.count < 2 {
-    //     return;
-    // }
-    // _ := Pop_Back(*text_buffer.change_history); // ignore current change
-    // last_change := Pop_Back(*text_buffer.change_history);
-    // End_Current_Change(.[], .[], true);
+    if text_buffer.change_history.count < 2 {
+        return;
+    }
+    _ := Pop_Back(*text_buffer.change_history); // ignore current change
+    last_change := Pop_Back(*text_buffer.change_history);
+    End_Current_Change();
 
     // // TODO: bleh
     // if last_change.deleted_text.bin_id.index == -1 {
     //     return;
     // }
 
+    cursor.x = last_change.cursor_position.x;
+    cursor.y = last_change.cursor_position.y;
+
+    for *last_change.lines {
+        if it.flags & .DELETION {
+            restore_text: string;
+            if it.bin_id.index != -1 {
+                bin := Get_Bin(*undo_redo_text, it.bin_id);
+                restore_text = As_String(bin);
+                restore_text.count = it.count;
+            }
+
+            if it.flags & .DELETE_LINE {
+                Insert_Line(text_buffer, cursor.y);
+                // Insert_Line(text_buffer, cursor.y+1);
+                // cursor.y += 1;
+            }
+            Clear_Line_Impl(text_buffer, cursor.y);
+            utf32 := As_Array(Encode(restore_text, .UTF8, .UTF32), u32);
+            Insert_Code_Points(text_buffer, cursor.y, 0, utf32);
+
+            // cleanup
+            if it.bin_id.index != -1 {
+                Release_Bin(*undo_redo_text, *it.bin_id);
+                it.count = 0;
+                it.flags = .NONE;
+            }
+        }
+    }
     // bin := Get_Bin(*undo_redo_text, last_change.deleted_text.bin_id);
     // bin.count = last_change.deleted_text.count;
-    // cursor.x = last_change.end_position.x;
-    // cursor.y = last_change.end_position.y;
 
-    // input_data := Temp_Buffer(u32, bin.count);
-    // i := 0;
-
-    // for bin {
-    //     input_data[i] = it | NOT_CHANGE;
-    //     i += 1;
-    // }
-
-    // Inject_Modified_Utf32_Into_Frame_Input(input_data);
 }
 
 Internal_Move_Cursor_To_Position :: () {
