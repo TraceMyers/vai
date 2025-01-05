@@ -126,28 +126,23 @@ Opposing_Circular_Buffer_Reset :: (using buffer: *OpposingCircularBuffer($T)) {
 
 Push_Middle :: (using buffer: *OpposingCircularBuffer($T), item: T) {
     if count == 0 {
-        Log("0");
         count = 1;
     } else {
-        Log("1");
         old_middle := middle;
         middle = Increment_Wrap(middle, 0, items.count-1);
         if count == items.count {
-            Log("2");
             assert(allow_overwrite);
             begin = Increment_Wrap(begin, 0, items.count-1);
             if item_cleanup_proc != null {
                 item_cleanup_proc(*items[middle]);
             }
         } else if end != old_middle {
-            Log("3");
             assert(allow_overwrite);
             if item_cleanup_proc != null {
                 item_cleanup_proc(*items[middle]);
             }
             count += 1;
         } else {
-            Log("4");
             count += 1;
         }
         end = middle;
@@ -180,10 +175,8 @@ Pop_Middle :: inline (using buffer: *OpposingCircularBuffer($T)) -> T {
 
 Push_Middle :: inline (using buffer: *OpposingCircularBuffer($T)) {
     if middle == end || count == items.count || Totally_Empty(buffer) {
-        Log("a");
         Push_Middle(buffer, .{});
     } else {
-        Log("b");
         middle = Increment_Wrap(middle, 0, items.count-1);
         count += 1;
     }
