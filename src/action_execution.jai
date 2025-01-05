@@ -588,11 +588,6 @@ Undo :: () {
     last_change := Pop_Back(*text_buffer.change_history);
     End_Current_Change();
 
-    // // TODO: bleh
-    // if last_change.deleted_text.bin_id.index == -1 {
-    //     return;
-    // }
-
     cursor.x = last_change.cursor_position.x;
     cursor.y = last_change.cursor_position.y;
 
@@ -606,9 +601,12 @@ Undo :: () {
             }
 
             if it.flags & .DELETE_LINE {
-                Insert_Line(text_buffer, cursor.y);
-                // Insert_Line(text_buffer, cursor.y+1);
-                // cursor.y += 1;
+                if it_index == 0 {
+                    Insert_Line(text_buffer, cursor.y);
+                } else {
+                    cursor.y += 1;
+                    Insert_Line(text_buffer, cursor.y);
+                }
             }
             Clear_Line_Impl(text_buffer, cursor.y);
             utf32 := As_Array(Encode(restore_text, .UTF8, .UTF32), u32);
@@ -622,9 +620,9 @@ Undo :: () {
             }
         }
     }
-    // bin := Get_Bin(*undo_redo_text, last_change.deleted_text.bin_id);
-    // bin.count = last_change.deleted_text.count;
 
+    cursor.x = last_change.cursor_position.x;
+    cursor.y = last_change.cursor_position.y;
 }
 
 Internal_Move_Cursor_To_Position :: () {

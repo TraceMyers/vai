@@ -757,6 +757,7 @@ BinTack :: struct {
 LineChangeFlags :: enum_flags u8 {
     NONE :: 0;
     INSERTION :: 1;
+    INSERT_LINE;
     DELETION;
     DELETE_LINE;
 }
