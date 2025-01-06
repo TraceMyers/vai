@@ -21,6 +21,7 @@ Render_Debug_View_Text :: (using tb_view: *DebugView, is_active: bool, render_pa
 
 Temp_Text_Buffer :: (history: *OpposingCircularBuffer(TextChange)) -> *TextBuffer {
     buf: *TextBuffer = xx talloc(size_of(TextBuffer));
+    buf.* = .{};
     Assign_Bin_Pool_Allocator(*buf.line_pool, temp);
     buf.lines.allocator = temp;
     Bin_Pool_Initialize(*buf.line_pool);

@@ -84,7 +84,7 @@ Create_Base_Views :: () {
 
 Prepare_Intro_File :: () -> string {
     // INTRO_FILE_NAME :: "intro.txt";
-    INTRO_FILE_NAME :: "test_files/big_code.jai";
+    INTRO_FILE_NAME :: "test_files/undo_redo.txt";
     file_data := read_entire_file(INTRO_FILE_NAME);
     if file_data.count == 0 {
         write_entire_file(INTRO_FILE_NAME, "type ':e somefilename' to open a file");

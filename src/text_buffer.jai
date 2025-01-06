@@ -120,6 +120,10 @@ Insert_Line :: (buffer: *TextBuffer, i: s64, is_change := true) {
 }
 
 Remove_Line :: (buffer: *TextBuffer, line_index: s64, is_change := true) {
+    if buffer.lines.count == 1 {
+        Clear_Line(buffer, line_index, is_change);
+        return;
+    }
     if is_change {
         Add_Line_To_Change(buffer, line_index, .DELETE_LINE);
     }
@@ -155,6 +159,7 @@ Set_Line_Bytes :: (buffer: *TextBuffer, line_index: s64, line_str: string) {
         if line.bin_id.bin_count == 0 {
             line.bin_id = Request_Bin(*buffer.line_pool, line_str.count);
         }
+        assert(line.bin_id.index != -1);
         Set_Bin_Data(*buffer.line_pool, *line.bin_id, As_Array(line_str, u8));
         line.byte_count = xx line_str.count;
         bytes := Get_Line_Bytes(buffer, line_index);
@@ -280,8 +285,10 @@ Break_Line_At :: (buffer: *TextBuffer, row: s64, col: s64) {
     }
 }
 
-Clear_Line :: (buffer: *TextBuffer, row: s64) {
-    Add_Line_To_Change(buffer, row, 0);
+Clear_Line :: (buffer: *TextBuffer, row: s64, is_change := true) {
+    if is_change {
+        Add_Line_To_Change(buffer, row, 0);
+    }
     Clear_Line_Impl(buffer, row);
 }
 

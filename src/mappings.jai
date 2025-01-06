@@ -42,6 +42,7 @@
     .{.["c0"],                  "REPLACE_TOWARD_LINE_ZERO",                     .{modes=.NORMAL, is_change=true,                proc=Replace_Toward_Line_Zero}},
     .{.["u"],                   "UNDO",                                         .{modes=.NORMAL,                                proc=Undo}},
     .{.["<C-r>"],               "REDO"              ,                           .{modes=.NORMAL,                                proc=Redo}},
+    .{.["<C-p>"],               "PLAY_INPUT_RECORD"             ,               .{modes=.NORMAL,                                proc=Play_Input_Record}},
     .{.["__INTERNAL__"],        "CLAMP_CURSOR_X_TO_BOUNDS"                      .{modes=.NONE}},
     .{.["__INTERNAL__"],        "NONE",                                         .{modes=.NONE}},
     .{.["__INTERNAL__"],        "INTERNAL_MOVE_CURSOR_TO_POSITION",             .{modes=.ALL    ,                               proc=Internal_Move_Cursor_To_Position}}

@@ -1,6 +1,9 @@
 
 Platform_Initialize_Input :: () {
     raw_input.allocator = temp;
+    if settings_file_data.record_processed_input {
+        write_entire_file("input_record.txt", "");
+    }
 }
 
 Platform_Shutdown_Input :: () {
@@ -36,7 +39,20 @@ Update_Modifier_Keys :: () {
 
 // returns utf32 code points flagged with modifier keys
 Process_Raw_Input :: () -> []u32 {
-    if raw_input.count == 0 then return u32.[];
+    if raw_input.count == 0 {
+        arr: []u32;
+        if play_input_record {
+            file_data, success := read_entire_file("input_record.txt");
+            if success {
+                arr.data = talloc(file_data.count);
+                arr.count = file_data.count / 4;
+                memcpy(arr.data, file_data.data, file_data.count);
+                free(file_data);
+            }
+            play_input_record = false;
+        }
+        return arr;
+    }
     
     utf16_str := As_String(raw_input);
     utf32_str := Encode(utf16_str, .UTF16, .UTF32);
@@ -50,6 +66,17 @@ Process_Raw_Input :: () -> []u32 {
     }
 
     array_reset(*raw_input);
+
+    if settings_file_data.record_processed_input && utf32_array.count > 0 {
+        f := file_open("input_record.txt", true, true);
+        defer file_close(*f);
+        file_len, success := file_length(f);
+        if success {
+            file_set_position(f, file_len);
+            file_write(*f, utf32_array.data, utf32_array.count * size_of(u32));
+        }
+    }
+
     return utf32_array;
 }
 

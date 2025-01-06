@@ -544,6 +544,8 @@ append_new_line_sequence := u32.[#char "o"];
 
 action_executor_data: ActionExecutorData;
 
+play_input_record: bool;
+
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 
 #if OS == .WINDOWS {

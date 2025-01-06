@@ -452,7 +452,7 @@ Delete_Selection :: (enter_normal_mode: bool) {
             Remove_Code_Points(text_buffer, edit_y, begin_x, remove_count);
         }
     }
-    cursor.y = selection_begin.y;
+    cursor.y = min(selection_begin.y, sdw(text_buffer.lines.count-1));
     cursor.x = Clamp_X_To_Line(selection_begin.x, Line_View(text_buffer, cursor.y));
     cursor.target_x = cursor.x;
 
@@ -578,8 +578,10 @@ Repeat_Last_Change :: () {
     // TODO: get back to normal mode
 }
 
+debug_undo_lock: bool;
+
 Undo_Redo_Loop_Iteration :: (text_buffer: *TextBuffer, cursor: *Cursor, line_change: *LineChange, remove_flag: LineChangeFlags, insert_flag: LineChangeFlags, restore_tack: *BinTack, set_redo_tack: bool) {
-    if set_redo_tack && line_change.redo_tack.bin_id.index == -1 {
+    if set_redo_tack && line_change.redo_tack.bin_id.index == -1 && cursor.y < text_buffer.lines.count {
         changed_line := Get_Current_Utf8_For_Line(text_buffer, cursor.y);
         if changed_line.count > 0 {
             line_change.redo_tack.bin_id = Request_Bin(*undo_redo_text, changed_line.count);
@@ -589,12 +591,20 @@ Undo_Redo_Loop_Iteration :: (text_buffer: *TextBuffer, cursor: *Cursor, line_cha
     }
 
     if line_change.flags & remove_flag {
+        if cursor.y >= text_buffer.lines.count {
+            debug_undo_lock = true;
+            return;
+        }
         Remove_Line(text_buffer, cursor.y, false);
         return;
     }
     if line_change.flags & insert_flag {
         Insert_Line(text_buffer, cursor.y, false);
     } 
+    if cursor.y >= text_buffer.lines.count {
+        debug_undo_lock = true;
+        return;
+    }
 
     restore_text: string;
     if restore_tack.bin_id.index != -1 {
@@ -606,12 +616,16 @@ Undo_Redo_Loop_Iteration :: (text_buffer: *TextBuffer, cursor: *Cursor, line_cha
     Clear_Line_Impl(text_buffer, cursor.y);
     utf32 := As_Array(Encode(restore_text, .UTF8, .UTF32), u32);
     Insert_Code_Points(text_buffer, cursor.y, 0, utf32, false);
-    cursor.y += 1;
+    cursor.y = min(cursor.y+1, sdw(text_buffer.lines.count-1));
 }
 
 Undo :: () {
     Init_Cursor_Proc_Or_Return();
 
+    if debug_undo_lock {
+        Log("ey");
+        return;
+    }
     if text_buffer.change_history.count < 2 {
         return;
     }
@@ -623,6 +637,9 @@ Undo :: () {
 
     for *last_change.lines {
         Undo_Redo_Loop_Iteration(text_buffer, cursor, it, .INSERT_LINE, .DELETE_LINE, *it.undo_tack, true);
+        if debug_undo_lock {
+            return;
+        }
     }
 
     cursor.x = last_change.cursor_position.x;
@@ -658,6 +675,10 @@ Internal_Move_Cursor_To_Position :: () {
     Init_Cursor_Proc_Or_Return();
     // cursor.x = move_cursor_to_position.x;
     // cursor.y = move_cursor_to_position.y;
+}
+
+Play_Input_Record :: () {
+    play_input_record = true;
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
