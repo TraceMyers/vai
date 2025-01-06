@@ -591,28 +591,28 @@ Undo :: () {
     cursor.y = last_change.cursor_position.y;
 
     for *last_change.lines {
+        if it.redo_tack.bin_id.index == -1 {
+            changed_line := Get_Current_Utf8_For_Line(text_buffer, cursor.y);
+            if changed_line.count > 0 {
+                it.redo_tack.bin_id = Request_Bin(*undo_redo_text, changed_line.count);
+                Set_Bin_Data(*undo_redo_text, *it.redo_tack.bin_id, As_Array(changed_line, u8));
+                it.redo_tack.count = changed_line.count;
+            }
+        }
+
+        if it.flags & .INSERT_LINE {
+            Remove_Line(text_buffer, cursor.y, false);
+            continue;
+        }
+        if it.flags & .DELETE_LINE {
+            Insert_Line(text_buffer, cursor.y, false);
+        } 
+
         restore_text: string;
         if it.undo_tack.bin_id.index != -1 {
             bin := Get_Bin(*undo_redo_text, it.undo_tack.bin_id);
             restore_text = As_String(bin);
             restore_text.count = it.undo_tack.count;
-        }
-
-        if it.flags & .DELETE_LINE {
-            Insert_Line(text_buffer, cursor.y, false);
-        } else {
-            if it.redo_tack.bin_id.index == -1 {
-                changed_line := Get_Current_Utf8_For_Line(text_buffer, cursor.y);
-                if changed_line.count > 0 {
-                    it.redo_tack.bin_id = Request_Bin(*undo_redo_text, changed_line.count);
-                    Set_Bin_Data(*undo_redo_text, *it.redo_tack.bin_id, As_Array(changed_line, u8));
-                    it.redo_tack.count = changed_line.count;
-                }
-            }
-            if it.flags & .INSERT_LINE {
-                Remove_Line(text_buffer, cursor.y, false);
-                continue;
-            }
         }
 
         Clear_Line_Impl(text_buffer, cursor.y);
@@ -644,7 +644,23 @@ Redo :: () {
     for *redo_change.lines {
         if it.flags & .DELETE_LINE {
             Remove_Line(text_buffer, cursor.y, false);
+            continue;
         }
+        if it.flags & .INSERT_LINE {
+            Insert_Line(text_buffer, cursor.y, false);
+        }
+
+        restore_text: string;
+        if it.redo_tack.bin_id.index != -1 {
+            bin := Get_Bin(*undo_redo_text, it.redo_tack.bin_id);
+            restore_text = As_String(bin);
+            restore_text.count = it.redo_tack.count;
+        }
+
+        Clear_Line_Impl(text_buffer, cursor.y);
+        utf32 := As_Array(Encode(restore_text, .UTF8, .UTF32), u32);
+        Insert_Code_Points(text_buffer, cursor.y, 0, utf32, false);
+        cursor.y += 1;
     }
 
     cursor.x = redo_change.cursor_position.x;
