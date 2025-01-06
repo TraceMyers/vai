@@ -589,7 +589,6 @@ Undo :: () {
 
     cursor.x = last_change.cursor_position.x;
     cursor.y = last_change.cursor_position.y;
-    Log("starting undo at line %", cursor.y);
 
     for *last_change.lines {
         restore_text: string;
@@ -600,7 +599,7 @@ Undo :: () {
         }
 
         if it.flags & .DELETE_LINE {
-            Insert_Line(text_buffer, cursor.y);
+            Insert_Line(text_buffer, cursor.y, false);
         }
         if it.flags & .INSERT_LINE {
             Remove_Line(text_buffer, cursor.y, false);
@@ -618,6 +617,10 @@ Undo :: () {
 
     current_change := Get_Current_Change(text_buffer);
     current_change.need_overwrite = true;
+}
+
+Redo :: () {
+
 }
 
 Internal_Move_Cursor_To_Position :: () {

@@ -107,13 +107,15 @@ Load_File_Into_Buffer :: (path: string) -> s64 {
 
 Append_Line :: (buffer: *TextBuffer, line_str: string) {
     Commit_And_Empty_Utf32_Buffers();
-    array_add(*buffer.lines, .{});
+    array_add(*buffer.lines, .{unique_id=line_id_counter});
+    line_id_counter += 1;
     Set_Line_Bytes(buffer, buffer.lines.count-1, line_str);
 }
 
 Insert_Line :: (buffer: *TextBuffer, i: s64, is_change := true) {
     Commit_And_Empty_Utf32_Buffers();
-    array_insert_at(*buffer.lines, .{}, i);
+    array_insert_at(*buffer.lines, .{unique_id=line_id_counter}, i);
+    line_id_counter += 1;
     if is_change then Add_Line_To_Change(buffer, i, .INSERT_LINE);
 }
 
@@ -237,7 +239,7 @@ Insert_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, code_points: []u
 
 Remove_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64) {
     // TODO: check if line deletion
-    Add_Line_To_Change(buffer, row, 0);
+    Add_Line_To_Change(buffer, row, .INSERT_FRONT);
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     assert(col < utf32_buffer.array.count);
     #if DEBUG_TEXT_BUFFERS {
@@ -538,7 +540,7 @@ Add_Line_To_Change :: (buffer: *TextBuffer, row: s64, flags: LineChangeFlags) {
     if current_change.need_overwrite {
         Reset_Back(*buffer.change_history);
     }
-    if current_change.lines.count == 0 {
+    if current_change.lines.count == 0 || (flags & .INSERT_FRONT) != 0 {
         if vi_mode == .VISUAL {
             selection_begin, _ := Cursor_Selection(cursor);
             current_change.cursor_position.x = selection_begin.x;
@@ -551,18 +553,28 @@ Add_Line_To_Change :: (buffer: *TextBuffer, row: s64, flags: LineChangeFlags) {
     line_change: *LineChange;
 
     change_exists := false;
+    line_id := buffer.lines[row].unique_id;
     for current_change.lines {
-        if it.row == row {
+        if it.line_id == line_id {
             line_change = *it;
+            if flags == .DELETE_LINE && (line_change.flags & .INSERT_LINE) != 0 {
+                array_ordered_remove_by_index(*current_change.lines, it_index);
+                return;
+            }
             change_exists = true;
             break;
         }
     }
     if line_change == null {
-        line_change = array_add(*current_change.lines);
+        if flags & .INSERT_FRONT {
+            array_insert_at(*current_change.lines, .{}, 0);
+            line_change = *current_change.lines[0];
+        } else {
+            line_change = array_add(*current_change.lines);
+        }
     }
     line_change.flags |= flags;
-    line_change.row = row;
+    line_change.line_id = line_id;
     if change_exists {
         return;
     }
@@ -596,6 +608,7 @@ Is_Current_Change_Empty :: () -> bool {
 
 LineBuffer :: struct {
     bin_id: BinID;
+    unique_id: u64;
     byte_count: u32;
 }
 
@@ -614,10 +627,11 @@ BinTack :: struct {
 LineChangeFlags :: enum_flags u8 {
     INSERT_LINE;
     DELETE_LINE;
+    INSERT_FRONT;
 }
 
 LineChange :: struct {
-    row: s64;
+    line_id: u64;
     using bin_tack: BinTack;
     flags: LineChangeFlags;
 }
@@ -653,3 +667,5 @@ Utf32Buffer :: struct {
     temp_bin_id: BinID;
     array: []u32;
 }
+
+line_id_counter: u64;

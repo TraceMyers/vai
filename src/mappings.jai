@@ -41,6 +41,7 @@
     .{.["d0"],                  "DELETE_TOWARD_LINE_ZERO",                      .{modes=.NORMAL, is_change=true,                proc=Delete_Toward_Line_Zero}},
     .{.["c0"],                  "REPLACE_TOWARD_LINE_ZERO",                     .{modes=.NORMAL, is_change=true,                proc=Replace_Toward_Line_Zero}},
     .{.["u"],                   "UNDO",                                         .{modes=.NORMAL,                                proc=Undo}},
+    .{.["<C-r>"],               "REDO"              ,                           .{modes=.NORMAL,                                proc=Redo}},
     .{.["__INTERNAL__"],        "CLAMP_CURSOR_X_TO_BOUNDS"                      .{modes=.NONE}},
     .{.["__INTERNAL__"],        "NONE",                                         .{modes=.NONE}},
     .{.["__INTERNAL__"],        "INTERNAL_MOVE_CURSOR_TO_POSITION",             .{modes=.ALL    ,                               proc=Internal_Move_Cursor_To_Position}}
