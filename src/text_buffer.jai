@@ -581,10 +581,10 @@ Add_Line_To_Change :: (buffer: *TextBuffer, row: s64, flags: LineChangeFlags) {
 
     line_str := Get_Current_Utf8_For_Line(buffer, row);
     if line_str.count > 0 {
-        if line_change.bin_id.index == -1 {
-            line_change.bin_id = Request_Bin(*undo_redo_text, line_str.count);
-            Set_Bin_Data(*undo_redo_text, *line_change.bin_id, As_Array(line_str, u8));
-            line_change.count = line_str.count;
+        if line_change.undo_tack.bin_id.index == -1 {
+            line_change.undo_tack.bin_id = Request_Bin(*undo_redo_text, line_str.count);
+            Set_Bin_Data(*undo_redo_text, *line_change.undo_tack.bin_id, As_Array(line_str, u8));
+            line_change.undo_tack.count = line_str.count;
         }
     }
 }
@@ -632,14 +632,18 @@ LineChangeFlags :: enum_flags u8 {
 
 LineChange :: struct {
     line_id: u64;
-    using bin_tack: BinTack;
+    undo_tack: BinTack;
+    redo_tack: BinTack;
     flags: LineChangeFlags;
 }
 
 Cleanup_Text_Change :: (using change: *TextChange) {
     for *lines {
-        if it.bin_id.index != -1 {
-            Release_Bin(*undo_redo_text, *it.bin_id);
+        if it.undo_tack.bin_id.index != -1 {
+            Release_Bin(*undo_redo_text, *it.undo_tack.bin_id);
+        }
+        if it.redo_tack.bin_id.index != -1 {
+            Release_Bin(*undo_redo_text, *it.redo_tack.bin_id);
         }
     }
     array_reset(*lines);
@@ -649,7 +653,7 @@ Cleanup_Text_Change :: (using change: *TextChange) {
 TextChange :: struct {
     id: u64;
     cursor_position: IntVector2;
-    lines: [..]LineChange;   
+    lines: [..]LineChange;
     need_overwrite: bool;
 }
 

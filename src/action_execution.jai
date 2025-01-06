@@ -592,18 +592,27 @@ Undo :: () {
 
     for *last_change.lines {
         restore_text: string;
-        if it.bin_id.index != -1 {
-            bin := Get_Bin(*undo_redo_text, it.bin_id);
+        if it.undo_tack.bin_id.index != -1 {
+            bin := Get_Bin(*undo_redo_text, it.undo_tack.bin_id);
             restore_text = As_String(bin);
-            restore_text.count = it.count;
+            restore_text.count = it.undo_tack.count;
         }
 
         if it.flags & .DELETE_LINE {
             Insert_Line(text_buffer, cursor.y, false);
-        }
-        if it.flags & .INSERT_LINE {
-            Remove_Line(text_buffer, cursor.y, false);
-            continue;
+        } else {
+            if it.redo_tack.bin_id.index == -1 {
+                changed_line := Get_Current_Utf8_For_Line(text_buffer, cursor.y);
+                if changed_line.count > 0 {
+                    it.redo_tack.bin_id = Request_Bin(*undo_redo_text, changed_line.count);
+                    Set_Bin_Data(*undo_redo_text, *it.redo_tack.bin_id, As_Array(changed_line, u8));
+                    it.redo_tack.count = changed_line.count;
+                }
+            }
+            if it.flags & .INSERT_LINE {
+                Remove_Line(text_buffer, cursor.y, false);
+                continue;
+            }
         }
 
         Clear_Line_Impl(text_buffer, cursor.y);
@@ -620,7 +629,26 @@ Undo :: () {
 }
 
 Redo :: () {
+    Init_Cursor_Proc_Or_Return();
+    
+    if text_buffer.change_history.middle == text_buffer.change_history.end {
+        // nothing to redo; at the end of changes
+        return;
+    }
 
+    redo_change := Peek_Middle(*text_buffer.change_history);
+    Push_Middle(*text_buffer.change_history);
+
+    cursor.y = redo_change.cursor_position.y;
+
+    for *redo_change.lines {
+        if it.flags & .DELETE_LINE {
+            Remove_Line(text_buffer, cursor.y, false);
+        }
+    }
+
+    cursor.x = redo_change.cursor_position.x;
+    cursor.y = redo_change.cursor_position.y;
 }
 
 Internal_Move_Cursor_To_Position :: () {

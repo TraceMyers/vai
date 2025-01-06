@@ -55,19 +55,25 @@ Temp_Text_Buffer :: (history: *OpposingCircularBuffer(TextChange)) -> *TextBuffe
         artifact_index := Element_Index(artifact, history.items);
 
         prefix := ifx found_middle then " past " else "future";
+
+        Append_Tack :: (tack: *BinTack, tack_prefix: string) #expand {
+            bin: []u8;
+            if tack.count > 0 {
+                bin = Get_Bin(*undo_redo_text, *tack.bin_id);
+                bin.count = tack.count;
+            }
+            fixed := Prefix_Postfix_String(As_String(bin), tprint("[%/%/%/%] (%) : [", i, tack_prefix, prefix, place_str, `it.flags), "]");
+            Append_Line(buf, fixed);
+        }
+
         if artifact.lines.count == 0 {
             fixed := tprint("[%/%/%/%] (%) : []", i, artifact_index, prefix, place_str, "");
             Append_Line(buf, fixed);
         } else for artifact.lines {
-            bin: []u8;
-            if it.count > 0 {
-                bin = Get_Bin(*undo_redo_text, *it.bin_id);
-                bin.count = it.count;
-            }
-            fixed := Prefix_Postfix_String(As_String(bin), tprint("[%/%/%/%] (%) : [", i, artifact_index, prefix, place_str, it.flags), "]");
-            Append_Line(buf, fixed);
+            Append_Tack(*it.undo_tack, "undo");
+            Append_Tack(*it.redo_tack, "redo");
         }
-        Append_Line(buf, "");
+        Append_Line(buf, "------------------ ");
         found_middle |= is_middle;
         i += 1;
     }
