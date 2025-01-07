@@ -157,11 +157,11 @@ Return_Item :: (using pool: *DynamicPool($T), i: s64, shrink_behavior := PoolRes
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 
-Byte_Index_To_Item_Index :: (byte: s64, bit: s64) -> s64 #expand {
+Byte_Index_To_Item_Index :: inline (byte: s64, bit: s64) -> s64 {
     return byte * 8 + bit;
 }
 
-Item_Index_To_Byte_Index :: (i: s64) -> s32, s32 #expand {
+Item_Index_To_Byte_Index :: inline (i: s64) -> s32, s32 {
     byte_index: s32 = xx (i >> 3);
     bit_index: s32 = xx (i - (byte_index << 3));
     return byte_index, bit_index;
@@ -313,17 +313,21 @@ Bin_Pool_Shutdown :: (using pool: *BinPool($SIZE, $T)) {
     array_reset(*massive_data);
 }
 
-Bin_In_Use_Check_Data :: inline (using id: BinID) -> u32, u8 {
+Bin_In_Use_Check_Data :: (using id: BinID) -> u32, u8 {
     #if DEBUG_POOLS then assert(bin_count <= 8);
     byte, bit := Item_Index_To_Byte_Index(id.index);
     flags := (ub(0xff) >> (ub(8) - bin_count)) << bit;
     return xx byte, flags;
 }
 
-Is_Item_In_Use :: inline (using pool: *BinPool($SIZE, $T), id: BinID) -> bool {
+Is_Item_In_Use :: (using pool: *BinPool($SIZE, $T), id: BinID) -> bool {
+    #if DEBUG_POOLS {
+        assert(id.type == .SMALL || id.type == .MASSIVE);
+    }
     tracker := *trackers[id.type];
     byte, flags := Bin_In_Use_Check_Data(id);
     #if DEBUG_POOLS {
+        assert(byte >= 0 && byte < tracker.in_use.count);
         val := tracker.in_use[byte] & flags;
         is_zero := val == 0;
         is_exact_match := val == flags;
@@ -451,9 +455,7 @@ Release_Bin :: (using pool: *BinPool($SIZE, $T), id: *BinID, shrink_behavior := 
 
 Get_Bin :: (using pool: *BinPool($SIZE, $T), id: BinID) -> []T {
     bin: []T;
-    #if DEBUG_POOLS {
-        assert(Is_Item_In_Use(pool, id));
-    }
+    assert(id.index >= 0);
     if Is_Item_In_Use(pool, id) {
         if id.type == .SMALL {
             #if DEBUG_POOLS {
@@ -492,9 +494,6 @@ Resize_Bin :: inline (using pool: *BinPool($SIZE, $T), id: *BinID, new_count: s6
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 
 Resize_Bin_Impl :: (using pool: *BinPool($SIZE, $T), id: *BinID, new_count: s64, $COPY: bool, $RELEASE_FIRST: bool) -> []T {
-    #if COPY && RELEASE_FIRST {
-        assert(false, "can't release first and copy to new alloc from old. would segfault on read");
-    }
     bin := Get_Bin(pool, id.*);
     if bin.count < new_count {
         bin = Replace_Bin(pool, bin, id, new_count, COPY, RELEASE_FIRST);
@@ -524,6 +523,9 @@ Resize_Bin_Impl :: (using pool: *BinPool($SIZE, $T), id: *BinID, new_count: s64,
 }
 
 Replace_Bin :: (using pool: *BinPool($SIZE, $T), bin: []T, id: *BinID, new_count: s64, $SHOULD_COPY: bool, $RELEASE_FIRST: bool) -> []T {
+    #if SHOULD_COPY && RELEASE_FIRST {
+        assert(false, "can't release first and copy to new alloc from old. would segfault on read");
+    }
     old_id := id.*;
     #if RELEASE_FIRST {
         Release_Bin(pool, *old_id, .DEFAULT);

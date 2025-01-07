@@ -199,7 +199,12 @@ Line_Count :: (buffer: *TextBuffer, row: s64) -> s64 {
 
 Set_Utf32_Buffer_Data :: inline (utf32_buffer: *Utf32Buffer, data: []u32) {
     Set_Bin_Data(*temp_utf32_buffer_pool, *utf32_buffer.temp_bin_id, data);
-    utf32_buffer.array.data = Get_Bin(*temp_utf32_buffer_pool, utf32_buffer.temp_bin_id).data;
+    if utf32_buffer.temp_bin_id.index == -1 {
+        assert(data.count == 0);
+        utf32_buffer.array.data = null;
+    } else {
+        utf32_buffer.array.data = Get_Bin(*temp_utf32_buffer_pool, utf32_buffer.temp_bin_id).data;
+    }
     utf32_buffer.array.count = data.count;
 }
 
