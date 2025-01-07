@@ -125,10 +125,6 @@ Append_Line :: (buffer: *TextBuffer, line_str: string, is_change := true, $FOR_D
 }
 
 Insert_Line :: (buffer: *TextBuffer, i: s64, is_change := true, $FOR_DEBUG := false) {
-    if i == buffer.lines.count {
-        Append_Line(buffer, "", is_change, FOR_DEBUG);
-        return;
-    }
     Commit_And_Empty_Utf32_Buffers();
     #if FOR_DEBUG {
         array_insert_at(*buffer.lines, .{unique_id=debug_line_id_counter}, i);
