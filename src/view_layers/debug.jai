@@ -52,8 +52,8 @@ Create_Debug_View_Undo_Redo :: (out_buffer: *TextBuffer) {
     middle_index := Element_Index(middle_artifact, history.items);
     front_index := Element_Index(front_artifact, history.items);
 
-    Append_Line(buf, tprint("front index: %, middle index: %, back index: %", front_index, middle_index, back_index), true);
-    Append_Line(buf, "", true);
+    Append_Line_To_Debug_Buffer(buf, tprint("front index: %, middle index: %, back index: %", front_index, middle_index, back_index));
+    Append_Line_To_Debug_Buffer(buf, "");
 
     place_buffer: [3]u8;
     place_str := string.{3, place_buffer.data};
@@ -77,17 +77,17 @@ Create_Debug_View_Undo_Redo :: (out_buffer: *TextBuffer) {
                 bin.count = tack.count;
             }
             fixed := Prefix_Postfix_String(As_String(bin), tprint("[%/%/%/%] (%) : [", i, tack_prefix, prefix, place_str, `it.flags), "]");
-            Append_Line(buf, fixed, true);
+            Append_Line_To_Debug_Buffer(buf, fixed);
         }
 
         if artifact.lines.count == 0 {
             fixed := tprint("[%/%/%/%] (%) : []", i, artifact_index, prefix, place_str, "");
-            Append_Line(buf, fixed, true);
+            Append_Line_To_Debug_Buffer(buf, fixed);
         } else for artifact.lines {
             Append_Tack(*it.undo_tack, "undo");
-            Append_Tack(*it.redo_tack, "redo");
+            // Append_Tack(*it.redo_tack, "redo");
         }
-        Append_Line(buf, "------------------ ", true);
+        Append_Line_To_Debug_Buffer(buf, "------------------ ");
         found_middle |= is_middle;
         i += 1;
     }
@@ -100,7 +100,10 @@ Create_Debug_View_Bin_Pool :: (out_buffer: *TextBuffer) {
 
     // TODO: for top n visible lines
     for text_buffer.lines {
-        Append_Line(buf, tprint("line [%/%]: bytes: %, bin id: %", it_index, it.unique_id, it.byte_count, it.bin_id), true);
+        Append_Line_To_Debug_Buffer(buf, tprint("line [%/%]: bytes: %, bin id: %", it_index, it.unique_id, it.byte_count, it.bin_id));
+        if it_index == 50 {
+            break;
+        }
     }
 
     using text_buffer.line_pool;
@@ -110,8 +113,8 @@ Create_Debug_View_Bin_Pool :: (out_buffer: *TextBuffer) {
     first_byte: s32;
     byte_counter: s32;
 
-    Append_Line(buf, "", true);
-    Append_Line(buf, tprint("in use data / byte ct: %", trackers[0].in_use.count), true);
+    Append_Line_To_Debug_Buffer(buf, "");
+    Append_Line_To_Debug_Buffer(buf, tprint("in use data / byte ct: %", trackers[0].in_use.count));
 
     for trackers[0].in_use {
         if byte_counter == 0 {
@@ -126,13 +129,13 @@ Create_Debug_View_Bin_Pool :: (out_buffer: *TextBuffer) {
 
         byte_counter += 1;
         if byte_counter == 8 {
-            Append_Line(buf, builder_to_string(*builder,,temp), true);
+            Append_Line_To_Debug_Buffer(buf, builder_to_string(*builder,,temp));
             byte_counter = 0;
             first_byte += 8;
         }
     }
     if byte_counter > 0 {
-        Append_Line(buf, builder_to_string(*builder,,temp), true);
+        Append_Line_To_Debug_Buffer(buf, builder_to_string(*builder,,temp));
     }
 
     collisions: [..]string;
@@ -140,8 +143,8 @@ Create_Debug_View_Bin_Pool :: (out_buffer: *TextBuffer) {
     first_byte = 0;
     byte_counter = 0;
 
-    Append_Line(buf, "", true);
-    Append_Line(buf, "projected in use data by bin id", true);
+    Append_Line_To_Debug_Buffer(buf, "");
+    Append_Line_To_Debug_Buffer(buf, "projected in use data by bin id");
 
     for trackers[0].in_use {
         byte := FormatInt.{value=first_byte, minimum_digits=6, padding=#char " "};
@@ -173,20 +176,20 @@ Create_Debug_View_Bin_Pool :: (out_buffer: *TextBuffer) {
         }
 
         first_byte += 1;
-        Append_Line(buf, builder_to_string(*builder,,temp), true);
+        Append_Line_To_Debug_Buffer(buf, builder_to_string(*builder,,temp));
     }
     if byte_counter > 0 {
-        Append_Line(buf, builder_to_string(*builder,,temp), true);
+        Append_Line_To_Debug_Buffer(buf, builder_to_string(*builder,,temp));
     }
 
-    Append_Line(buf, "", true);
-    Append_Line(buf, "projected in use data collisions", true);
+    Append_Line_To_Debug_Buffer(buf, "");
+    Append_Line_To_Debug_Buffer(buf, "projected in use data collisions");
     for collisions {
-        Append_Line(buf, tprint("collision: %", it), true);
+        Append_Line_To_Debug_Buffer(buf, tprint("collision: %", it));
     }
 
-    Append_Line(buf, tprint("small mark:      %", small_mark), true);
-    Append_Line(buf, tprint("medium mark:     %", medium_mark), true);
-    Append_Line(buf, tprint("large mark:      %", large_mark), true);
-    Append_Line(buf, tprint("very large mark: %", very_large_mark), true);
+    Append_Line_To_Debug_Buffer(buf, tprint("small mark:      %", small_mark));
+    Append_Line_To_Debug_Buffer(buf, tprint("medium mark:     %", medium_mark));
+    Append_Line_To_Debug_Buffer(buf, tprint("large mark:      %", large_mark));
+    Append_Line_To_Debug_Buffer(buf, tprint("very large mark: %", very_large_mark));
 }

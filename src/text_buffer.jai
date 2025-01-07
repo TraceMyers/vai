@@ -99,7 +99,7 @@ Load_File_Into_Buffer :: (path: string) -> s64 {
     buffer := Get_Item(*file_buffers, buf_index);
     Initialize_Text_Buffer(buffer, copy_string(path), line_count, expected_bin_ct);
 
-    Append_Line_To_Buffer :: inline (line: *string, buffer: *TextBuffer) { Append_Line(buffer, line.*); }
+    Append_Line_To_Buffer :: inline (line: *string, buffer: *TextBuffer) { Append_Line(buffer, line.*, false); }
     Process_Per_Line(file_string, Append_Line_To_Buffer, buffer);
     return buf_index;
 }
@@ -107,7 +107,11 @@ Load_File_Into_Buffer :: (path: string) -> s64 {
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // add/remove lines and get/set line bytes
 
-Append_Line :: (buffer: *TextBuffer, line_str: string, $FOR_DEBUG := false) {
+Append_Line_To_Debug_Buffer :: inline (buffer: *TextBuffer, line_str: string) {
+    Append_Line(buffer, line_str, false, true);
+}
+
+Append_Line :: (buffer: *TextBuffer, line_str: string, is_change := true, $FOR_DEBUG := false) {
     Commit_And_Empty_Utf32_Buffers();
     #if FOR_DEBUG {
         array_add(*buffer.lines, .{unique_id=debug_line_id_counter});
@@ -117,9 +121,14 @@ Append_Line :: (buffer: *TextBuffer, line_str: string, $FOR_DEBUG := false) {
         line_id_counter += 1;
     }
     Set_Line_Bytes(buffer, buffer.lines.count-1, line_str);
+    if is_change then Add_Line_To_Change(buffer, buffer.lines.count-1, .INSERT_LINE);
 }
 
 Insert_Line :: (buffer: *TextBuffer, i: s64, is_change := true, $FOR_DEBUG := false) {
+    if i == buffer.lines.count {
+        Append_Line(buffer, "", is_change, FOR_DEBUG);
+        return;
+    }
     Commit_And_Empty_Utf32_Buffers();
     #if FOR_DEBUG {
         array_insert_at(*buffer.lines, .{unique_id=debug_line_id_counter}, i);

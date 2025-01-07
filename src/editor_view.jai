@@ -80,7 +80,7 @@ Create_Base_Views :: () {
     // test split file editor
     split := Split_View(*view_pool.items[active_view_id], .VERTICAL, false);
     split.layers[0].type = .DEBUG;
-    split.layers[0].debug.type = .BIN_POOL;
+    split.layers[0].debug.type = .UNDO_REDO;
 }
 
 Prepare_Intro_File :: () -> string {

@@ -616,14 +616,14 @@ Undo_Redo_Loop_Iteration :: (text_buffer: *TextBuffer, cursor: *Cursor, line_cha
     Clear_Line_Impl(text_buffer, cursor.y);
     utf32 := As_Array(Encode(restore_text, .UTF8, .UTF32), u32);
     Insert_Code_Points(text_buffer, cursor.y, 0, utf32, false);
-    cursor.y = min(cursor.y+1, sdw(text_buffer.lines.count-1));
+    cursor.y = min(cursor.y+1, sdw(text_buffer.lines.count));
 }
 
 Undo :: () {
     Init_Cursor_Proc_Or_Return();
 
     if debug_undo_lock {
-        Log("ey");
+        Log("undo locked because it fucking broke");
         return;
     }
     if text_buffer.change_history.count < 2 {
