@@ -122,7 +122,6 @@ Create_Debug_View_Bin_Pool :: (out_buffer: *TextBuffer) {
 
         byte_str := tprint(" %", FormatInt.{value=it, minimum_digits=8, base=2});
         Reverse_String(byte_str);
-        // Log("byte str: %", byte_str);
         print_to_builder(*builder, byte_str);
 
         byte_counter += 1;

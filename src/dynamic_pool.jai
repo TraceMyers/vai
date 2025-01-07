@@ -477,41 +477,71 @@ Get_Bin :: (using pool: *BinPool($SIZE, $T), id: BinID) -> []T {
 }
 
 // TODO: failure behavior?
-Set_Bin_Data :: (using pool: *BinPool($SIZE, $T), id: *BinID, new_data: []T, shrink_behavior := PoolResizeBehavior.DEFAULT, grow_behavior := PoolResizeBehavior.DEFAULT) {
-    bin := Get_Bin(pool, id.*);
-    if bin.count < new_data.count {
-        if id.bin_count > 0 {
-            Release_Bin(pool, id, shrink_behavior);
-        }
-        id.* = Request_Bin(pool, new_data.count, grow_behavior);
-        assert(id.index != -1);
-        bin = Get_Bin(pool, id.*);
+Set_Bin_Data :: inline (using pool: *BinPool($SIZE, $T), id: *BinID, new_data: []T, shrink_behavior := PoolResizeBehavior.DEFAULT, grow_behavior := PoolResizeBehavior.DEFAULT) {
+    bin := Resize_Bin_Impl(pool, id, new_data.count, false, true);
+    if new_data.count > 0 {
+        memcpy(bin.data, new_data.data, new_data.count * size_of(T));
     }
-    memcpy(bin.data, new_data.data, new_data.count * size_of(T));
 }
 
 // TODO: shrink
-Resize_Bin :: (using pool: *BinPool($SIZE, $T), id: *BinID, new_count: s64) {
-    bin := Get_Bin(pool, id.*);
-    #if DEBUG_POOLS {
-        assert(bin.count < 100_000 && bin.count > -1);
-    }
-    if bin.count < new_count {
-        old_id := id.*;
-        id.* = Request_Bin(pool, new_count, .DEFAULT);
-        assert(id.index != -1);
-        new_bin := Get_Bin(pool, id.*);
-
-        do_copy := bin.count > 0 && new_bin.count > 0;
-        if do_copy {
-            memcpy(new_bin.data, bin.data, bin.count * size_of(T));
-        }
-
-        Release_Bin(pool, *old_id, .DEFAULT);
-    }
+Resize_Bin :: inline (using pool: *BinPool($SIZE, $T), id: *BinID, new_count: s64) {
+    Resize_Bin_Impl(pool, id, new_count, true, false);
 }
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
+
+Resize_Bin_Impl :: (using pool: *BinPool($SIZE, $T), id: *BinID, new_count: s64, $COPY: bool, $RELEASE_FIRST: bool) -> []T {
+    #if COPY && RELEASE_FIRST {
+        assert(false, "can't release first and copy to new alloc from old. would segfault on read");
+    }
+    bin := Get_Bin(pool, id.*);
+    if bin.count < new_count {
+        bin = Replace_Bin(pool, bin, id, new_count, COPY, RELEASE_FIRST);
+    } else if bin.count > 0 {
+        if new_count <= 0 {
+            Release_Bin(pool, id);
+            bin = T.[];
+        } else if id.bin_count > 1 || id.type == .MASSIVE {
+            if new_count <= SHRINK_TO_SMALL_MAX {
+                bin = Replace_Bin(pool, bin, id, new_count, COPY, RELEASE_FIRST);
+            } else if new_count <= SHRINK_TO_MEDIUM_MAX {
+                if id.bin_count != MEDIUM_BIN_COUNT {
+                    bin = Replace_Bin(pool, bin, id, new_count, COPY, RELEASE_FIRST);
+                }
+            } else if new_count <= SHRINK_TO_LARGE_MAX {
+                if id.bin_count != LARGE_BIN_COUNT {
+                    bin = Replace_Bin(pool, bin, id, new_count, COPY, RELEASE_FIRST);
+                }
+            } else if new_count <= SHRINK_TO_VERY_LARGE_MAX {
+                if id.type != .SMALL {
+                    bin = Replace_Bin(pool, bin, id, new_count, COPY, RELEASE_FIRST);
+                }
+            }
+        }
+    }
+    return bin;
+}
+
+Replace_Bin :: (using pool: *BinPool($SIZE, $T), bin: []T, id: *BinID, new_count: s64, $SHOULD_COPY: bool, $RELEASE_FIRST: bool) -> []T {
+    old_id := id.*;
+    #if RELEASE_FIRST {
+        Release_Bin(pool, *old_id, .DEFAULT);
+    }
+    id.* = Request_Bin(pool, new_count, .DEFAULT);
+    assert(id.index != -1);
+    new_bin := Get_Bin(pool, id.*);
+    #if SHOULD_COPY {
+        do_copy := bin.count > 0 && new_bin.count > 0;
+        if do_copy {
+            memcpy(new_bin.data, bin.data, min(new_bin.count, bin.count) * size_of(T));
+        }
+    }
+    #if !RELEASE_FIRST {
+        Release_Bin(pool, *old_id, .DEFAULT);
+    }
+    return new_bin;
+}
 
 PoolUsageIndexingInfo :: struct($BIN_COUNT: u8) {
     #if BIN_COUNT == 1 {
