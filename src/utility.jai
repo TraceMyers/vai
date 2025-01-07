@@ -193,3 +193,13 @@ Temp_Array_Prepend_Append :: (arr: []$T, prefix: []T, suffix: []T) -> []T {
     }
     return t;
 }
+
+Reverse_String :: (str: string) {
+    b: s64;
+    half_count := str.count >> 1;
+    while b <= half_count {
+        e := str.count - 1 - b;
+        str[b], str[e] = str[e], str[b];
+        b += 1;
+    }
+}

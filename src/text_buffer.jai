@@ -2,6 +2,8 @@
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // data
 
+TEXT_BUFFER_SMALL_CHUNK_LEN :: 24;
+
 file_buffers: DynamicPool(TextBuffer);
 general_text_buffer: TextBuffer;
 
@@ -105,17 +107,27 @@ Load_File_Into_Buffer :: (path: string) -> s64 {
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // add/remove lines and get/set line bytes
 
-Append_Line :: (buffer: *TextBuffer, line_str: string) {
+Append_Line :: (buffer: *TextBuffer, line_str: string, $FOR_DEBUG := false) {
     Commit_And_Empty_Utf32_Buffers();
-    array_add(*buffer.lines, .{unique_id=line_id_counter});
-    line_id_counter += 1;
+    #if FOR_DEBUG {
+        array_add(*buffer.lines, .{unique_id=debug_line_id_counter});
+        debug_line_id_counter += 1;
+    } else {
+        array_add(*buffer.lines, .{unique_id=line_id_counter});
+        line_id_counter += 1;
+    }
     Set_Line_Bytes(buffer, buffer.lines.count-1, line_str);
 }
 
-Insert_Line :: (buffer: *TextBuffer, i: s64, is_change := true) {
+Insert_Line :: (buffer: *TextBuffer, i: s64, is_change := true, $FOR_DEBUG := false) {
     Commit_And_Empty_Utf32_Buffers();
-    array_insert_at(*buffer.lines, .{unique_id=line_id_counter}, i);
-    line_id_counter += 1;
+    #if FOR_DEBUG {
+        array_insert_at(*buffer.lines, .{unique_id=debug_line_id_counter}, i);
+        debug_line_id_counter += 1;
+    } else {
+        array_insert_at(*buffer.lines, .{unique_id=line_id_counter}, i);
+        line_id_counter += 1;
+    }
     if is_change then Add_Line_To_Change(buffer, i, .INSERT_LINE);
 }
 
@@ -666,7 +678,7 @@ TextChange :: struct {
 
 TextBuffer :: struct {
     lines: [..]LineBuffer;
-    line_pool: BinPool(24, u8);
+    line_pool: BinPool(TEXT_BUFFER_SMALL_CHUNK_LEN, u8);
     file_path: string;
     change_history: OpposingCircularBuffer(TextChange);
 }
@@ -680,3 +692,4 @@ Utf32Buffer :: struct {
 }
 
 line_id_counter: u64;
+debug_line_id_counter: u64;

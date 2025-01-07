@@ -80,12 +80,14 @@ Create_Base_Views :: () {
     // test split file editor
     split := Split_View(*view_pool.items[active_view_id], .VERTICAL, false);
     split.layers[0].type = .DEBUG;
+    split.layers[0].debug.type = .BIN_POOL;
 }
 
 Prepare_Intro_File :: () -> string {
     // INTRO_FILE_NAME :: "intro.txt";
     INTRO_FILE_NAME :: "test_files/undo_redo.txt";
     file_data := read_entire_file(INTRO_FILE_NAME);
+    defer free(file_data);
     if file_data.count == 0 {
         write_entire_file(INTRO_FILE_NAME, "type ':e somefilename' to open a file");
     }
@@ -501,11 +503,9 @@ Layer_Text_Buffer :: (layer: *ViewLayer) -> *TextBuffer {
             return *file_buffers.items[buffer_index];
         }
     case .DEBUG;
-        if layer.debug.type == .REDO_TEXT {
-            if Active_View_Layer().type == .FILE_EDITOR {
-                buffer := *file_buffers.items[Active_View_Layer().file_editor.file_buffer];
-                return Temp_Text_Buffer(*buffer.change_history);
-            }
+        if Active_View_Layer().type == .FILE_EDITOR {
+            buffer := *file_buffers.items[Active_View_Layer().file_editor.file_buffer];
+            return Temp_Text_Buffer(*layer.debug);
         }
         // buffer_index := layer.debug.text_buffer;
         // if buffer_index == -1 {
@@ -545,7 +545,9 @@ DebugView :: CursorLayer(
 );
 
 DebugViewType :: enum u8 {
-    REDO_TEXT;
+    NONE :: 0;
+    UNDO_REDO :: 1;
+    BIN_POOL;
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

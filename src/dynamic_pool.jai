@@ -417,34 +417,27 @@ Release_Bin :: (using pool: *BinPool($SIZE, $T), id: *BinID, shrink_behavior := 
         }
         memset(small_data.data + id.index, 0, id.bin_count * SMALL_BIN_SIZE);
 
-        very_large_moved: bool;
-        large_moved: bool;
-        medium_moved: bool;
-
         if id.bin_count == {
         case VERY_LARGE_BIN_COUNT;
-            very_large_moved = Move_Mark_Back(*very_large_mark);
-            #through;
+            Try_Move_Mark_Back(*very_large_mark, id.index);
+            Maybe_Move_Large_Mark();
+            Maybe_Move_Medium_Mark();
+            Try_Move_Mark_Back(*small_mark, id.index);
         case LARGE_BIN_COUNT;
-            large_moved = Move_Mark_Back(*large_mark);
-            if large_moved {
-                Maybe_Move_Very_Large_Mark();
-            }
-            #through;
+            Maybe_Move_Very_Large_Mark();
+            Try_Move_Mark_Back(*large_mark, id.index);
+            Maybe_Move_Medium_Mark();
+            Try_Move_Mark_Back(*small_mark, id.index);
         case MEDIUM_BIN_COUNT;
-            medium_moved = Move_Mark_Back(*medium_mark);
-            if medium_moved {
-                Maybe_Move_Very_Large_Mark();
-                Maybe_Move_Large_Mark();
-            }
-            #through;
+            Maybe_Move_Very_Large_Mark();
+            Maybe_Move_Large_Mark();
+            Try_Move_Mark_Back(*medium_mark, id.index);
+            Try_Move_Mark_Back(*small_mark, id.index);
         case SMALL_BIN_COUNT;
-            small_moved := Move_Mark_Back(*small_mark);
-            if small_moved {
-                Maybe_Move_Very_Large_Mark();
-                Maybe_Move_Large_Mark();
-                Maybe_Move_Medium_Mark();
-            }
+            Maybe_Move_Very_Large_Mark();
+            Maybe_Move_Large_Mark();
+            Maybe_Move_Medium_Mark();
+            Try_Move_Mark_Back(*small_mark, id.index);
         }
     } else {
         #if DEBUG_POOLS {
@@ -548,31 +541,28 @@ Initialize_Massive_Allocators_From :: (using pool: *BinPool($SIZE, $T), start_in
     }
 }
 
-Move_Mark_Back :: (mark: *s32) -> bool #expand { 
-    if `id.index < mark.* {
-        mark.* = `id.index; 
+Try_Move_Mark_Back :: inline (mark: *s32, index: s32) -> bool { 
+    if index < mark.* {
+        mark.* = index; 
         return true;
     }
     return false;
 }
 
 Maybe_Move_Very_Large_Mark :: () #expand {
-    if !`very_large_moved && `tracker_byte == 0x0 {
-        `very_large_mark = Multiple_Of_Floor(`id.index, 8);
-        `very_large_moved = true;
+    if `tracker_byte == 0x0 {
+        Try_Move_Mark_Back(*`very_large_mark, Multiple_Of_Floor(`id.index, 8));
     }
 }
 
 Maybe_Move_Large_Mark :: () #expand {
-    if !`large_moved && ( (`tracker_byte & 0xf0) == 0x0 || (`tracker_byte & 0x0f) == 0x0 ) {
-        `large_mark = Multiple_Of_Floor(`id.index, 4);
-        `large_moved = true;
+    if ( (`tracker_byte & 0xf0) == 0x0 || (`tracker_byte & 0x0f) == 0x0 ) {
+        Try_Move_Mark_Back(*`large_mark, Multiple_Of_Floor(`id.index, 4));
     }
 }
 
 Maybe_Move_Medium_Mark :: () #expand {
-    if !`medium_moved && ( (`tracker_byte & 0xc0) == 0x0 || (`tracker_byte & 0x30) == 0x0 || (`tracker_byte & 0x0c) == 0x0 || (`tracker_byte & 0x03) == 0x0 ) {
-        `medium_mark = Multiple_Of_Floor(`id.index, 2);
-        `medium_moved = true;
+    if ( (`tracker_byte & 0xc0) == 0x0 || (`tracker_byte & 0x30) == 0x0 || (`tracker_byte & 0x0c) == 0x0 || (`tracker_byte & 0x03) == 0x0 ) {
+        Try_Move_Mark_Back(*`medium_mark, Multiple_Of_Floor(`id.index, 2));
     }
 }
