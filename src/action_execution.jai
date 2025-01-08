@@ -612,11 +612,9 @@ Undo_Redo_Loop_Iteration :: (text_buffer: *TextBuffer, cursor: *Cursor, line_cha
 }
 
 Set_Cursor_Position_After_Undo_Redo :: (cursor: *Cursor, buffer: *TextBuffer, change: *TextChange) {
-    cursor.x = change.cursor_position.x;
-    cursor.y = change.cursor_position.y;
-    cursor.y = min(cursor.y, sdw(buffer.lines.count-1));
+    cursor.y = min(change.cursor_position.y, sdw(buffer.lines.count-1));
     line := Line_View(buffer, cursor.y);
-    cursor.x = Clamp_X_To_Line(cursor.x, line);
+    cursor.x = Clamp_X_To_Line(change.cursor_position.x, line);
 }
 
 Undo :: () {
@@ -626,6 +624,7 @@ Undo :: () {
         // nothing to undo. when history count == 2, we have one undoable item and one current, uncommitted change (probably empty)
         return;
     }
+
     _ := Pop_Middle(*text_buffer.change_history); // ignore current change
     last_change := Peek_Middle(*text_buffer.change_history);
     last_change.need_overwrite = true;
