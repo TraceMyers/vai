@@ -461,7 +461,7 @@ Delete_Selection :: (enter_normal_mode: bool) {
         Enter_Insert_Mode(false);
         Cursor_Scroll_Down();
         Cursor_Scroll_To_Line_Zero();
-        Backspace_Impl(false);
+        Backspace_Impl(true);
     }
 
     if enter_normal_mode {
@@ -578,8 +578,6 @@ Repeat_Last_Change :: () {
     // TODO: get back to normal mode
 }
 
-debug_undo_lock: bool;
-
 Undo_Redo_Loop_Iteration :: (text_buffer: *TextBuffer, cursor: *Cursor, line_change: *LineChange, remove_flag: LineChangeFlags, insert_flag: LineChangeFlags, restore_tack: *BinTack, set_redo_tack: bool) {
     if set_redo_tack && line_change.redo_tack.bin_id.index == -1 && cursor.y < text_buffer.lines.count {
         changed_line := Get_Current_Utf8_For_Line(text_buffer, cursor.y);
@@ -591,20 +589,14 @@ Undo_Redo_Loop_Iteration :: (text_buffer: *TextBuffer, cursor: *Cursor, line_cha
     }
 
     if line_change.flags & remove_flag {
-        if cursor.y >= text_buffer.lines.count {
-            debug_undo_lock = true;
-            return;
-        }
+        assert(cursor.y < text_buffer.lines.count);
         Remove_Line(text_buffer, cursor.y, false);
         return;
     }
     if line_change.flags & insert_flag {
         Insert_Line(text_buffer, cursor.y, false);
+        assert(cursor.y < text_buffer.lines.count);
     } 
-    if cursor.y >= text_buffer.lines.count {
-        debug_undo_lock = true;
-        return;
-    }
 
     restore_text: string;
     if restore_tack.bin_id.index != -1 {
@@ -622,10 +614,6 @@ Undo_Redo_Loop_Iteration :: (text_buffer: *TextBuffer, cursor: *Cursor, line_cha
 Undo :: () {
     Init_Cursor_Proc_Or_Return();
 
-    if debug_undo_lock {
-        Log("undo locked because it fucking broke");
-        return;
-    }
     if text_buffer.change_history.count < 2 {
         return;
     }
@@ -637,9 +625,6 @@ Undo :: () {
 
     for *last_change.lines {
         Undo_Redo_Loop_Iteration(text_buffer, cursor, it, .INSERT_LINE, .DELETE_LINE, *it.undo_tack, true);
-        if debug_undo_lock {
-            return;
-        }
     }
 
     cursor.x = last_change.cursor_position.x;
