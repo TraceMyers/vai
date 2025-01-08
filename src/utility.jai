@@ -151,26 +151,27 @@ Inline_Buffer_Append :: inline (buf: *[]$T, item: T) #expand {
     buf.*[buf.count-1] = item;
 }
 
-Arrays_Equal :: (a: []$T, b: []T) -> bool {
+Arrays_Equal :: inline (a: []$T, b: []T) -> bool {
     if a.count != b.count return false;
     for a { if it != b[it_index] then return false; }
     return true;
 }
 
-Array_Append :: (a: *[]$T, b: []T) {
+Array_Append :: inline (a: *[]$T, b: []T) {
+    if b.count == 0 then return;
     prev_count := a.count;
     array_resize(a, a.count + b.count);
     memcpy(a.data + prev_count, b.data, (a.count - prev_count) * size_of(T));
 }
 
-Prefix_String :: (str: string, prefix: string) -> string {
+Prefix_String :: inline (str: string, prefix: string) -> string {
     new_str := talloc_string(prefix.count + str.count);
     memcpy(new_str.data, prefix.data, prefix.count);
     memcpy(new_str.data + prefix.count, str.data, str.count);
     return new_str;
 }
 
-Prefix_Postfix_String :: (str: string, prefix: string, postfix: string) -> string {
+Prefix_Postfix_String :: inline (str: string, prefix: string, postfix: string) -> string {
     new_str := talloc_string(prefix.count + str.count + postfix.count);
     if prefix.count > 0 {
         memcpy(new_str.data, prefix.data, prefix.count);
@@ -182,7 +183,7 @@ Prefix_Postfix_String :: (str: string, prefix: string, postfix: string) -> strin
     return new_str;
 }
 
-Temp_Array_Prepend_Append :: (arr: []$T, prefix: []T, suffix: []T) -> []T {
+Temp_Array_Prepend_Append :: inline (arr: []$T, prefix: []T, suffix: []T) -> []T {
     t := Temp_Buffer(T, prefix.count + arr.count + suffix.count);
     if prefix.count > 0 {
         memcpy(t.data, prefix.data, prefix.count * size_of(T));
@@ -194,7 +195,7 @@ Temp_Array_Prepend_Append :: (arr: []$T, prefix: []T, suffix: []T) -> []T {
     return t;
 }
 
-Reverse_String :: (str: string) {
+Reverse_String :: inline (str: string) {
     b: s64;
     half_count := str.count >> 1;
     while b <= half_count {

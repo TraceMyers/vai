@@ -562,20 +562,7 @@ Replace_Toward_Line_Zero :: () {
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 Repeat_Last_Change :: () {
-    Init_Cursor_Proc_Or_Return();
-
-    // if text_buffer.change_history.count < 2 {
-    //     return;
-    // }
-    // current_change := Peek_Back(*text_buffer.change_history);
-    // change := Seek_Back(*text_buffer.change_history, current_change);
-
-    // bin := Get_Bin(*undo_redo_text, change.input_text.bin_id);
-    // bin.count = change.input_text.count;
-    // Inject_Modified_Utf32_Into_Frame_Input(bin);
-    
-    // 
-    // TODO: get back to normal mode
+    Inject_Modified_Utf32_Into_Frame_Input(last_change_input);
 }
 
 Undo_Redo_Loop_Iteration :: (text_buffer: *TextBuffer, cursor: *Cursor, line_change: *LineChange, remove_flag: LineChangeFlags, insert_flag: LineChangeFlags, restore_tack: *BinTack, set_redo_tack: bool) {

@@ -98,7 +98,7 @@ Translate_Inputs_To_Actions :: () -> any_input: bool {
         modified_utf32 := frame_input_stream[frame_input_stream_index];
 
         action_input_timer = ACTION_BUFFER_MAX_TIME;
-
+        
         // intercept digits meant for repeating actions n times
         is_zero := modified_utf32 == #char "0";
         is_num_one_to_nine := (modified_utf32 >= #char "1" && modified_utf32 <= #char "9");
@@ -141,14 +141,18 @@ Dump_Action_Input_Buffer :: (action_matches: *[..]ActionMatch = null) {
     if (vi_mode == .COMMAND || vi_mode == .INSERT) && !any_exact_action_matches {
         detected_change_ignore := false;
         for action_repeat_buffer {
+            if mid_change then array_add(*last_change_input, it);
             detected_change_ignore |= (it & NOT_CHANGE) != 0;
             array_add(*auxiliary_input_buffer, it);
         }
         for action_input_buffer {
+            if mid_change then array_add(*last_change_input, it);
             detected_change_ignore |= (it & NOT_CHANGE) != 0;
             array_add(*auxiliary_input_buffer, Remove_Modifier_Flags(it));
         }
-
+        if mid_change {
+            Log("change input: %", Encode(As_String(last_change_input), .UTF32, .UTF8));
+        }
         Process_Text_Input(auxiliary_input_buffer);
         array_reset_keeping_memory(*auxiliary_input_buffer);
     }
@@ -223,12 +227,21 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
                     action_executor_proc();
                 }
 
-                if it.is_change {
-                    if vi_mode != .INSERT && !Is_Current_Change_Empty() {
-                        End_Current_Change();
+                if mid_change {
+                    if !prev_action_was_mid_change {
+                        array_reset_keeping_memory(*last_change_input);
+                        prev_action_was_mid_change = true;
                     }
-                } else if it.action == .ENTER_NORMAL_MODE && !Is_Current_Change_Empty() {
-                    End_Current_Change();
+                    Array_Append(*last_change_input, it.input);
+                    Log("change input: %", Encode(As_String(last_change_input), .UTF32, .UTF8));
+                }
+
+                if it.action != .REDO && it.action != .UNDO {
+                    if (vi_mode == .NORMAL || vi_mode == .VISUAL) && !Is_Current_Change_Empty() {
+                        End_Current_Change();
+                        mid_change = false;
+                        prev_action_was_mid_change = false;
+                    }
                 }
 
                 action_executor_data.entered_normal_mode_past_line_end = false;
@@ -539,6 +552,10 @@ append_new_line_sequence := u32.[#char "o"];
 action_executor_data: ActionExecutorData;
 
 play_input_record: bool;
+
+mid_change: bool;
+prev_action_was_mid_change: bool;
+last_change_input: [..]u32;
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 

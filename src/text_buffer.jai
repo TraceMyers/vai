@@ -565,6 +565,7 @@ Get_Current_Change :: (buffer: *TextBuffer) -> *TextChange {
 
 Add_Line_To_Change :: (buffer: *TextBuffer, row: s64, flags: LineChangeFlags) {
     Init_Cursor_Proc_Or_Return();
+    mid_change = true;
     current_change := Get_Current_Change(buffer);
     if current_change.need_overwrite {
         Reset_Back(*buffer.change_history);
