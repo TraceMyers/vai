@@ -611,10 +611,19 @@ Undo_Redo_Loop_Iteration :: (text_buffer: *TextBuffer, cursor: *Cursor, line_cha
     cursor.y = min(cursor.y+1, sdw(text_buffer.lines.count));
 }
 
+Set_Cursor_Position_After_Undo_Redo :: (cursor: *Cursor, buffer: *TextBuffer, change: *TextChange) {
+    cursor.x = change.cursor_position.x;
+    cursor.y = change.cursor_position.y;
+    cursor.y = min(cursor.y, sdw(buffer.lines.count-1));
+    line := Line_View(buffer, cursor.y);
+    cursor.x = Clamp_X_To_Line(cursor.x, line);
+}
+
 Undo :: () {
     Init_Cursor_Proc_Or_Return();
 
     if text_buffer.change_history.count < 2 {
+        // nothing to undo. when history count == 2, we have one undoable item and one current, uncommitted change (probably empty)
         return;
     }
     _ := Pop_Middle(*text_buffer.change_history); // ignore current change
@@ -627,8 +636,7 @@ Undo :: () {
         Undo_Redo_Loop_Iteration(text_buffer, cursor, it, .INSERT_LINE, .DELETE_LINE, *it.undo_tack, true);
     }
 
-    cursor.x = last_change.cursor_position.x;
-    cursor.y = last_change.cursor_position.y;
+    Set_Cursor_Position_After_Undo_Redo(cursor, text_buffer, last_change);
 
     current_change := Get_Current_Change(text_buffer);
     current_change.need_overwrite = true;
@@ -652,8 +660,7 @@ Redo :: () {
         Undo_Redo_Loop_Iteration(text_buffer, cursor, it, .DELETE_LINE, .INSERT_LINE, *it.redo_tack, false);
     }
 
-    cursor.x = redo_change.cursor_position.x;
-    cursor.y = redo_change.cursor_position.y;
+    Set_Cursor_Position_After_Undo_Redo(cursor, text_buffer, redo_change);
 }
 
 Internal_Move_Cursor_To_Position :: () {

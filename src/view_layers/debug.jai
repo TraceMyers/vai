@@ -85,7 +85,7 @@ Create_Debug_View_Undo_Redo :: (out_buffer: *TextBuffer) {
             Append_Line_To_Debug_Buffer(buf, fixed);
         } else for artifact.lines {
             Append_Tack(*it.undo_tack, "undo");
-            // Append_Tack(*it.redo_tack, "redo");
+            Append_Tack(*it.redo_tack, "redo");
         }
         Append_Line_To_Debug_Buffer(buf, "------------------ ");
         found_middle |= is_middle;
