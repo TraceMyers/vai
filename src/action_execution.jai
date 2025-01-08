@@ -124,13 +124,6 @@ Scroll_To_Next_Editor :: () {
 }
 
 Insert_New_Line :: () {
-    Insert_New_Line_Impl();
-    if action_executor_data.is_change {
-        // Push_Input_Text_To_Current_Change(PLATFORM_CARRIAGE_RETURN);
-    }
-}
-
-Insert_New_Line_Impl :: inline () {
     Init_Cursor_Proc_Or_Return(true);
     Break_Line_At(text_buffer, cursor.y, cursor.x);
     cursor.y += 1;

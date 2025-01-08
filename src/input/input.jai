@@ -179,13 +179,7 @@ Get_Input_Buffer_Action_Matches :: (matches: *[..]ActionMatch, mode: ViMode) -> 
         if match {
             exact_match := action_input_buffer.count == it.code_point_string_count;
 
-            is_change: bool;
-            if exact_match {
-                is_change = DEFAULT_ACTION_BINDINGS[it.action].extension.is_change;
-            }
-            is_change &= (action_input_buffer[0] & NOT_CHANGE) == 0;
-
-            array_add(matches, .{it.action, code_point_string, exact_match, is_change});
+            array_add(matches, .{it.action, code_point_string, exact_match});
             if exact_match {
                 exact_match_count += 1;
             }
@@ -217,10 +211,13 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
                 }
 
                 prev_vi_mode := vi_mode;
-                action_executor_data.is_change = it.is_change;
 
                 for 0..repeat_ct-1 {
                     action_executor_proc();
+                }
+
+                if prev_vi_mode != .INSERT && vi_mode == .INSERT {
+                    mid_change = true;
                 }
 
                 if mid_change {
@@ -475,7 +472,6 @@ ActionMatch :: struct {
     action: Action;
     input: []u32;
     exact_match: bool;
-    is_change: bool;
 }
 
 ViMode :: enum_flags u8{
@@ -489,12 +485,10 @@ ViMode :: enum_flags u8{
 
 ActionDataContainer :: struct {
     modes: ViMode;
-    is_change: bool;
     proc: Action_Executor = null;
 }
 
 ActionExecutorData :: struct {
-    is_change: bool;
     entered_normal_mode_past_line_end: bool;
     move_cursor_to_position: IntVector2;
 }
