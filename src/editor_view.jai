@@ -251,8 +251,8 @@ Render_View :: (view: *View, view_id: s64, viewport_id: s64, render_pass: ViewRe
         rendering_scissor_ul, rendering_scissor_lr = Viewport_Rect_Points(*rect, s32);
 
         if render_pass == {
-        case .IMAGES;
-        case .TEXT;
+        case .IMAGES;       #through;
+        case .TEXT;         #through;
         case .FOREGROUND;
             // during these render passes, views must make sure their draws are dispatched while this scissor is set
             Set_Scissor(rendering_scissor_ul, rendering_scissor_lr);

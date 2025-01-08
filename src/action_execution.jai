@@ -7,21 +7,21 @@ Action_Execution :: struct {
 }
 
 Cursor_Scroll_Down :: () {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     cursor.y = min(cursor.y+1, sdw(max(text_buffer.lines.count-1, 0)));
     line := Line_View(text_buffer, cursor.y);
     cursor.x = Clamp_X_To_Line(cursor.target_x, line);
 }
 
 Cursor_Scroll_Up :: () {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     cursor.y = max(cursor.y-1, sdw(0));
     line := Line_View(text_buffer, cursor.y);
     cursor.x = Clamp_X_To_Line(cursor.target_x, line);
 }
 
 Cursor_Scroll_Right :: () {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     line := Line_View(text_buffer, cursor.y);
     cursor.x += 1;
     cursor.x = Clamp_X_To_Line(cursor.x, line, .FORWARD);
@@ -29,7 +29,7 @@ Cursor_Scroll_Right :: () {
 }
 
 Cursor_Scroll_Left :: () {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     line := Line_View(text_buffer, cursor.y);
     cursor.x -= 1;
     cursor.x = Clamp_X_To_Line(cursor.x, line);
@@ -37,21 +37,21 @@ Cursor_Scroll_Left :: () {
 }
 
 Cursor_Scroll_To_Top :: () {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     cursor.y = 0;
     line := Line_View(text_buffer, cursor.y);
     cursor.x = Clamp_X_To_Line(cursor.target_x, line);
 }
 
 Cursor_Scroll_To_Bottom :: () {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     cursor.y = xx (text_buffer.lines.count-1);
     line := Line_View(text_buffer, cursor.y);
     cursor.x = Clamp_X_To_Line(cursor.target_x, line);
 }
 
 Cursor_Scroll_To_Line_End :: () {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     line := Line_View(text_buffer, cursor.y);
     cursor.x = max(sdw(ifx vi_mode == .INSERT then line.count else line.count-1), 0);
     cursor.x = Clamp_X_To_Line(cursor.x, line);
@@ -59,7 +59,7 @@ Cursor_Scroll_To_Line_End :: () {
 }
 
 Cursor_Scroll_To_Line_Begin :: () {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     cursor.x = 0;
     line := Line_View(text_buffer, cursor.y);
     if line.count == 0 then return;
@@ -77,7 +77,7 @@ Cursor_Scroll_To_Line_Begin :: () {
 }
 
 Cursor_Scroll_To_Line_Zero :: () {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     cursor.x = 0;
     cursor.target_x = 0;
 }
@@ -131,14 +131,14 @@ Insert_New_Line :: () {
 }
 
 Insert_New_Line_Impl :: inline () {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     Break_Line_At(text_buffer, cursor.y, cursor.x);
     cursor.y += 1;
     cursor.x = 0;
 }
 
 Enter_Insert_Mode :: (append: bool) {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     vi_mode = .INSERT;
     if append {
         Cursor_Scroll_Right();
@@ -148,7 +148,7 @@ Enter_Insert_Mode_Prepend   :: #bake_arguments Enter_Insert_Mode(append=false);
 Enter_Insert_Mode_Append    :: #bake_arguments Enter_Insert_Mode(append=true);
 
 Enter_Normal_Mode :: () {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     if vi_mode == {
     case .INSERT;
         line_count := Line_Count(text_buffer, cursor.y);
@@ -164,7 +164,7 @@ Backspace :: () {
 }
 
 Backspace_Impl :: inline (is_change := true) {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     if cursor.x > 0 {
         // search backward for valid character to delete
         line := Line_View(text_buffer, cursor.y);
@@ -186,7 +186,7 @@ Backspace_Impl :: inline (is_change := true) {
 }
 
 Delete_Character :: () {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     line_count := Line_Count(text_buffer, cursor.y);
     if line_count > 0 {
         Remove_Code_Point(text_buffer, cursor.y, cursor.x);
@@ -197,7 +197,7 @@ Delete_Character :: () {
 }
 
 Insert_Line_And_Enter_Insert_Mode :: (append: bool) {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     if append {
         // insert before moving cursor so the state is always valid (if cursor on final line)
         Insert_Line(text_buffer, cursor.y+1);
@@ -213,7 +213,7 @@ Append_Line_And_Enter_Insert_Mode :: #bake_arguments Insert_Line_And_Enter_Inser
 Prepend_Line_And_Enter_Insert_Mode :: #bake_arguments Insert_Line_And_Enter_Insert_Mode(append=false);
 
 Delete_Line :: () {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     if cursor.y == 0 && text_buffer.lines.count == 1 {
         Clear_Line(text_buffer, 0);
         cursor.x = 0;
@@ -230,7 +230,7 @@ Delete_Line :: () {
 }
 
 Word_Scroll :: (forward: bool, small_word: bool) {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     line := Line_View(text_buffer, cursor.y);
 
     reference_blob: TextBlobType = ---;
@@ -317,7 +317,7 @@ Word_Scroll_Backward_Small :: #bake_arguments Word_Scroll(forward=false, small_w
 Word_Scroll_Backward_Large :: #bake_arguments Word_Scroll(forward=false, small_word=false);
 
 Word_Scroll_To_End :: (small: bool) {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     line := Line_View(text_buffer, cursor.y);
 
     pre_scroll_x := cursor.x;
@@ -377,7 +377,7 @@ Word_Scroll_To_End_Small :: #bake_arguments Word_Scroll_To_End(small=true);
 Word_Scroll_To_End_Large :: #bake_arguments Word_Scroll_To_End(small=false);
 
 Delete_Word :: (inside: bool, small: bool, delete_trailing_whitespace: bool) {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     // 'delete inside word' = delete word the cursor is inside
     if inside {
         inside_x := cursor.x;
@@ -415,7 +415,7 @@ Delete_Word_Small :: #bake_arguments Delete_Word(inside=false, small=true, delet
 Delete_Word_Inside_Small :: #bake_arguments Delete_Word(inside=true, small=true, delete_trailing_whitespace=true);
 
 Delete_Selection :: (enter_normal_mode: bool) {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
 
     selection_begin, selection_end := Cursor_Selection(cursor);
     do_concatenate := selection_end.y != selection_begin.y;
@@ -474,7 +474,7 @@ Delete_Selection :: (enter_normal_mode: bool) {
 Delete_Selection_And_Enter_Normal_Mode :: #bake_arguments Delete_Selection(enter_normal_mode=true);
 
 Toggle_Comment_Selection :: () {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
 
     selection_begin, selection_end: IntVector2;
     if vi_mode == .VISUAL {
@@ -525,7 +525,7 @@ Replace_Selection :: () {
 }
 
 Replace_Line :: () {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     Clear_Line(text_buffer, cursor.y);
     cursor.x = 0;
     Enter_Insert_Mode(false);
@@ -539,13 +539,13 @@ Replace_Word_Small :: #bake_arguments Replace_Word(inside=false, small=true);
 Replace_Word_Inside_Small :: #bake_arguments Replace_Word(inside=true, small=true);
 
 Enter_Visual_Mode :: () {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     vi_mode = .VISUAL;
     cursor.begin_selection = .{cursor.x, cursor.y};
 }
 
 Delete_Toward_Line_Zero :: () {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     line := Line_View(text_buffer, cursor.y);
     if line.count == 0 || cursor.x == 0 then return;
     end_x := cursor.x;
@@ -592,8 +592,7 @@ Undo_Redo_Loop_Iteration :: (text_buffer: *TextBuffer, cursor: *Cursor, line_cha
         assert(cursor.y < text_buffer.lines.count);
         Remove_Line(text_buffer, cursor.y, false);
         return;
-    }
-    if line_change.flags & insert_flag {
+    } else if line_change.flags & insert_flag {
         Insert_Line(text_buffer, cursor.y, false);
         assert(cursor.y < text_buffer.lines.count);
     } 
@@ -618,7 +617,7 @@ Set_Cursor_Position_After_Undo_Redo :: (cursor: *Cursor, buffer: *TextBuffer, ch
 }
 
 Undo :: () {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
 
     if text_buffer.change_history.count < 2 {
         // nothing to undo. when history count == 2, we have one undoable item and one current, uncommitted change (probably empty)
@@ -640,7 +639,7 @@ Undo :: () {
 }
 
 Redo :: () {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     
     if text_buffer.change_history.middle == text_buffer.change_history.end {
         // nothing to redo; at the end of changes
@@ -661,7 +660,7 @@ Redo :: () {
 }
 
 Internal_Move_Cursor_To_Position :: () {
-    Init_Cursor_Proc_Or_Return();
+    Init_Cursor_Proc_Or_Return(true);
     // cursor.x = move_cursor_to_position.x;
     // cursor.y = move_cursor_to_position.y;
 }
@@ -672,7 +671,7 @@ Play_Input_Record :: () {
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-Init_Cursor_Proc_Or_Return :: ($RESET_BLINK := true) #expand {
+Init_Cursor_Proc_Or_Return :: ($RESET_BLINK := false) #expand {
     `active_layer := Active_View_Layer();
     `cursor := Layer_Cursor(`active_layer);
     if `cursor == null then `return;
@@ -683,7 +682,7 @@ Init_Cursor_Proc_Or_Return :: ($RESET_BLINK := true) #expand {
     }
 }
 
-Init_Cursor_Proc_Or_Return_Value :: (value: $T, $RESET_BLINK := true) -> T #expand {
+Init_Cursor_Proc_Or_Return_Value :: (value: $T, $RESET_BLINK := false) -> T #expand {
     `active_layer := Active_View_Layer();
     `cursor := Layer_Cursor(`active_layer);
     if `cursor == null then `return value;

@@ -148,10 +148,6 @@ Dump_Action_Input_Buffer :: (action_matches: *[..]ActionMatch = null) {
             detected_change_ignore |= (it & NOT_CHANGE) != 0;
             array_add(*auxiliary_input_buffer, Remove_Modifier_Flags(it));
         }
-        // if vi_mode == .INSERT && !detected_change_ignore {
-        //     Push_Input_Text_To_Current_Change(action_repeat_buffer);
-        //     Push_Input_Text_To_Current_Change(action_input_buffer);
-        // }
 
         Process_Text_Input(auxiliary_input_buffer);
         array_reset_keeping_memory(*auxiliary_input_buffer);
@@ -228,7 +224,6 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
                 }
 
                 if it.is_change {
-                    // Push_Input_Text_To_Current_Change(it.input);
                     if vi_mode != .INSERT && !Is_Current_Change_Empty() {
                         End_Current_Change();
                     }
@@ -236,7 +231,6 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
                     End_Current_Change();
                 }
 
-                Log("scrolled left: %", action_executor_data.entered_normal_mode_past_line_end);
                 action_executor_data.entered_normal_mode_past_line_end = false;
             }
             any_exact = true;
