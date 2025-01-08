@@ -47,8 +47,7 @@ Generate_Struct_Enum_Mapping :: (enum_type_name: string, $EnumBackingType: Type,
         for enum_names {
             if it == enum_name {
                 if indexable {
-                    Log_Error("mapping marked as indexable, but a duplicate enum was found");
-                    assert(false);
+                    assert(false, "mapping marked as indexable, but a duplicate enum was found");
                 } else {
                     enum_is_duplicate = true;
                     break;

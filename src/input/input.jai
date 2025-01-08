@@ -217,7 +217,6 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
                 }
 
                 prev_vi_mode := vi_mode;
-
                 action_executor_data.is_change = it.is_change;
 
                 for 0..repeat_ct-1 {

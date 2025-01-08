@@ -1,18 +1,6 @@
 
-// TODO: enforce always at least one line in any file editor text buffer
 // TODO: font scaling in a not ugly way - how to use scale + loaded font sizes effectively
 // NOTE: put off options implementations for a while, because there are a lot of non-vim and vim options that could be brought together in a nice way, but it's probably hard to see until having gone without it for a bit.
-
-// TODO: undo
-// - make note of the vi mode before and after each action
-// - if an action is a change, start a change. if the action entered insert mode, leave the change open.
-// - while in insert mode, store all text added as part of that change 
-// - on the action that exits insert mode, close the change. 
-
-// a change is:
-// - inciting action
-// - ending row and column
-// - any text added during insert mode
 
 quit: bool;
 
