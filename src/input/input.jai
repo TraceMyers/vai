@@ -150,9 +150,6 @@ Dump_Action_Input_Buffer :: (action_matches: *[..]ActionMatch = null) {
             detected_change_ignore |= (it & NOT_CHANGE) != 0;
             array_add(*auxiliary_input_buffer, Remove_Modifier_Flags(it));
         }
-        if mid_change {
-            Log("change input: %", Encode(As_String(last_change_input), .UTF32, .UTF8));
-        }
         Process_Text_Input(auxiliary_input_buffer);
         array_reset_keeping_memory(*auxiliary_input_buffer);
     }
@@ -233,10 +230,9 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
                         prev_action_was_mid_change = true;
                     }
                     Array_Append(*last_change_input, it.input);
-                    Log("change input: %", Encode(As_String(last_change_input), .UTF32, .UTF8));
                 }
 
-                if it.action != .REDO && it.action != .UNDO {
+                if it.action != .REDO && it.action != .UNDO && it.action != .REPEAT_LAST_CHANGE {
                     if (vi_mode == .NORMAL || vi_mode == .VISUAL) && !Is_Current_Change_Empty() {
                         End_Current_Change();
                         mid_change = false;
