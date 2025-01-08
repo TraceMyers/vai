@@ -628,6 +628,7 @@ Undo :: () {
     }
     _ := Pop_Middle(*text_buffer.change_history); // ignore current change
     last_change := Peek_Middle(*text_buffer.change_history);
+    last_change.need_overwrite = true;
 
     cursor.x = last_change.cursor_position.x;
     cursor.y = last_change.cursor_position.y;
@@ -637,9 +638,6 @@ Undo :: () {
     }
 
     Set_Cursor_Position_After_Undo_Redo(cursor, text_buffer, last_change);
-
-    current_change := Get_Current_Change(text_buffer);
-    current_change.need_overwrite = true;
 }
 
 Redo :: () {
