@@ -232,7 +232,7 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
                 }
 
                 if it.action != .REDO && it.action != .UNDO && it.action != .REPEAT_LAST_CHANGE {
-                    if (vi_mode == .NORMAL || vi_mode == .VISUAL) && !Is_Current_Change_Empty() {
+                    if (vi_mode == .NORMAL || vi_mode == .VISUAL) && mid_change {
                         End_Current_Change();
                         mid_change = false;
                         prev_action_was_mid_change = false;
