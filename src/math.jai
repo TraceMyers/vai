@@ -86,7 +86,7 @@ operator == :: inline (a: IntVector2, b: IntVector2) -> bool {
 }
 
 Is_Power_Of_Two :: inline (value: s64) -> bool {
-    return ((value >> 1) & value) == 0;
+    return value != 0 && (((value >> 1) & value) == 0);
 }
 
 Increment_Wrap :: inline (val: $T, min: T, max: T) -> T {

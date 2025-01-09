@@ -136,13 +136,16 @@ Insert_Line :: (buffer: *TextBuffer, i: s64, is_change := true, $FOR_DEBUG := fa
     if is_change then Add_Line_To_Change(buffer, i, .INSERT_LINE);
 }
 
-Remove_Line :: (buffer: *TextBuffer, line_index: s64, is_change := true) {
+Remove_Line :: (buffer: *TextBuffer, line_index: s64, is_change := true, moving_backward := false) {
     if buffer.lines.count == 1 {
         Clear_Line(buffer, line_index, is_change);
         return;
     }
     if is_change {
-        Add_Line_To_Change(buffer, line_index, .DELETE_LINE);
+        // flags : LineChangeFlags = ifx moving_backward then .DELETE_LINE | .INSERT_FRONT else .DELETE_LINE;
+        // Log("flags: %", flags);
+        flags := LineChangeFlags.DELETE_LINE;
+        Add_Line_To_Change(buffer, line_index, flags);
     }
     Commit_And_Empty_Utf32_Buffers();
     line := *buffer.lines[line_index];
@@ -218,7 +221,7 @@ Expand_Utf32_Buffer_Tabs :: inline (utf32_buffer: *Utf32Buffer) {
     Set_Utf32_Buffer_Data(utf32_buffer, expanded);
 }
 
-// NOTE: undo not implemented for this
+// TODO: was commented out because it didn't work with an old implementation of undo, but it could be brought back
 // Replace_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64, code_point: u32) {
 //     utf32_buffer := Get_Utf32_Buffer(buffer, row);
 //     assert(col < utf32_buffer.array.count);
@@ -247,9 +250,10 @@ Insert_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64, code_point: u32, 
     Expand_Utf32_Buffer_Tabs(utf32_buffer);
 }
 
-Insert_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, code_points: []u32, is_change := true) {
+Insert_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, code_points: []u32, is_change := true, is_line_join := false) {
     if code_points.count <= 0 then return;
-    if is_change then Add_Line_To_Change(buffer, row, 0);
+    flags : LineChangeFlags = ifx is_line_join then .INSERT_FRONT else xx 0;
+    if is_change then Add_Line_To_Change(buffer, row, flags);
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     assert(col <= utf32_buffer.array.count);
     #if DEBUG_TEXT_BUFFERS {
@@ -266,7 +270,7 @@ Insert_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, code_points: []u
 
 Remove_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64) {
     // TODO: check if line deletion
-    Add_Line_To_Change(buffer, row, .INSERT_FRONT);
+    Add_Line_To_Change(buffer, row, 0);
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     assert(col < utf32_buffer.array.count);
     #if DEBUG_TEXT_BUFFERS {
@@ -290,7 +294,6 @@ Remove_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, count: s64) {
 
 Break_Line_At :: (buffer: *TextBuffer, row: s64, col: s64) {
     Insert_Line(buffer, row+1);
-
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     assert(col <= utf32_buffer.array.count);
     #if DEBUG_TEXT_BUFFERS {
@@ -566,24 +569,29 @@ Get_Current_Change :: (buffer: *TextBuffer) -> *TextChange {
 Add_Line_To_Change :: (buffer: *TextBuffer, row: s64, flags: LineChangeFlags) {
     Init_Cursor_Proc_Or_Return();
     mid_change = true;
+
     current_change := Get_Current_Change(buffer);
     if current_change.need_overwrite {
         Reset_Back(*buffer.change_history);
     }
-    if current_change.lines.count == 0 || (flags & .INSERT_FRONT) != 0 {
-        if vi_mode == .VISUAL {
-            selection_begin, _ := Cursor_Selection(cursor);
-            current_change.cursor_position.x = selection_begin.x;
-            current_change.cursor_position.y = selection_begin.y;
-        } else {
-            current_change.cursor_position.x = cursor.x;
+
+    if vi_mode == .VISUAL {
+        selection_begin, _ := Cursor_Selection(cursor);
+        current_change.cursor_position.x = selection_begin.x;
+        current_change.cursor_position.y = selection_begin.y;
+    } else {
+        current_change.cursor_position.x = cursor.x;
+        if current_change.lines.count == 0 {
             current_change.cursor_position.y = xx row;
+        } else {
+            current_change.cursor_position.y = min(sdw(row), current_change.cursor_position.y);
         }
     }
-    line_change: *LineChange;
 
+    line_change: *LineChange;
     change_exists := false;
     line_id := buffer.lines[row].unique_id;
+
     for current_change.lines {
         if it.line_id == line_id {
             line_change = *it;
@@ -596,7 +604,9 @@ Add_Line_To_Change :: (buffer: *TextBuffer, row: s64, flags: LineChangeFlags) {
         }
     }
     if line_change == null {
+        Log("is null, flags : %", flags);
         if flags & .INSERT_FRONT {
+            Log("inserting front");
             array_insert_at(*current_change.lines, .{}, 0);
             line_change = *current_change.lines[0];
         } else {
@@ -605,6 +615,7 @@ Add_Line_To_Change :: (buffer: *TextBuffer, row: s64, flags: LineChangeFlags) {
     }
     line_change.flags |= flags;
     line_change.line_id = line_id;
+    line_change.line_index = row;
     if change_exists {
         return;
     }
@@ -624,6 +635,7 @@ End_Current_Change :: () {
     if Totally_Empty(*text_buffer.change_history) {
         return;
     }
+    current_change := Get_Current_Change(text_buffer); 
     Push_Middle(*text_buffer.change_history);
 }
 
@@ -662,6 +674,7 @@ LineChangeFlags :: enum_flags u8 {
 
 LineChange :: struct {
     line_id: u64;
+    line_index: s64;
     undo_tack: BinTack;
     redo_tack: BinTack;
     flags: LineChangeFlags;

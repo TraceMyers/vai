@@ -173,7 +173,7 @@ Backspace_Impl :: inline (is_change := true) {
         Cursor_Scroll_Up();
         Cursor_Scroll_To_Line_End();
         src_line := Line_View(text_buffer, cursor.y+1);
-        Insert_Code_Points(text_buffer, cursor.y, cursor.x, src_line);
+        Insert_Code_Points(text_buffer, cursor.y, cursor.x, src_line, true, true);
         Remove_Line(text_buffer, cursor.y+1, is_change);
     }
 }

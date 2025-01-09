@@ -85,7 +85,8 @@ Create_Base_Views :: () {
 
 Prepare_Intro_File :: () -> string {
     // INTRO_FILE_NAME :: "intro.txt";
-    INTRO_FILE_NAME :: "test_files/undo_redo.txt";
+    // INTRO_FILE_NAME :: "test_files/undo_redo.txt";
+    INTRO_FILE_NAME :: "test_files/struct_utilities.jai";
     file_data := read_entire_file(INTRO_FILE_NAME);
     defer free(file_data);
     if file_data.count == 0 {

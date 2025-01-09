@@ -216,10 +216,10 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
                     action_executor_proc();
                 }
 
+                // mid_change is also set to true when stuff is added to a change, but not all actions that begin changes themselves make a change
                 if prev_vi_mode != .INSERT && vi_mode == .INSERT {
                     mid_change = true;
                 }
-
                 if mid_change {
                     if !prev_action_was_mid_change {
                         array_reset_keeping_memory(*last_change_input);
@@ -227,7 +227,7 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
                     }
                     Array_Append(*last_change_input, it.input);
                 }
-
+                // this SHOULD catch all cases of a change needing to be ended. if it doesn't, that is a bug.
                 if it.action != .REDO && it.action != .UNDO && it.action != .REPEAT_LAST_CHANGE {
                     if (vi_mode == .NORMAL || vi_mode == .VISUAL) && mid_change {
                         End_Current_Change();

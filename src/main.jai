@@ -20,6 +20,7 @@ Vai_Main :: () {
     if !Scoped_Construct(Input)                 then return;
     if !Scoped_Construct(Viewports)             then return;
     if !Scoped_Construct(Editor_Views)          then return;
+    if !Scoped_Construct(Window_Input)          then return;
 
     Initialize_Render_Text();
     Initialize_Time();
@@ -63,6 +64,7 @@ Vai_Main :: () {
 #import "Thread";
 #import "System";
 #import "Sort";
+#import "Bit_Operations";
 #if OS == .WINDOWS {
     #import "Windows";
 }
@@ -103,3 +105,4 @@ Program_Print :: #import "Program_Print";
 #load "text_processing.jai";
 #load "action_execution.jai";
 #load "circular_buffer.jai";
+#load "bit_array.jai";

@@ -1,5 +1,12 @@
 
 WindowType :: HWND;
+VirtualKey :: enum u8 {
+    UP :: VK_UP;
+    DOWN :: VK_DOWN;
+    LEFT :: VK_LEFT;
+    RIGHT :: VK_RIGHT;
+}
+
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -117,6 +124,15 @@ Receive_Window_Message :: (hwnd: HWND, message: u32, wParam: WPARAM, lParam: LPA
         case WM_KEYDOWN;
             if wParam == VK_F9 {
                 quit = true;
+            } else if wParam == {
+            case VK_LEFT;
+                Set_Bit(*key_pressed, xx VK_LEFT);
+            case VK_RIGHT;
+                Set_Bit(*key_pressed, xx VK_RIGHT);
+            case VK_UP;
+                Set_Bit(*key_pressed, xx VK_UP);
+            case VK_DOWN;
+                Set_Bit(*key_pressed, xx VK_DOWN);
             }
             last_vkey = xx wParam;
             last_vkey_modified_by_control = (modifier_keys & .CONTROL) != 0;
@@ -124,6 +140,18 @@ Receive_Window_Message :: (hwnd: HWND, message: u32, wParam: WPARAM, lParam: LPA
             // TODO:... eh something
             if wParam == 191 {
                 Take_Raw_Input(xx #char "/");
+            }
+        case WM_SYSKEYUP;
+        case WM_KEYUP;
+            if wParam == {
+            case VK_LEFT;
+                Unset_Bit(*key_pressed, xx VK_LEFT);
+            case VK_RIGHT;
+                Unset_Bit(*key_pressed, xx VK_RIGHT);
+            case VK_UP;
+                Unset_Bit(*key_pressed, xx VK_UP);
+            case VK_DOWN;
+                Unset_Bit(*key_pressed, xx VK_DOWN);
             }
         case WM_SYSCHAR;
               // This is here to prevent beeps when a Alt key combo is pressed. If we don't return 0, windows helpfully emits a beep sound to indicate the user that the key wasn't handled.

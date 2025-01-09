@@ -1,4 +1,17 @@
 
+Window_Input :: struct {
+
+    Initialize :: () -> success: bool {
+        Set_Capacity(*key_pressed, 256);
+        return true;
+    }
+
+    Shutdown :: () {
+        Reset(*key_pressed);
+    }
+
+}
+
 window: Window;
 
 WindowInfo :: struct {
@@ -40,13 +53,15 @@ Window_Dimensions :: ($T1: Type) -> T1, T1
     return cast(T1) window.width, cast(T1) window.height;
 }
 
-// Window_Just_Resized :: inline () -> bool {
-//     return window.resized;
-// }
-
 #if OS == .WINDOWS {
     #load "win32_window.jai";
 }
+
+Is_Virtual_Key_Pressed :: (key: VirtualKey) -> bool {
+    return Is_Bit_Set(*key_pressed, xx key);
+}
+
+key_pressed: BitArray(1);
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 
