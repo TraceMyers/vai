@@ -43,6 +43,13 @@ Render_File_Editor_Text :: (using file_editor: *FileEditor, is_active: bool) {
     text_buffer := *file_buffers.items[file_editor.file_buffer];
     Render_Text_Buffer_Lines(*renderer, text_buffer, true);
 
+    view_max = .{};
+    view_line_max := min(cast(s64)(renderer.text_view_clip.y + renderer.line_count - 1), text_buffer.lines.count-1);
+    for renderer.text_view_clip.y..view_line_max {
+        view_max.x = xx max(cast(float32)Line_Count(text_buffer, it), view_max.x);
+    }
+    view_max.y = xx (text_buffer.lines.count - 1);
+
     if is_active {
         Flush_Draws();
         cursor.style = ifx vi_mode == .INSERT then .VERTICAL_LINE else .BLOCK;

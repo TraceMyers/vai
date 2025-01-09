@@ -159,9 +159,7 @@ Text_To_Render_Space :: inline (using renderer: *TextRenderer, text_x: s32, text
     return render_x, render_y;
 }
 
-Render_Text_Cursor :: (renderer: *TextRenderer, cursor: *Cursor, only_preparation := false) -> (ul: IntVector2, lr: IntVector2) {
-    Set_Shader_For_Color_Inversion();
-
+Render_Text_Cursor :: (renderer: *TextRenderer, cursor: *Cursor, just_want_out_rect := false) -> (ul: IntVector2, lr: IntVector2) {
     ul_x, ul_y := Text_To_Render_Space(renderer, cursor.x, cursor.y);
     lr_x := ul_x;
     lr_y := ul_y + renderer.screen_line_height;
@@ -172,7 +170,7 @@ Render_Text_Cursor :: (renderer: *TextRenderer, cursor: *Cursor, only_preparatio
         lr_x += 1;
     }
 
-    if !only_preparation {
+    if !just_want_out_rect {
         if cursor.reset_blink {
             cursor.blink_timer = kb_cursor_blink_time;
             cursor.reset_blink = false;
@@ -181,6 +179,7 @@ Render_Text_Cursor :: (renderer: *TextRenderer, cursor: *Cursor, only_preparatio
             if cursor.blink_timer >= kb_cursor_blink_time * 2 {
                 cursor.blink_timer -= kb_cursor_blink_time * 2;
             } else {
+                Set_Shader_For_Color_Inversion();
                 Render_Quad(.{ul_x, ul_y}, .{lr_x, lr_y});
                 Flush_Draws();
             }

@@ -138,7 +138,7 @@ Receive_Window_Message :: (hwnd: HWND, message: u32, wParam: WPARAM, lParam: LPA
             last_vkey_modified_by_control = (modifier_keys & .CONTROL) != 0;
             last_vkey_modified_by_shift = (modifier_keys & .SHIFT) != 0;
             // TODO:... eh something
-            if wParam == 191 {
+            if wParam == 191 && last_vkey_modified_by_control { // otherwise ctrl + / doesn't come through text input
                 Take_Raw_Input(xx #char "/");
             }
         case WM_SYSKEYUP;

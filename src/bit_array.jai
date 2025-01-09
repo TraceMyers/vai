@@ -80,9 +80,9 @@ Reset :: inline (using array: *BitArray($COUNT)) {
     array_reset(*items);
 }
 
-
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 
+// needed to bring this in from Bit_Operations module, and make it *not* a macro to use it at compile time, otherwise no compile. not clear why.
 Bit_Scan_Forward :: (input: $T) -> s32 {  // One plus the index of the first bit, when searching from LSB to MSB. A result of 0 means the input was 0.
     BITS :: size_of(T)*8;
 

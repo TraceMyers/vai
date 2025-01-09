@@ -263,6 +263,22 @@ Render_View :: (view: *View, view_id: s64, viewport_id: s64, render_pass: ViewRe
 
         view_layer := *view.layers[view.active_layer];
         view_active := view_id == active_view_id;
+        if view_active {
+            bounds_ul, bounds_lr := View_Bounds(view_layer);
+            scroll_speed := settings_file_data.arrow_key_scroll_speed; 
+            if Is_Virtual_Key_Pressed(.UP) {
+                Scroll_View_Up(view_layer, bounds_ul.y, scroll_speed);
+            } 
+            if Is_Virtual_Key_Pressed(.DOWN) {
+                Scroll_View_Down(view_layer, bounds_lr.y, scroll_speed);
+            }
+            if Is_Virtual_Key_Pressed(.LEFT) {
+                Scroll_View_Left(view_layer, bounds_ul.x, scroll_speed);
+            } 
+            if Is_Virtual_Key_Pressed(.RIGHT) {
+                Scroll_View_Right(view_layer, bounds_lr.x, scroll_speed);
+            }
+        }
         #insert #run Generate_View_Layer_Switch("Render_Layer(%, view_active, render_pass);");
     }
 }
@@ -450,6 +466,35 @@ Set_View_Scissor :: (ul: IntVector2, lr: IntVector2) {
     Set_Scissor(rendering_scissor_ul, rendering_scissor_lr);
 }
 
+Scroll_View_Down :: (layer: *ViewLayer, y_max: float32, speed: float32) {
+    layer.view_position.y += speed * xx delta_time;
+    layer.view_position.y = min(layer.view_position.y, y_max);
+}
+
+Scroll_View_Up :: (layer: *ViewLayer, y_min: float32, speed: float32) {
+    layer.view_position.y -= speed * xx delta_time;
+    layer.view_position.y = max(layer.view_position.y, y_min);
+}
+
+Scroll_View_Right :: (layer: *ViewLayer, x_max: float32, speed: float32) {
+    layer.view_position.x += speed * xx delta_time;
+    layer.view_position.x = min(layer.view_position.x, x_max);
+}
+
+Scroll_View_Left :: (layer: *ViewLayer, x_min: float32, speed: float32) {
+    layer.view_position.x -= speed * xx delta_time;
+    layer.view_position.x = max(layer.view_position.x, x_min);
+}
+
+View_Bounds :: (layer: *ViewLayer) -> (ul: Vector2, lr: Vector2) {
+    if layer.type == {
+    case .FILE_EDITOR;
+        return .{}, layer.file_editor.view_max;
+    case;
+        return .{}, .{};
+    }
+}
+
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ViewLayerType :: enum_flags u16 {
@@ -508,12 +553,6 @@ Layer_Text_Buffer :: (layer: *ViewLayer) -> *TextBuffer {
             buffer := *file_buffers.items[Active_View_Layer().file_editor.file_buffer];
             return Temp_Text_Buffer(*layer.debug);
         }
-        // buffer_index := layer.debug.text_buffer;
-        // if buffer_index == -1 {
-        //     return null;
-        // } else {
-        //     return 
-        // }
     }
     return null;
 }
@@ -530,6 +569,7 @@ FileEditor :: CursorLayer(
         file_buffer: s64 = -1;
         // only used for mouse wheel scrolling or anything bound to use mouse wheel-like scrolling
         view_velocity: Vector2;
+        view_max: Vector2;
     }
 );
 

@@ -34,6 +34,7 @@ SettingsFileData :: struct {
     key_repeat_rate := 40.0;
     change_history_count: s32 = 100;
     record_processed_input := false;
+    arrow_key_scroll_speed := 60.0;
     
     #place window_width;
         window_info: WindowInfo = ---;

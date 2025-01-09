@@ -47,6 +47,8 @@ Input :: struct {
             Set_Action_Bindings(group_byte, group_bindings);
         }
 
+        Set_Capacity(*key_pressed, 256);
+
         return true;
     }
 
@@ -56,6 +58,7 @@ Input :: struct {
         array_reset(*action_binding_buffer);
         array_reset(*action_code_point_strings);
         array_reset(*action_repeat_buffer);
+        Reset(*key_pressed);
     }
 
 }
@@ -446,6 +449,12 @@ Unpack_Modified_Code_Point :: inline (code_point: u32) -> code_point: u32, modif
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+Is_Virtual_Key_Pressed :: (key: VirtualKey) -> bool {
+    return Is_Bit_Set(*key_pressed, xx key);
+}
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 ModifierKeysState :: enum_flags u32 {
     NONE :: 0x00;
     META :: 0x01; // or command
@@ -545,6 +554,9 @@ play_input_record: bool;
 mid_change: bool;
 prev_action_was_mid_change: bool;
 last_change_input: [..]u32;
+
+
+key_pressed: BitArray(1);
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 
