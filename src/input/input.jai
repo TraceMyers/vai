@@ -153,8 +153,9 @@ Dump_Action_Input_Buffer :: (action_matches: *[..]ActionMatch = null) {
             detected_change_ignore |= (it & NOT_CHANGE) != 0;
             array_add(*auxiliary_input_buffer, Remove_Modifier_Flags(it));
         }
-        Process_Text_Input(auxiliary_input_buffer);
-        array_reset_keeping_memory(*auxiliary_input_buffer);
+        if Process_Text_Input(auxiliary_input_buffer) {
+            array_reset_keeping_memory(*auxiliary_input_buffer);
+        }
     }
     array_reset_keeping_memory(*action_repeat_buffer);
     array_reset_keeping_memory(*action_input_buffer);

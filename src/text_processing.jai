@@ -65,6 +65,21 @@ Get_Unmarked_Utf8 :: (in_utf32: []u32, out_utf8: *[..]u8, out_colors: *[..]TextC
     }
 }
 
+Get_Unmarked_Utf8 :: (in_utf32: []u32) -> utf8: []u8 {
+    out_utf8 := Temp_Buffer(u8, in_utf32.count * 4);
+    out_count := 0;
+    for in_utf32 {
+        code_point := Unmarked_Code_Point(it);
+        utf8_cp := Utf32_To_Utf8(xx *code_point.utf32);
+        for 0..utf8_cp.count-1 {
+            out_utf8[out_count] = utf8_cp.bytes[it];
+            out_count += 1;
+        }
+    }
+    out_utf8.count = out_count;
+    return out_utf8;
+}
+
 Expand_Tabs :: (data: []$T, indent_width: s64, $MARK_TABS := false) -> []T {
     #if MARK_TABS then assert(T == u32); // can only mark tabs with 32 bits per code point
     if data.count == 0 then return T.[];

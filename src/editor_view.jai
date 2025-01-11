@@ -41,12 +41,12 @@ Create_Base_Views :: () {
         assert(id == ROOT_ID);
     }
     // top bar
-    {
-        layer: ViewLayer;
-        layer.type = .TOP_BAR;
-        layer.top_bar = .{};
-        Add_View(.{type=.PIXELS, top_pixels=24}, *layer, ROOT_ID);
-    }
+    // {
+    //     layer: ViewLayer;
+    //     layer.type = .TOP_BAR;
+    //     layer.top_bar = .{};
+    //     Add_View(.{type=.PIXELS, top_pixels=24}, *layer, ROOT_ID);
+    // }
     // // bottom bar / vim console
     {
         layer: ViewLayer;
@@ -57,7 +57,7 @@ Create_Base_Views :: () {
     // empty background to stage file editors
     empty_id: s64;
     {
-        empty_id = Add_View(.{type=.PIXELS, top_pixels=24, inverted=true}, null, ROOT_ID);
+        empty_id = Add_View(.{type=.PIXELS, inverted=true}, null, ROOT_ID);
     }
     // default file editor
     {
@@ -208,15 +208,19 @@ Split_View :: (v: *View, direction: SplitDirection, set_as_active := true) -> *V
     return new_view;
 }
 
-Process_Text_Input :: (utf32: []u32) {
-    if utf32.count == 0 then return;
+Process_Text_Input :: (utf32: []u32) -> bool {
+    if utf32.count == 0 then return false;
     active_view_layer := Active_View_Layer();
     if active_view_layer != null {
         if active_view_layer.type == {
         case .FILE_EDITOR;
             Process_Text_Input(*active_view_layer.file_editor, utf32);
+            return true;
+        case .VIM_CONSOLE;
+            return false;
         }
     }
+    return true;
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -579,6 +583,10 @@ FileEditor :: CursorLayer(
 VimConsole :: CursorLayer(
     struct {
         display_only: bool;
+        mode: enum u8 {
+            COMMAND;
+            SEARCH;
+        }
     }
 );
 
@@ -646,6 +654,7 @@ VIEW_LAYERS_MAX :: 16;
 VIEWS_MAX :: 128;
 
 VIM_CONSOLE_DEPTH :: 0.0;
+VIM_CONSOLE_TEXT_DEPTH :: 0.1;
 TEXT_DEPTH :: 0.0;
 
 active_view_id: s64;

@@ -31,7 +31,7 @@ Normalized_Text_View_Window :: (view_position: Vector2, buffer: *TextBuffer) -> 
     return clamp(view_position.y / total_space, 0.0, 1.0), clamp((view_position.y + window_space) / total_space, 0.0, 1.0);
 }
 
-Initialize_Text_Renderer :: (using renderer: *TextRenderer, in_view_layer: *ViewLayer) {
+Initialize_Text_Renderer :: (using renderer: *TextRenderer, in_view_layer: *ViewLayer, force_gutter_char_width: s32 = -1) {
     view_layer = in_view_layer;
 
     ul := Upper_Left();
@@ -44,7 +44,11 @@ Initialize_Text_Renderer :: (using renderer: *TextRenderer, in_view_layer: *View
     line_count = xx max((cast(float)viewport_height / cast(float)screen_line_height + 1.0), 0.0);
     if line_count == 0 then return;
     screen_char_width = xx prepare_text(font, "m", 0);
-    screen_gutter_width = screen_char_width * gutter_char_width;
+    if force_gutter_char_width >= 0 {
+        screen_gutter_width = force_gutter_char_width;
+    } else {
+        screen_gutter_width = screen_char_width * gutter_char_width;
+    }
 
     gutter_right_pad : s32 = xx (cast(float32)screen_char_width * 0.45);
     align_info_gutter.alignment = .RIGHT;
@@ -159,7 +163,7 @@ Text_To_Render_Space :: inline (using renderer: *TextRenderer, text_x: s32, text
     return render_x, render_y;
 }
 
-Render_Text_Cursor :: (renderer: *TextRenderer, cursor: *Cursor, just_want_out_rect := false) -> (ul: IntVector2, lr: IntVector2) {
+Render_Text_Cursor :: (renderer: *TextRenderer, cursor: *Cursor, just_want_out_rect := false, depth := DEFAULT_DEPTH) -> (ul: IntVector2, lr: IntVector2) {
     ul_x, ul_y := Text_To_Render_Space(renderer, cursor.x, cursor.y);
     lr_x := ul_x;
     lr_y := ul_y + renderer.screen_line_height;
@@ -180,7 +184,7 @@ Render_Text_Cursor :: (renderer: *TextRenderer, cursor: *Cursor, just_want_out_r
                 cursor.blink_timer -= kb_cursor_blink_time * 2;
             } else {
                 Set_Shader_For_Color_Inversion();
-                Render_Quad(.{ul_x, ul_y}, .{lr_x, lr_y});
+                Render_Quad(.{ul_x, ul_y}, .{lr_x, lr_y}, depth=depth);
                 Flush_Draws();
             }
         }
@@ -218,6 +222,14 @@ Render_Text_Selection_Blocks :: (renderer: *TextRenderer, text_buffer: *TextBuff
         lr_y := ul_y + renderer.screen_line_height;
         Render_Quad(.{ul_x, ul_y}, .{lr_x, lr_y}, color=.{rgb=fRGB_WHITE, a=0.2});
     }
+}
+
+Immediate_Render_Marked_Line :: (renderer: *TextRenderer, line: []u32, color: bRGB, depth := DEFAULT_DEPTH)  {
+    Scoped_Immediate_Text_Render(depth);
+    color_buffer := TextColorLocation.[.{color, 0}];
+    utf8 := Get_Unmarked_Utf8(line);
+    prefixed := tprint("/%", As_String(utf8));
+    Render_Text_Line(renderer, *renderer.align_info_main, As_Array(prefixed, u8), color_buffer);    
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -291,9 +303,9 @@ line_spacing_factor := 0.4;
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 
 // text rendering requires drawing within a given scissor, so we need to flush any draws that came before, then at the end of the scope, flush any text we've added.
-Scoped_Immediate_Text_Render :: () #expand {
+Scoped_Immediate_Text_Render :: (depth := DEFAULT_DEPTH) #expand {
     Flush_Draws();
-    `defer Render_Quads_Generated_For_Text();
+    `defer Render_Quads_Generated_For_Text(depth);
     `defer Flush_Draws();
     // set the scissor back to whatever it was before
     `defer Set_Scissor(rendering_scissor_ul, rendering_scissor_lr);

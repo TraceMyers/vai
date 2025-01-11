@@ -142,10 +142,7 @@ Remove_Line :: (buffer: *TextBuffer, line_index: s64, is_change := true, moving_
         return;
     }
     if is_change {
-        // flags : LineChangeFlags = ifx moving_backward then .DELETE_LINE | .INSERT_FRONT else .DELETE_LINE;
-        // Log("flags: %", flags);
-        flags := LineChangeFlags.DELETE_LINE;
-        Add_Line_To_Change(buffer, line_index, flags);
+        Add_Line_To_Change(buffer, line_index, .DELETE_LINE);
     }
     Commit_And_Empty_Utf32_Buffers();
     line := *buffer.lines[line_index];
@@ -605,9 +602,7 @@ Add_Line_To_Change :: (buffer: *TextBuffer, row: s64, flags: LineChangeFlags) {
         }
     }
     if line_change == null {
-        Log("is null, flags : %", flags);
         if flags & .INSERT_FRONT {
-            Log("inserting front");
             array_insert_at(*current_change.lines, .{}, 0);
             line_change = *current_change.lines[0];
         } else {
@@ -651,7 +646,7 @@ Is_Current_Change_Empty :: () -> bool {
 
 LineBuffer :: struct {
     bin_id: BinID;
-    unique_id: u64;
+    unique_id: u32; // 'unique' is sort of a misnomer. maybe rename to 'counter_id' ?
     byte_count: u32;
 }
 
@@ -674,10 +669,10 @@ LineChangeFlags :: enum_flags u8 {
 }
 
 LineChange :: struct {
-    line_id: u64;
     line_index: s64;
     undo_tack: BinTack;
     redo_tack: BinTack;
+    line_id: u32;
     flags: LineChangeFlags;
 }
 
@@ -695,9 +690,8 @@ Cleanup_Text_Change :: (using change: *TextChange) {
 }
 
 TextChange :: struct {
-    id: u64;
-    cursor_position: IntVector2;
     lines: [..]LineChange;
+    cursor_position: IntVector2;
     need_overwrite: bool;
 }
 
@@ -711,11 +705,11 @@ TextBuffer :: struct {
 Utf32Buffer :: struct {
     home_buffer: *TextBuffer;
     home_row: u32;
-    line_id: u64;
+    line_id: u32;
     home_bin_id: BinID;
     temp_bin_id: BinID;
     array: []u32;
 }
 
-line_id_counter: u64;
-debug_line_id_counter: u64;
+line_id_counter: u32;
+debug_line_id_counter: u32;

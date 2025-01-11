@@ -141,13 +141,25 @@ Enter_Insert_Mode_Prepend   :: #bake_arguments Enter_Insert_Mode(append=false);
 Enter_Insert_Mode_Append    :: #bake_arguments Enter_Insert_Mode(append=true);
 
 Enter_Normal_Mode :: () {
-    Init_Cursor_Proc_Or_Return(true);
     if vi_mode == {
     case .INSERT;
+        Init_Cursor_Proc_Or_Return(true);
         line_count := Line_Count(text_buffer, cursor.y);
         action_executor_data.entered_normal_mode_past_line_end = cursor.x >= line_count; 
         Cursor_Scroll_Left();
     case .VISUAL;
+    case .COMMAND;
+        Init_Cursor_Proc_Or_Return(true, false);
+        layer := Active_View_Layer();
+        assert(layer.type == .VIM_CONSOLE);
+        if layer.vim_console.mode == {
+        case .COMMAND;
+        case .SEARCH;
+        }
+        array_reset_keeping_memory(*auxiliary_input_buffer);
+        assert(background_view_id != -1);
+        active_view_id = background_view_id;
+        background_view_id = -1;
     }
     vi_mode = .NORMAL;
 }
@@ -157,24 +169,30 @@ Backspace :: () {
 }
 
 Backspace_Impl :: inline (is_change := true) {
-    Init_Cursor_Proc_Or_Return(true);
-    if cursor.x > 0 {
-        // search backward for valid character to delete
-        line := Line_View(text_buffer, cursor.y);
-        cursor.x -= 1;
-        while cursor.x > 0 {
-            if !Is_Tab_Expanded_Space(line[cursor.x]) {
-                break;
-            }
+    if vi_mode == .COMMAND {
+        Init_Cursor_Proc_Or_Return(true, false);
+        auxiliary_input_buffer.count = max(0, auxiliary_input_buffer.count - 1);
+        return;
+    } else {
+        Init_Cursor_Proc_Or_Return(true);
+        if cursor.x > 0 {
+            // search backward for valid character to delete
+            line := Line_View(text_buffer, cursor.y);
             cursor.x -= 1;
+            while cursor.x > 0 {
+                if !Is_Tab_Expanded_Space(line[cursor.x]) {
+                    break;
+                }
+                cursor.x -= 1;
+            }
+            Remove_Code_Point(text_buffer, cursor.y, cursor.x);
+        } else if cursor.y != 0 {
+            Cursor_Scroll_Up();
+            Cursor_Scroll_To_Line_End();
+            src_line := Line_View(text_buffer, cursor.y+1);
+            Insert_Code_Points(text_buffer, cursor.y, cursor.x, src_line, true, true);
+            Remove_Line(text_buffer, cursor.y+1, is_change);
         }
-        Remove_Code_Point(text_buffer, cursor.y, cursor.x);
-    } else if cursor.y != 0 {
-        Cursor_Scroll_Up();
-        Cursor_Scroll_To_Line_End();
-        src_line := Line_View(text_buffer, cursor.y+1);
-        Insert_Code_Points(text_buffer, cursor.y, cursor.x, src_line, true, true);
-        Remove_Line(text_buffer, cursor.y+1, is_change);
     }
 }
 
@@ -649,14 +667,29 @@ Play_Input_Record :: () {
     play_input_record = true;
 }
 
+Enter_Search_Mode :: () {
+    Init_Cursor_Proc_Or_Return();
+
+    if Active_View_Layer().type == {
+    case .FILE_EDITOR;
+        vi_mode = .COMMAND;
+        background_view_id = active_view_id;
+        active_view_id = vim_console_id;
+        Active_View_Layer().vim_console.mode = .SEARCH;
+    case;
+    }
+}
+
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-Init_Cursor_Proc_Or_Return :: ($RESET_BLINK := false) #expand {
+Init_Cursor_Proc_Or_Return :: ($RESET_BLINK := false, $NEED_TEXT_BUFFER := true) #expand {
     `active_layer := Active_View_Layer();
     `cursor := Layer_Cursor(`active_layer);
     if `cursor == null then `return;
-    `text_buffer := Layer_Text_Buffer(`active_layer);
-    if `text_buffer == null then `return;
+    #if NEED_TEXT_BUFFER {
+        `text_buffer := Layer_Text_Buffer(`active_layer);
+        if `text_buffer == null then `return;
+    }
     #if RESET_BLINK {
         `cursor.reset_blink = true;
     }

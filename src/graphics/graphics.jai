@@ -22,6 +22,9 @@ Set_Projection :: (render_target_width: s32, render_target_height: s32) {
     #load "win32_graphics.jai";
 }
 
+
+DEFAULT_DEPTH :: -1.0;
+
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // VaiTexture :: struct {

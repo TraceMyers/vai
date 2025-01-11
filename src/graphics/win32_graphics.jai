@@ -263,18 +263,8 @@ Set_Vertex_Format :: (shader: *Shader) {
     }
 }
 
-Render_Quads_Generated_For_Text :: () {
+Render_Quads_Generated_For_Text :: (depth := DEFAULT_DEPTH) {
     Set_Shader_For_Text();
-
-    // Draw_Letter_Quad :: inline (font: *Dynamic_Font, quad: Font_Quad) {
-    //     page := quad.glyph.page;
-
-    //     // if page.bitmap_data.width  <= 1 return;
-    //     // if page.bitmap_data.height <= 1 return;
-
-    //     using quad;
-    //     Render_Quad(ul, lr, xx color, uv0, uv1);
-    // }
 
     last_texture: s64 = -1;
 
@@ -297,8 +287,7 @@ Render_Quads_Generated_For_Text :: () {
             glUniform1i(current_shader.texture_sampler_loc, 0);
         }
 
-        Render_Quad(quad.ul, quad.lr, xx,force quad.color, quad.uv0, quad.uv1);
-        // Draw_Letter_Quad(font, quad);
+        Render_Quad(quad.ul, quad.lr, xx,force quad.color, quad.uv0, quad.uv1, depth);
     }
 
     array_reset_keeping_memory(*font.current_quads);
@@ -483,8 +472,6 @@ Vertex :: struct {
 MAX_VERTICES :: 4800;
 vertex_buffer: [MAX_VERTICES] Vertex;
 vertices: []Vertex;
-
-DEFAULT_DEPTH :: -1.0;
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
