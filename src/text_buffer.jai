@@ -182,7 +182,7 @@ Set_Line_Bytes :: (buffer: *TextBuffer, line_index: s64, line_str: string) {
         assert(line.bin_id.index != -1);
         Set_Bin_Data(*buffer.line_pool, *line.bin_id, As_Array(line_str, u8));
         line.byte_count = xx line_str.count;
-        bytes := Get_Line_Bytes(buffer, line_index);
+        // bytes := Get_Line_Bytes(buffer, line_index);
     }
 }
 
@@ -371,7 +371,7 @@ Get_Utf32_Buffer :: (buffer: *TextBuffer, line_index: s64, $ALLOW_ALLOCATION := 
     utf32_buffer: *Utf32Buffer;
     buffer_index := -1;
     for temp_utf32_buffers {
-        if it.home_bin_id == line.bin_id && it.home_row == line_index {
+        if it.home_bin_id == line.bin_id && it.line_id == line.unique_id {
             utf32_buffer = *it;
             buffer_index = it_index;
             break;
@@ -383,6 +383,7 @@ Get_Utf32_Buffer :: (buffer: *TextBuffer, line_index: s64, $ALLOW_ALLOCATION := 
             buffer_index = temp_utf32_buffers.count-1;
             utf32_buffer.home_buffer = buffer;
             utf32_buffer.home_row = xx line_index;
+            utf32_buffer.line_id = line.unique_id;
             utf32_buffer.home_bin_id = line.bin_id;
 
             if line.byte_count > 0 {
@@ -710,6 +711,7 @@ TextBuffer :: struct {
 Utf32Buffer :: struct {
     home_buffer: *TextBuffer;
     home_row: u32;
+    line_id: u64;
     home_bin_id: BinID;
     temp_bin_id: BinID;
     array: []u32;

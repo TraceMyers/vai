@@ -87,9 +87,11 @@ Find_Item :: (using pool: *DynamicPool($T), user_data: $T2, Compare: (*T, T2) ->
     defer unlock(*mutex);
     i := -1;
     while true {
+        pre_iter_i := i;
         i = Find_Active(in_use, i + 1);
         if i == -1 then break;
         if Compare(*items[i], user_data) then return i;
+        if i == pre_iter_i then i += 1;
     }
     return -1;
 }

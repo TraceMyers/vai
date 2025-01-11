@@ -79,8 +79,11 @@ Create_Base_Views :: () {
 
     // test split file editor
     split := Split_View(*view_pool.items[active_view_id], .VERTICAL, false);
-    split.layers[0].type = .DEBUG;
-    split.layers[0].debug.type = .UNDO_REDO;
+    // split.layers[0].type = .DEBUG;
+    // split.layers[0].debug.type = .UNDO_REDO;
+    split.layers[0].type = .FILE_EDITOR;
+    split.layers[0].file_editor = .{};
+    split.layers[0].file_editor.file_buffer = Get_File_Buffer_ID("test_files/utf8.txt");
 }
 
 Prepare_Intro_File :: () -> string {
