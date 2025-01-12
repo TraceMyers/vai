@@ -361,50 +361,62 @@ Remove_Utf32_Buffer :: (buffer: *TextBuffer, row: s64) {
     }
 }
 
-#scope_file // ------------------------------------------------------------------------------------------------ { FILE }
+Init_Utf32_Buffer_Data :: inline (utf32_buffer: *Utf32Buffer) {
+    if utf32_buffer.temp_bin_id.index != -1 {
+        bin := Get_Bin(*temp_utf32_buffer_pool, utf32_buffer.temp_bin_id);
+        utf32_buffer.array.data = bin.data;
+    } else {
+        utf32_buffer.array.data = null;
+        utf32_buffer.array.count = 0;
+    }
+}
 
 Get_Utf32_Buffer :: (buffer: *TextBuffer, line_index: s64, $ALLOW_ALLOCATION := true) -> *Utf32Buffer {
     line := *buffer.lines[line_index];
     utf32_buffer: *Utf32Buffer;
-    buffer_index := -1;
     for temp_utf32_buffers {
-        if it.home_bin_id == line.bin_id && it.line_id == line.unique_id {
+        if it.line_id == line.unique_id {
+            assert(it.home_bin_id == line.bin_id);
             utf32_buffer = *it;
-            buffer_index = it_index;
             break;
         }
     }
     #if ALLOW_ALLOCATION {
         if utf32_buffer == null {
-            utf32_buffer = array_add(*temp_utf32_buffers);
-            buffer_index = temp_utf32_buffers.count-1;
-            utf32_buffer.home_buffer = buffer;
-            utf32_buffer.home_row = xx line_index;
-            utf32_buffer.line_id = line.unique_id;
-            utf32_buffer.home_bin_id = line.bin_id;
-
-            if line.byte_count > 0 {
-                bytes := Get_Line_Bytes(buffer, line_index);
-                utf32_string := Encode(bytes, .UTF8, .UTF32);
-                utf32_array := As_Array(utf32_string, u32);
-                expanded := Expand_Tabs(utf32_array, 4, true);
-                utf32_buffer.temp_bin_id = Request_Bin(*temp_utf32_buffer_pool, expanded.count + 8);
-                utf32_buffer.array.count = expanded.count;
-                Set_Bin_Data(*temp_utf32_buffer_pool, *utf32_buffer.temp_bin_id, expanded);
-            } else {
-                return utf32_buffer;
-            }
-        }
-        if utf32_buffer.temp_bin_id.index != -1 {
-            bin := Get_Bin(*temp_utf32_buffer_pool, utf32_buffer.temp_bin_id);
-            utf32_buffer.array.data = bin.data;
+            utf32_buffer = Allocate_Utf32_Buffer(buffer, line_index);
         } else {
-            utf32_buffer.array.data = null;
-            utf32_buffer.array.count = 0;
+            Init_Utf32_Buffer_Data(utf32_buffer);
         }
     }
     return utf32_buffer;
 }
+
+Allocate_Utf32_Buffer :: (buffer: *TextBuffer, line_index: s64) -> *Utf32Buffer {
+    line := *buffer.lines[line_index];
+    utf32_buffer := array_add(*temp_utf32_buffers);
+    utf32_buffer.home_buffer = buffer;
+    utf32_buffer.home_row = xx line_index;
+    utf32_buffer.line_id = line.unique_id;
+    utf32_buffer.home_bin_id = line.bin_id;
+
+    if line.byte_count > 0 {
+        bytes := Get_Line_Bytes(buffer, line_index);
+        utf32_string := Encode(bytes, .UTF8, .UTF32);
+        utf32_array := As_Array(utf32_string, u32);
+        expanded := Expand_Tabs(utf32_array, 4, true);
+        utf32_buffer.temp_bin_id = Request_Bin(*temp_utf32_buffer_pool, expanded.count + 8);
+        utf32_buffer.array.count = expanded.count;
+        Set_Bin_Data(*temp_utf32_buffer_pool, *utf32_buffer.temp_bin_id, expanded);
+    } else {
+        return utf32_buffer;
+    }
+
+    Init_Utf32_Buffer_Data(utf32_buffer);
+
+    return utf32_buffer;
+}
+
+#scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 
 Resize_Utf32_Buffer :: (utf32_buffer: *Utf32Buffer, count: u32) {
     if utf32_buffer.temp_bin_id.index == -1 {

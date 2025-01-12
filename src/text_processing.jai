@@ -48,6 +48,13 @@ Is_Alphanumeric_Or_Underscore :: inline (marked_code_point: u32) -> bool {
         || utf32 == #char "_";
 }
 
+Get_Unmarked_Utf32 :: (in_utf32: []u32, out_buffer: *[..]u32) {
+    array_resize(out_buffer, in_utf32.count);
+    for in_utf32 {
+        array_add(out_buffer, Marked_Code_Point_Utf32(it));
+    }   
+}
+
 Get_Unmarked_Utf8 :: (in_utf32: []u32, out_utf8: *[..]u8, out_colors: *[..]TextColorLocation) {
     array_reset_keeping_memory(out_utf8);
     array_reset_keeping_memory(out_colors);

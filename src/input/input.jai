@@ -58,6 +58,7 @@ Input :: struct {
         array_reset(*action_binding_buffer);
         array_reset(*action_code_point_strings);
         array_reset(*action_repeat_buffer);
+        array_reset(*search_pattern);
         Reset(*key_pressed);
     }
 
@@ -556,6 +557,7 @@ mid_change: bool;
 prev_action_was_mid_change: bool;
 last_change_input: [..]u32;
 
+search_pattern: [..]u32;
 
 key_pressed: BitArray(1);
 

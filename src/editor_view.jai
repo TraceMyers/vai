@@ -170,6 +170,8 @@ Add_View_Layer :: (v: *View, layer: *ViewLayer) {
     i := v.layers.count;
     v.layers.count += 1;
     v.layers[i] = layer.*;
+    v.layers[i].id = view_layer_id_counter;
+    view_layer_id_counter += 1;
 }
 
 Split_View :: (v: *View, direction: SplitDirection, set_as_active := true) -> *View {
@@ -523,6 +525,7 @@ ViewLayerData :: union {
 
 ViewLayer :: struct {
     type: ViewLayerType;
+    id: u32;
     view_position: Vector2; 
     using data: ViewLayerData;
 }
@@ -671,5 +674,7 @@ rendering_scissor_ul: IntVector2;
 rendering_scissor_lr: IntVector2;
 
 render_full_update: bool;
+
+view_layer_id_counter: u32;
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }

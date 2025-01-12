@@ -570,6 +570,39 @@ Replace_Toward_Line_Zero :: () {
     Enter_Insert_Mode(false);
 }
 
+Text_Pattern_Search :: (forward: bool) {
+    if search_pattern.count == 0 then return; // TODO: feedback
+    Init_Cursor_Proc_Or_Return(true);
+
+    Search_Line_For_Pattern :: inline (pattern: []u32, text_buffer: *TextBuffer, row: s32, col: s32) -> (row: s32, col: s32) {
+        out_row, out_col: s32 = -1;
+        return out_row, out_col;
+    }
+    
+    row := cursor.y;
+    col := cursor.x + 1;
+    iter_ct := text_buffer.lines.count + 1;
+    match_row, match_col: s32 = -1;
+    if forward for 0..iter_ct-1 {
+        match_row, match_col = Search_Line_For_Pattern(search_pattern, text_buffer, row, col);
+        if match_row != -1 then break;
+        col = 0;
+        row = Increment_Wrap(row, 0, xx (text_buffer.lines.count-1));
+    } else for 0..iter_ct-1 {
+        match_row, match_col = Search_Line_For_Pattern(search_pattern, text_buffer, row, col);
+        if match_row != -1 then break;
+        col = 0;
+        row = Decrement_Wrap(row, 0, xx (text_buffer.lines.count-1));
+    }
+
+    if match_row != -1 {
+        cursor.x = match_col;
+        cursor.y = match_row;
+    }
+}
+Text_Pattern_Search_Forward :: #bake_arguments Text_Pattern_Search(forward=true);
+Text_Pattern_Search_Backward :: #bake_arguments Text_Pattern_Search(forward=false);
+
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 Repeat_Last_Change :: () {
@@ -675,6 +708,11 @@ Enter_Search_Mode :: () {
         vi_mode = .COMMAND;
         background_view_id = active_view_id;
         active_view_id = vim_console_id;
+        if auxiliary_input_buffer.count > 0 {
+            Get_Unmarked_Utf32(auxiliary_input_buffer, *search_pattern);
+        } else {
+            array_reset_keeping_memory(*search_pattern);
+        }
         Active_View_Layer().vim_console.mode = .SEARCH;
     case;
     }
