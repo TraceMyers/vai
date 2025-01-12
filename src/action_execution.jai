@@ -155,6 +155,11 @@ Enter_Normal_Mode :: () {
         if layer.vim_console.mode == {
         case .COMMAND;
         case .SEARCH;
+            if auxiliary_input_buffer.count > 0 {
+                Get_Unmarked_Utf32(auxiliary_input_buffer, *search_pattern);
+            } else {
+                array_reset_keeping_memory(*search_pattern);
+            }
         }
         array_reset_keeping_memory(*auxiliary_input_buffer);
         assert(background_view_id != -1);
@@ -574,28 +579,48 @@ Text_Pattern_Search :: (forward: bool) {
     if search_pattern.count == 0 then return; // TODO: feedback
     Init_Cursor_Proc_Or_Return(true);
 
-    Search_Line_For_Pattern :: inline (pattern: []u32, text_buffer: *TextBuffer, row: s32, col: s32) -> (row: s32, col: s32) {
-        out_row, out_col: s32 = -1;
-        return out_row, out_col;
+    Search_Line_For_Pattern :: inline (pattern_utf8: string, text_buffer: *TextBuffer, row: s32, col: s32) -> col: s32 {
+        out_col: s32 = -1;
+        line_bytes := Get_Line_Bytes(text_buffer, row); 
+        line_bytes.data += col;
+        line_bytes.count -= col;
+        if line_bytes.count >= pattern_utf8.count {
+            i := find_index_from_left(line_bytes, pattern_utf8);
+            if i != -1 {
+                out_col = Collapsed_To_Expanded_Column(text_buffer, row, xx i);
+            }
+        }
+        return out_col;
     }
+
+    Loop_Body :: ($ITERATE_LINE: string) -> bool #expand {
+        `match_col = Search_Line_For_Pattern(`pattern_utf8, `text_buffer, `row, `col);
+        if `match_col != -1 {
+            `match_row = `row;
+            return true;
+        }
+        `col = 0;
+        #insert ITERATE_LINE;
+        return false;
+    }
+
+    pattern_utf8 := Encode(As_String(search_pattern), .UTF32, .UTF8);
     
+    // need to find the position given collapsed tabs so we're serching from the right place in raw line utf8
+    col: s32;
+    if cursor.x != 0 {
+        col = Expanded_To_Collapsed_Column(text_buffer, cursor.y, cursor.x) + 1;
+    }
     row := cursor.y;
-    col := cursor.x + 1;
     iter_ct := text_buffer.lines.count + 1;
     match_row, match_col: s32 = -1;
     if forward for 0..iter_ct-1 {
-        match_row, match_col = Search_Line_For_Pattern(search_pattern, text_buffer, row, col);
-        if match_row != -1 then break;
-        col = 0;
-        row = Increment_Wrap(row, 0, xx (text_buffer.lines.count-1));
+        if Loop_Body("`row = Increment_Wrap(`row, 0, xx (`text_buffer.lines.count-1));") then break;
     } else for 0..iter_ct-1 {
-        match_row, match_col = Search_Line_For_Pattern(search_pattern, text_buffer, row, col);
-        if match_row != -1 then break;
-        col = 0;
-        row = Decrement_Wrap(row, 0, xx (text_buffer.lines.count-1));
+        if Loop_Body("`row = Decrement_Wrap(`row, 0, xx (`text_buffer.lines.count-1));") then break;
     }
 
-    if match_row != -1 {
+    if match_col != -1 {
         cursor.x = match_col;
         cursor.y = match_row;
     }
@@ -708,11 +733,7 @@ Enter_Search_Mode :: () {
         vi_mode = .COMMAND;
         background_view_id = active_view_id;
         active_view_id = vim_console_id;
-        if auxiliary_input_buffer.count > 0 {
-            Get_Unmarked_Utf32(auxiliary_input_buffer, *search_pattern);
-        } else {
-            array_reset_keeping_memory(*search_pattern);
-        }
+
         Active_View_Layer().vim_console.mode = .SEARCH;
     case;
     }

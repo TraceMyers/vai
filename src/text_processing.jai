@@ -51,7 +51,7 @@ Is_Alphanumeric_Or_Underscore :: inline (marked_code_point: u32) -> bool {
 Get_Unmarked_Utf32 :: (in_utf32: []u32, out_buffer: *[..]u32) {
     array_resize(out_buffer, in_utf32.count);
     for in_utf32 {
-        array_add(out_buffer, Marked_Code_Point_Utf32(it));
+        out_buffer.*[it_index] = Marked_Code_Point_Utf32(it);
     }   
 }
 

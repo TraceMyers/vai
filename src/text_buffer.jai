@@ -335,6 +335,39 @@ Get_Current_Utf8_For_Line :: (buffer: *TextBuffer, row: s64) -> string {
     return utf8_string;
 }
 
+Expanded_To_Collapsed_Column :: (buffer: *TextBuffer, row: s32, col: s32) -> s32 {
+    utf8_text := Get_Current_Utf8_For_Line(buffer, row);
+    expanded_col: s32 = 0;
+    unexpanded_col: s32 = col;
+    for 0..utf8_text.count-1 {
+        if utf8_text[it] == #char "\t" {
+            // TODO: tab size
+            expanded_col += 4 - (expanded_col % 4);
+        } else {
+            expanded_col += 1;
+        }
+        if expanded_col >= col {
+            unexpanded_col = xx it;
+        }
+    }
+    return unexpanded_col;
+}
+
+Collapsed_To_Expanded_Column :: (buffer: *TextBuffer, row: s32, col: s32) -> s32 {
+    utf8_text := Get_Current_Utf8_For_Line(buffer, row);
+    expanded_col: s32 = 0;
+    iter_ct := min(utf8_text.count, col);
+    for 0..iter_ct-1 {
+        if utf8_text[it] == #char "\t" {
+            // TODO: tab size
+            expanded_col += 4 - (expanded_col % 4);
+        } else {
+            expanded_col += 1;
+        }
+    }
+    return expanded_col;
+}
+
 Commit_Utf32_To_Line :: (utf32_buffer: *Utf32Buffer) {
     Collapse_Tabs_Inline(*utf32_buffer.array);
     utf32_string := As_String(utf32_buffer.array);
