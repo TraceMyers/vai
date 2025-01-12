@@ -46,6 +46,7 @@
     .{.["<C-p>"],               "PLAY_INPUT_RECORD"             ,               .{modes=.NORMAL,                 proc=Play_Input_Record}},
     .{.["n"],                   "TEXT_PATTERN_SEARCH_FORWARD",                  .{modes=.NORMAL,                 proc=Text_Pattern_Search_Forward}},
     .{.["N"],                   "TEXT_PATTERN_SEARCH_BACKWARD",                 .{modes=.NORMAL,                 proc=Text_Pattern_Search_Backward}},
+    .{.["~"],                   "TOGGLE_LETTER_CASE",                           .{modes=.NORMAL,                 proc=Toggle_Letter_Case}},
     .{.["__INTERNAL__"],        "CLAMP_CURSOR_X_TO_BOUNDS"                      .{modes=.NONE}},
     .{.["__INTERNAL__"],        "NONE",                                         .{modes=.NONE}},
     .{.["__INTERNAL__"],        "INTERNAL_MOVE_CURSOR_TO_POSITION",             .{modes=.ALL    ,                proc=Internal_Move_Cursor_To_Position}}

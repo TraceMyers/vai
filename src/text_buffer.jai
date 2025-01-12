@@ -218,20 +218,20 @@ Expand_Utf32_Buffer_Tabs :: inline (utf32_buffer: *Utf32Buffer) {
     Set_Utf32_Buffer_Data(utf32_buffer, expanded);
 }
 
-// TODO: was commented out because it didn't work with an old implementation of undo, but it could be brought back
-// Replace_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64, code_point: u32) {
-//     utf32_buffer := Get_Utf32_Buffer(buffer, row);
-//     assert(col < utf32_buffer.array.count);
-//     #if DEBUG_TEXT_BUFFERS {
-//         assert(!Is_Tab_Expanded_Space(utf32_buffer.array[col]));
-//     }
-//     replacing_tab := utf32_buffer.array[col] == #char "\t";
-//     utf32_buffer.array[col] = code_point;
-//     if replacing_tab {
-//         Collapse_Tabs_Inline(*utf32_buffer.array);
-//         Expand_Utf32_Buffer_Tabs(utf32_buffer);
-//     }
-// }
+Replace_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64, code_point: u32, is_change := true) {
+    if is_change then Add_Line_To_Change(buffer, row, 0);
+    utf32_buffer := Get_Utf32_Buffer(buffer, row);
+    assert(col < utf32_buffer.array.count);
+    #if DEBUG_TEXT_BUFFERS {
+        assert(!Is_Tab_Expanded_Space(utf32_buffer.array[col]));
+    }
+    replacing_tab := utf32_buffer.array[col] == #char "\t";
+    utf32_buffer.array[col] = code_point;
+    if replacing_tab {
+        Collapse_Tabs_Inline(*utf32_buffer.array);
+        Expand_Utf32_Buffer_Tabs(utf32_buffer);
+    }
+}
 
 Insert_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64, code_point: u32, is_change := true) {
     if is_change then Add_Line_To_Change(buffer, row, 0);

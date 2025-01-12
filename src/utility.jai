@@ -219,17 +219,14 @@ Reverse_String :: inline (str: string) {
     }
 }
 
+TO_LOWER_DIFFERENCE :: #char "a" - #char "A";
+
 Find_Index_From_Left :: inline (str: string, pattern: string, $STR_TO_LOWER := false) -> s64 {
     match_count := 0;
-    #if STR_TO_LOWER {
-        to_lower_diff: u8 = #char "a" - #char "A";
-    }
     for 0..str.count-1 {
         c := str[it];
         #if STR_TO_LOWER {
-            if c <= #char "Z" && c >= #char "A" {
-                c += to_lower_diff;
-            }
+            c = To_Lower(c);
         }
         if c == pattern[match_count] {
             match_count += 1;
@@ -245,4 +242,36 @@ Find_Index_From_Left :: inline (str: string, pattern: string, $STR_TO_LOWER := f
         }
     }
     return -1;
+}
+
+Is_Alpha_Upper :: inline (c: $T) -> bool {
+    return c <= #char "Z" && c >= #char "A";
+}
+
+Is_Alpha_Lower :: inline (c: $T) -> bool {
+    return c <= #char "z" && c >= #char "a";
+}
+
+To_Upper :: inline (c: $T, $CHECKED := true) -> T 
+#modify {
+    return (cast(*Type_Info)T).type == .INTEGER;
+} {
+    #if CHECKED {
+        if !Is_Alpha_Lower(c) {
+            return c;
+        }
+    }
+    return c - TO_LOWER_DIFFERENCE;
+}
+
+To_Lower :: inline (c: $T, $CHECKED := true) -> T 
+#modify {
+    return (cast(*Type_Info)T).type == .INTEGER;
+} {
+    #if CHECKED {
+        if !Is_Alpha_Upper(c) {
+            return c;
+        }
+    }
+    return c + TO_LOWER_DIFFERENCE;
 }

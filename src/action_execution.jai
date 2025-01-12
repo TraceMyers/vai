@@ -619,7 +619,7 @@ Text_Pattern_Search :: (forward: bool) {
     }
     pattern_utf8 := Encode(As_String(search_pattern), .UTF32, .UTF8);
     
-    // need to find the position given collapsed tabs so we're serching from the right place in raw line utf8
+    // need to find the position given collapsed tabs so we're searching from the right place in the line's raw utf8
     col: s32 = 1;
     if cursor.x != 0 {
         col = Expanded_To_Collapsed_Column(text_buffer, cursor.y, cursor.x) + 1;
@@ -640,6 +640,17 @@ Text_Pattern_Search :: (forward: bool) {
 }
 Text_Pattern_Search_Forward :: #bake_arguments Text_Pattern_Search(forward=true);
 Text_Pattern_Search_Backward :: #bake_arguments Text_Pattern_Search(forward=false);
+
+Toggle_Letter_Case :: () {
+    Init_Cursor_Proc_Or_Return(true);
+    line := Line_View(text_buffer, cursor.y);
+    letter := line[cursor.x];
+    if Is_Alpha_Upper(letter) {
+        Replace_Code_Point(text_buffer, cursor.y, cursor.x, To_Lower(letter, false));
+    } else if Is_Alpha_Lower(letter) {
+        Replace_Code_Point(text_buffer, cursor.y, cursor.x, To_Upper(letter, false));
+    }
+}
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
