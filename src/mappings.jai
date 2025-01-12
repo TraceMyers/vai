@@ -47,6 +47,8 @@
     .{.["n"],                   "TEXT_PATTERN_SEARCH_FORWARD",                  .{modes=.NORMAL,                 proc=Text_Pattern_Search_Forward}},
     .{.["N"],                   "TEXT_PATTERN_SEARCH_BACKWARD",                 .{modes=.NORMAL,                 proc=Text_Pattern_Search_Backward}},
     .{.["~"],                   "TOGGLE_LETTER_CASE",                           .{modes=.NORMAL,                 proc=Toggle_Letter_Case}},
+    .{.["U"],                   "MAKE_SELECTION_UPPERCASE",                     .{modes=.VISUAL,                 proc=Make_Selection_Uppercase}},
+    .{.["u"],                   "MAKE_SELECTION_LOWERCASE",                     .{modes=.VISUAL,                 proc=Make_Selection_Lowercase}},
     .{.["__INTERNAL__"],        "CLAMP_CURSOR_X_TO_BOUNDS"                      .{modes=.NONE}},
     .{.["__INTERNAL__"],        "NONE",                                         .{modes=.NONE}},
     .{.["__INTERNAL__"],        "INTERNAL_MOVE_CURSOR_TO_POSITION",             .{modes=.ALL    ,                proc=Internal_Move_Cursor_To_Position}}
