@@ -152,11 +152,13 @@ Enter_Normal_Mode :: () {
         Init_Cursor_Proc_Or_Return(true, false);
         layer := Active_View_Layer();
         assert(layer.type == .VIM_CONSOLE);
+        do_search := false;
         if layer.vim_console.mode == {
         case .COMMAND;
         case .SEARCH;
             if auxiliary_input_buffer.count > 0 {
                 Get_Unmarked_Utf32(auxiliary_input_buffer, *search_pattern);
+                do_search = true;
             } else {
                 array_reset_keeping_memory(*search_pattern);
             }
@@ -165,6 +167,9 @@ Enter_Normal_Mode :: () {
         assert(background_view_id != -1);
         active_view_id = background_view_id;
         background_view_id = -1;
+        if do_search  {
+            Text_Pattern_Search_Forward();
+        }
     }
     vi_mode = .NORMAL;
 }
@@ -579,22 +584,22 @@ Text_Pattern_Search :: (forward: bool) {
     if search_pattern.count == 0 then return; // TODO: feedback
     Init_Cursor_Proc_Or_Return(true);
 
-    Search_Line_For_Pattern :: inline (pattern_utf8: string, text_buffer: *TextBuffer, row: s32, col: s32) -> col: s32 {
+    Search_Line_For_Pattern :: inline (pattern_utf8: string, text_buffer: *TextBuffer, row: s32, col: s32, line_to_lower: bool) -> col: s32 {
         out_col: s32 = -1;
         line_bytes := Get_Line_Bytes(text_buffer, row); 
         line_bytes.data += col;
         line_bytes.count -= col;
         if line_bytes.count >= pattern_utf8.count {
-            i := find_index_from_left(line_bytes, pattern_utf8);
+            i := Find_Index_From_Left(line_bytes, pattern_utf8, true);
             if i != -1 {
-                out_col = Collapsed_To_Expanded_Column(text_buffer, row, xx i);
+                out_col = Collapsed_To_Expanded_Column(text_buffer, row, xx (i + col));
             }
         }
         return out_col;
     }
 
     Loop_Body :: ($ITERATE_LINE: string) -> bool #expand {
-        `match_col = Search_Line_For_Pattern(`pattern_utf8, `text_buffer, `row, `col);
+        `match_col = Search_Line_For_Pattern(`pattern_utf8, `text_buffer, `row, `col, `search_lowercase);
         if `match_col != -1 {
             `match_row = `row;
             return true;
@@ -604,10 +609,18 @@ Text_Pattern_Search :: (forward: bool) {
         return false;
     }
 
+    // smartcase option = if the search pattern doesn't have uppercase letters, then it's assumed we want to match against any case.
+    search_lowercase := Is_Bool_Option_Set(.PATTERN_SEARCH_SMART_CASE);
+    if search_lowercase then for search_pattern {
+        if it <= #char "Z" && it >= #char "A" {
+            search_lowercase = false;
+            break;
+        }
+    }
     pattern_utf8 := Encode(As_String(search_pattern), .UTF32, .UTF8);
     
     // need to find the position given collapsed tabs so we're serching from the right place in raw line utf8
-    col: s32;
+    col: s32 = 1;
     if cursor.x != 0 {
         col = Expanded_To_Collapsed_Column(text_buffer, cursor.y, cursor.x) + 1;
     }
@@ -733,7 +746,7 @@ Enter_Search_Mode :: () {
         vi_mode = .COMMAND;
         background_view_id = active_view_id;
         active_view_id = vim_console_id;
-
+        array_reset_keeping_memory(*auxiliary_input_buffer);
         Active_View_Layer().vim_console.mode = .SEARCH;
     case;
     }

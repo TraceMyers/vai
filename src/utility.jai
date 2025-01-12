@@ -95,6 +95,20 @@ Temp_Copy_Array :: inline (array: []$T) -> []T {
     return out_array;
 }
 
+To_Lower_Temp :: inline (str: string) -> string {
+    out_str := talloc_string(str.count);
+    to_lower_diff: u8 = #char "a" - #char "A";
+    for 0..out_str.count-1 {
+        c := str[it];
+        if c <= #char "Z" && c >= #char "A" {
+            out_str[it] = c + to_lower_diff;
+        }  else {
+            out_str[it] = c;
+        }
+    }
+    return out_str;
+}
+
 Temp_Resize_Array :: inline ($T: Type, reserve_count := 0) -> [..]T {
     array: [..]T;
     array.allocator = temp;
@@ -203,4 +217,32 @@ Reverse_String :: inline (str: string) {
         str[b], str[e] = str[e], str[b];
         b += 1;
     }
+}
+
+Find_Index_From_Left :: inline (str: string, pattern: string, $STR_TO_LOWER := false) -> s64 {
+    match_count := 0;
+    #if STR_TO_LOWER {
+        to_lower_diff: u8 = #char "a" - #char "A";
+    }
+    for 0..str.count-1 {
+        c := str[it];
+        #if STR_TO_LOWER {
+            if c <= #char "Z" && c >= #char "A" {
+                c += to_lower_diff;
+            }
+        }
+        if c == pattern[match_count] {
+            match_count += 1;
+            if match_count == pattern.count {
+                return it - match_count + 1;
+            }
+        } else {
+            remain_ct := str.count - it - 1;
+            if remain_ct < pattern.count {
+                break;
+            }
+            match_count = 0;
+        }
+    }
+    return -1;
 }

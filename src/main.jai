@@ -20,6 +20,7 @@ Vai_Main :: () {
     if !Scoped_Construct(Input)                 then return;
     if !Scoped_Construct(Viewports)             then return;
     if !Scoped_Construct(Editor_Views)          then return;
+    if !Scoped_Construct(Options)               then return;
 
     Initialize_Render_Text();
     Initialize_Time();

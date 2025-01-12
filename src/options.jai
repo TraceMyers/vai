@@ -1,5 +1,19 @@
 
+Options :: struct {
 
+    Initialize :: () -> success: bool  {
+        return true;
+    }
+
+    Shutdown :: () {
+
+    }
+}
+Is_Bool_Option_Set :: (option: Option) -> bool {
+    using option_mappings[option].extension;
+    assert(type == .BOOL);
+    return _bool;
+}
 
 OptionSetting :: struct {
     using value: union {
