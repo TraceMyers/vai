@@ -654,23 +654,27 @@ Toggle_Letter_Case :: () {
 
 Change_Selection_Case :: (to_upper: bool) {
     Init_Cursor_Proc_Or_Return(true);
-
     selection_begin, selection_end := Cursor_Selection(cursor);
     first_line_x_begin := selection_begin.x;
     last_line_x_end := max(selection_end.x - 1, sdw(0));
-    for selection_begin.y..selection_end.y {
-        line := Line_View(text_buffer, it);
-        if line.count == 0 then continue;
-        x_begin := ifx it == selection_begin.y then first_line_x_begin else sdw(0);
-        x_end := ifx it == selection_end.y then last_line_x_end else sdw(line.count-1);
-        for x_begin..x_end {
-            if to_upper {
-                line[it] = To_Upper(line[it]);
-            } else {
-                line[it] = To_Lower(line[it]);
+
+    Loop_Impl :: ($CONVERSION_LINE: string) #expand {
+        x_begin := first_line_x_begin;
+        for selection_begin.y..selection_end.y {
+            line := Line_View(text_buffer, it);
+            if line.count == 0 then continue;
+            x_end := ifx it == selection_end.y then last_line_x_end else sdw(line.count-1);
+            for x_begin..x_end {
+                #insert CONVERSION_LINE;
             }
+            x_begin = sdw(0);
         }
     }
+
+    if to_upper 
+        then Loop_Impl("line[it] = To_Upper(line[it]);");
+        else Loop_Impl("line[it] = To_Lower(line[it]);");
+
     cursor.x = selection_begin.x;
     cursor.y = selection_begin.y;
     Enter_Normal_Mode();
