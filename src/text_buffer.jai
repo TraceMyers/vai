@@ -3,13 +3,16 @@
 // data
 
 TEXT_BUFFER_SMALL_CHUNK_LEN :: 24;
+TEXT_REGISTER_SMALL_CHUNK_LEN :: 48;
 
 file_buffers: DynamicPool(TextBuffer);
-general_text_buffer: TextBuffer;
 
-temp_utf32_buffer_pool: BinPool(24, u32); 
+temp_utf32_buffer_pool: BinPool(TEXT_BUFFER_SMALL_CHUNK_LEN, u32); 
 temp_utf32_buffers: [..]Utf32Buffer;
+
 undo_redo_text: BinPool(16, u8);
+register_text: BinPool(TEXT_REGISTER_SMALL_CHUNK_LEN, u32);
+registers: TextRegisters;
 
 // NOTE TO SELF: be careful not to alias data when working with bins inline then copying into the bin
 // NOTE TO SELF: tab-expanded column is the only real column outside this file, but tab-expanded spaces are invalid to edit
@@ -22,17 +25,25 @@ Text_Buffers :: struct {
 
     Initialize :: () -> success: bool {
         Initialize(*file_buffers, 32);
-        Initialize_Text_Buffer(*general_text_buffer, "", 1024, 1024);
         Assign_Bin_Pool_Allocator(*temp_utf32_buffer_pool, temp);
         Bin_Pool_Initialize(*undo_redo_text);
+        Bin_Pool_Initialize(*register_text);
+        // for register keys 0-9, initialize them all with "";
+        Circular_Buffer_Initialize(*registers.number_registers, 10, Cleanup_Text_Register, true);
+        for 0..9 {
+            Push_Back(*registers.number_registers, .{});
+        }
+        init(*registers.tack_map, 128);
         temp_utf32_buffers.allocator = temp;
         return true;
     }
 
     Shutdown :: () {
         Shutdown(*file_buffers, Shutdown_Text_Buffer);
-        Shutdown_Text_Buffer(*general_text_buffer);
         Bin_Pool_Shutdown(*undo_redo_text);
+        Circular_Buffer_Reset(*registers.number_registers);
+        Bin_Pool_Shutdown(*register_text);
+        deinit(*registers.tack_map);
     }
 
 }
@@ -721,6 +732,13 @@ LineChange :: struct {
     flags: LineChangeFlags;
 }
 
+Cleanup_Text_Register :: (using register_tack: *BinTack) {
+    if register_tack.bin_id.index != -1 {
+        Release_Bin(*register_text, *register_tack.bin_id);
+    }
+    register_tack.* = .{};
+}
+
 Cleanup_Text_Change :: (using change: *TextChange) {
     for *lines {
         if it.undo_tack.bin_id.index != -1 {
@@ -758,3 +776,46 @@ Utf32Buffer :: struct {
 
 line_id_counter: u32;
 debug_line_id_counter: u32;
+
+DEFAULT_REGISTER : u32 : 0xff_ff_ff_ff;
+
+TextRegisters :: struct {
+    tack_map: Table(u32, BinTack);
+    number_registers: CircularBuffer(BinTack);
+}
+
+Get_Register_Text :: (register: u32) -> []u32 {
+    tack := table_find_pointer(*registers.tack_map, register);
+    if tack != null && tack.bin_id.index != - 1 {
+        bin := Get_Bin(*register_text, tack.bin_id);
+        bin.count = tack.count;
+        return bin;
+    }
+    return u32.[];
+}
+
+Set_Register_Text :: (register: u32, text: []u32) {
+    tack := table_find_pointer(*registers.tack_map, register);
+    if tack == null {
+        tack = table_set(*registers.tack_map, register, .{});
+    }
+    if tack.bin_id.index == -1 {
+        tack.bin_id = Request_Bin(*register_text, text.count);
+    }
+    if tack.bin_id.index != -1 {
+        Set_Bin_Data(*register_text, *tack.bin_id, text);
+    }
+    tack.count = text.count;
+    if register < #char "0" || register > #char "9" {
+        Push_Text_To_Number_Registers(text);
+    }
+}
+
+Push_Text_To_Number_Registers :: (text: []u32) {
+    tack := Push_Front(*registers.number_registers, .{});   
+    if text.count > 0 {
+        tack.bin_id = Request_Bin(*register_text, text.count);
+        Set_Bin_Data(*register_text, *tack.bin_id, text);
+        tack.count = text.count;
+    }
+}

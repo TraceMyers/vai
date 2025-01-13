@@ -235,6 +235,8 @@ Prepend_Line_And_Enter_Insert_Mode :: #bake_arguments Insert_Line_And_Enter_Inse
 
 Delete_Line :: () {
     Init_Cursor_Proc_Or_Return(true);
+    line := Line_View(text_buffer, cursor.y);
+    Set_Register_Text(selected_register, line);
     if cursor.y == 0 && text_buffer.lines.count == 1 {
         Clear_Line(text_buffer, 0);
         cursor.x = 0;
@@ -646,9 +648,9 @@ Toggle_Letter_Case :: () {
     line := Line_View(text_buffer, cursor.y);
     letter := line[cursor.x];
     if Is_Alpha_Upper(letter) {
-        Replace_Code_Point(text_buffer, cursor.y, cursor.x, To_Lower(letter, false));
+        line[cursor.x] = To_Lower(letter, false);
     } else if Is_Alpha_Lower(letter) {
-        Replace_Code_Point(text_buffer, cursor.y, cursor.x, To_Upper(letter, false));
+        line[cursor.x] = To_Upper(letter, false);
     }
 }
 
@@ -793,6 +795,26 @@ Enter_Search_Mode :: () {
     case;
     }
 }
+
+Yank_Line :: () {
+    Init_Cursor_Proc_Or_Return(true);
+    line := Line_View(text_buffer, cursor.y);
+    Set_Register_Text(selected_register, line);
+}
+
+Paste :: (below: bool) {
+    Init_Cursor_Proc_Or_Return(true);
+    register_text := Get_Register_Text(selected_register);
+    if register_text.count > 0 {
+        if below {
+            cursor.y += 1;
+        }
+        Insert_Line(text_buffer, cursor.y);
+        Insert_Code_Points(text_buffer, cursor.y, 0, register_text);
+    }
+}
+Paste_Below :: #bake_arguments Paste(below=true);
+Paste_Above :: #bake_arguments Paste(below=false);
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

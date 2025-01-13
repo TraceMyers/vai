@@ -551,6 +551,8 @@ append_new_line_sequence := u32.[#char "o"];
 
 action_executor_data: ActionExecutorData;
 
+selected_register := DEFAULT_REGISTER;
+
 play_input_record: bool;
 
 mid_change: bool;

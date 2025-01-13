@@ -65,6 +65,7 @@ Vai_Main :: () {
 #import "System";
 #import "Sort";
 #import "Bit_Operations";
+#import "Hash_Table";
 #if OS == .WINDOWS {
     #import "Windows";
 }

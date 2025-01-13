@@ -4,24 +4,33 @@ CircularBuffer :: struct($T: Type) {
     begin: s64 = -1;
     end: s64 = -1;
     count: s64;
+    item_cleanup_proc: (*T);
     allow_overwrite: bool;
 }
 
-Circular_Buffer_Initialize :: (buffer: *CircularBuffer($T), item_count: s64, allow_overwrite: bool) {
+Circular_Buffer_Initialize :: (buffer: *CircularBuffer($T), item_count: s64, cleanup_proc: (*T), allow_overwrite: bool) {
     array_reset_keeping_memory(*buffer.items);
     array_resize(*buffer.items, item_count);
     buffer.begin = -1;
     buffer.end = -1;
     buffer.count = 0;
+    buffer.item_cleanup_proc = cleanup_proc;
     buffer.allow_overwrite = allow_overwrite;
 }
 
 Circular_Buffer_Reset :: (using buffer: *CircularBuffer($T)) {
+    if item_cleanup_proc && count > 0 {
+        item := Peek_Back(buffer);
+        for 0..count-1 {
+            item_cleanup_proc(item);
+            item = Seek_Back(buffer, item);
+        }
+    }
     array_reset(*items);
     buffer.* = .{};
 }
 
-Push_Front :: (using buffer: *CircularBuffer($T), item: T) {
+Push_Front :: (using buffer: *CircularBuffer($T), item: T) -> *T {
     if count == 0 {
         begin = 0;
         end = 0;
@@ -30,15 +39,19 @@ Push_Front :: (using buffer: *CircularBuffer($T), item: T) {
         begin = Decrement_Wrap(begin, 0, items.count-1);
         if count == items.count {
             assert(allow_overwrite);
+            if item_cleanup_proc != null {
+                item_cleanup_proc(*items[begin]);
+            }
             end = Decrement_Wrap(end, 0, items.count-1);
         } else {
             count += 1;
         }
     }
     items[begin] = item;
+    return *items[begin];
 }
 
-Push_Back :: (using buffer: *CircularBuffer($T), item: T) {
+Push_Back :: (using buffer: *CircularBuffer($T), item: T) -> *T {
     if count == 0 {
         begin = 0;
         end = 0;
@@ -47,12 +60,16 @@ Push_Back :: (using buffer: *CircularBuffer($T), item: T) {
         end = Increment_Wrap(end, 0, items.count-1);
         if count == items.count {
             assert(allow_overwrite);
+            if item_cleanup_proc != null {
+                item_cleanup_proc(*items[end]);
+            }
             begin = Increment_Wrap(begin, 0, items.count-1);
         } else {
             count += 1;
         }
     }
     items[end] = item;
+    return *items[end];
 }
 
 Pop_Back :: inline (using buffer: *CircularBuffer($T)) -> T {
