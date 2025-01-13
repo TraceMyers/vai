@@ -235,8 +235,7 @@ Prepend_Line_And_Enter_Insert_Mode :: #bake_arguments Insert_Line_And_Enter_Inse
 
 Delete_Line :: () {
     Init_Cursor_Proc_Or_Return(true);
-    line := Line_View(text_buffer, cursor.y);
-    Set_Register_Text(selected_register, line);
+    Set_Selected_Register_Text_To_Current_Line(text_buffer, cursor);
     if cursor.y == 0 && text_buffer.lines.count == 1 {
         Clear_Line(text_buffer, 0);
         cursor.x = 0;
@@ -798,25 +797,70 @@ Enter_Search_Mode :: () {
 
 Yank_Line :: () {
     Init_Cursor_Proc_Or_Return(true);
+    Set_Selected_Register_Text_To_Current_Line(text_buffer, cursor);
+}
+
+Set_Selected_Register_Text_To_Current_Line :: inline (text_buffer: *TextBuffer, cursor: *Cursor) {
     line := Line_View(text_buffer, cursor.y);
+    line = Paste_Arrays(u32.[#char "\n"], line);
     Set_Register_Text(selected_register, line);
 }
 
-Paste :: (below: bool) {
+Paste :: (after: bool) {
     Init_Cursor_Proc_Or_Return(true);
-    register_text := Get_Register_Text(selected_register);
-    if register_text.count > 0 {
-        if below {
-            cursor.y += 1;
+    register_lines, start_with_newline := Get_Register_Lines(selected_register);
+    paste_x := cursor.x;
+    prev_count, line_added_count: s64;
+    for register_lines {
+        first_line := it_index == 0;
+        if it_index == 0 {
+            if start_with_newline {
+                if after {
+                    cursor.y += 1;
+                }
+                Insert_Line(text_buffer, cursor.y);
+            }
+        } else {
+            Break_Line_At(text_buffer, cursor.y, paste_x);
+            paste_x = 0;
         }
-        Insert_Line(text_buffer, cursor.y);
-        Insert_Code_Points(text_buffer, cursor.y, 0, register_text);
+        prev_count = Line_Count(text_buffer, cursor.y);
+        Insert_Code_Points(text_buffer, cursor.y, paste_x, it);
+        new_count := Line_Count(text_buffer, cursor.y);
+        line_added_count = new_count - prev_count;
+        paste_x += xx line_added_count;
     }
 }
-Paste_Below :: #bake_arguments Paste(below=true);
-Paste_Above :: #bake_arguments Paste(below=false);
+Paste_After :: #bake_arguments Paste(after=true);
+Paste_Before :: #bake_arguments Paste(after=false);
 
+    
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+Get_Register_Lines :: (register: u32) -> (lines: [][]u32, first_line_is_new_line: bool) {
+    register_text := Get_Register_Text(selected_register);
+    lines: [..][]u32;
+    lines.allocator = temp;
+    first_line_newline: bool;
+    if register_text.count > 0 {
+        cur_line := array_add(*lines);
+        cur_line.data = register_text.data;
+        for register_text {
+            if it == #char "\n" {
+                if it_index == 0 {
+                    first_line_newline = true;
+                    cur_line.data += 1;
+                } else {
+                    cur_line.count = (register_text.data + it_index) - cur_line.data;
+                    cur_line = array_add(*lines);
+                    cur_line.data = (register_text.data + it_index) + 1;
+                }
+            }
+        }
+        cur_line.count = (register_text.data + register_text.count) - cur_line.data;
+    }
+    return lines, first_line_newline;
+}
 
 Init_Cursor_Proc_Or_Return :: ($RESET_BLINK := false, $NEED_TEXT_BUFFER := true) #expand {
     `active_layer := Active_View_Layer();

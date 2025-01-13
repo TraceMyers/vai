@@ -275,3 +275,15 @@ To_Lower :: inline (c: $T, $CHECKED := true) -> T
     }
     return c + TO_LOWER_DIFFERENCE;
 }
+
+Paste_Arrays :: (a: []$T, b: []T) -> []T {
+    arr := Temp_Buffer(T, a.count + b.count);
+    Memcpy(arr.data, a.data, a.count);
+    Memcpy(arr.data + a.count, b.data, b.count);
+    return arr;
+}
+
+Memcpy :: (dest: *$T, src: *T, count: s64) #expand {
+    memcpy(dest, src, count * size_of(T));
+}
+
