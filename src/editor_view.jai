@@ -83,14 +83,14 @@ Create_Base_Views :: () {
     // split.layers[0].debug.type = .UNDO_REDO;
     split.layers[0].type = .FILE_EDITOR;
     split.layers[0].file_editor = .{};
-    split.layers[0].file_editor.file_buffer = Get_File_Buffer_ID("test_files/utf8.txt");
-    // split.layers[0].file_editor.file_buffer = Get_File_Buffer_ID(intro_file_name);
+    // split.layers[0].file_editor.file_buffer = Get_File_Buffer_ID("test_files/utf8.txt");
+    split.layers[0].file_editor.file_buffer = Get_File_Buffer_ID(intro_file_name);
 }
 
 Prepare_Intro_File :: () -> string {
-    // INTRO_FILE_NAME :: "intro.txt";
+    INTRO_FILE_NAME :: "intro.txt";
     // INTRO_FILE_NAME :: "test_files/undo_redo.txt";
-    INTRO_FILE_NAME :: "test_files/struct_utilities.jai";
+    // INTRO_FILE_NAME :: "test_files/struct_utilities.jai";
     file_data := read_entire_file(INTRO_FILE_NAME);
     defer free(file_data);
     if file_data.count == 0 {
