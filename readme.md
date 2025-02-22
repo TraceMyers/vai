@@ -1,6 +1,6 @@
 # Vai
 
-![Screenshot]("screenshot.png")
+![Alt text]("screenshot.png" "screenshot")
 
 A gui vim replacement written in Jai, with these goals: 
 
