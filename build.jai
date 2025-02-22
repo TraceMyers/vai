@@ -1,6 +1,9 @@
 
 #run {
     set_build_options_dc(.{do_output=false});
+
+    make_directory_if_it_does_not_exist("bin");
+
     w := compiler_create_workspace();
     build_options := get_build_options(w);
     build_options.entry_point_name = "Vai_Main";
@@ -48,6 +51,7 @@ DO_PROFILING :: false;
 
 #import "Basic";
 #import "Compiler";
+#import "File";
 #if DO_PROFILING {
     prof :: #import "Iprof";
 }
