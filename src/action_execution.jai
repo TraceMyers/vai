@@ -419,7 +419,7 @@ Delete_Word :: (inside: bool, small: bool, delete_trailing_whitespace: bool) {
         Word_Scroll(true, small);
     } else {
         Word_Scroll_To_End(small);
-        Cursor_Scroll_Right();
+        Enter_Insert_Mode(true); // scrolls right even if at end of line
     }
     if cursor.y != save_y {
         cursor.y = save_y;
