@@ -443,7 +443,7 @@ Delete_Selection :: (enter_normal_mode: bool) {
     do_concatenate := selection_end.y != selection_begin.y;
     edit_y_offset: s32 = 1;
 
-    // prepare a buffer to later save data into a register
+    // prepare a buffer to copy in all deleted text that will go into the currently selected register
     code_point_sum := 0;
     for selection_begin.y..selection_end.y {
         code_point_sum += Line_Count(text_buffer, it) + 1;

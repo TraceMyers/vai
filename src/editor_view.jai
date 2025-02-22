@@ -60,8 +60,8 @@ Create_Base_Views :: () {
         empty_id = Add_View(.{type=.PIXELS, inverted=true}, null, ROOT_ID);
     }
     // default file editor
+    intro_file_name := Prepare_Intro_File();
     {
-        intro_file_name := Prepare_Intro_File();
         layer: ViewLayer;
         layer.type = .FILE_EDITOR;
         layer.file_editor = .{};
@@ -84,6 +84,7 @@ Create_Base_Views :: () {
     split.layers[0].type = .FILE_EDITOR;
     split.layers[0].file_editor = .{};
     split.layers[0].file_editor.file_buffer = Get_File_Buffer_ID("test_files/utf8.txt");
+    // split.layers[0].file_editor.file_buffer = Get_File_Buffer_ID(intro_file_name);
 }
 
 Prepare_Intro_File :: () -> string {
