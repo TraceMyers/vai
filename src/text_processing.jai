@@ -36,6 +36,10 @@ Is_Whitespace :: inline (marked_code_point: u32) -> bool {
     return ((marked_code_point & TAB_OR_EXPANDED_SPACE_MARK) != 0) || marked_code_point == #char " ";
 }
 
+Is_Unmarked_Whitespace :: inline (code_point: u32) -> bool {
+    return code_point == #char " " || code_point == #char "\t" || code_point == #char "\n";
+}
+
 Code_Point_Equal_To :: inline (marked_code_point: u32, utf32: u32) -> bool {
     return Strip_Markup(marked_code_point) == utf32;
 }

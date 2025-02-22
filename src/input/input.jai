@@ -499,6 +499,10 @@ ActionDataContainer :: struct {
     proc: Action_Executor = null;
 }
 
+CommandDataContainer :: struct {
+    proc: Command_Executor = null;
+}
+
 ActionExecutorData :: struct {
     entered_normal_mode_past_line_end: bool;
     move_cursor_to_position: IntVector2;

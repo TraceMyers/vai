@@ -11,7 +11,7 @@
     .{.["^"],                   "SCROLL_TO_LINE_NON_WHITESPACE_BEGIN",          .{modes=.NORMAL | .VISUAL,       proc=Cursor_Scroll_To_Line_Begin}},
     .{.["0"],                   "SCROLL_TO_LINE_ZERO",                          .{modes=.NORMAL | .VISUAL,       proc=Cursor_Scroll_To_Line_Zero}},
     .{.["<C-w><C-w>"],          "SCROLL_TO_NEXT_EDITOR",                        .{modes=.NORMAL | .VISUAL,       proc=Scroll_To_Next_Editor}},
-    .{.[":"],                   "ENTER_COMMAND_MODE",                           .{modes=.NORMAL}},
+    .{.[":"],                   "ENTER_COMMAND_MODE",                           .{modes=.NORMAL,                 proc=Enter_Command_Mode}},
     .{.["/"],                   "ENTER_SEARCH_MODE",                            .{modes=.NORMAL,                 proc=Enter_Search_Mode}},
     .{.["v"],                   "ENTER_VISUAL_MODE",                            .{modes=.NORMAL,                 proc=Enter_Visual_Mode}},
     .{.["<CR>"],                "EXECUTE_COMMANDS_AND_ENTER_NORMAL_MODE",       .{modes=.COMMAND,                proc=Enter_Normal_Mode}},
@@ -67,16 +67,16 @@ HERE
 HERE
 );
 
-#insert #run Generate_Struct_Enum_Mapping("Command", u32, "CommandBinding", "COMPTIME_COMMAND_BINDINGS", TempEnumMapping(string, 1), true, "As_Command", true,
+#insert #run Generate_Struct_Enum_Mapping("Command", u32, "CommandBinding", "COMPTIME_COMMAND_BINDINGS", TempEnumMapping(string, 1, CommandDataContainer), true, "As_Command", true,
 #string HERE
-    .{.["none"],        "NONE"},
-    .{.["quit"],        "QUIT"},
-    .{.["edit"],        "OPEN_FILE"},
-    .{.["bnext"],       "NEXT_BUFFER"},
-    .{.["bprev"],       "PREVIOUS_BUFFER"},
-    .{.["vsplit"],      "VERTICAL_SPLIT"},
-    .{.["split"],       "HORIZONTAL_SPLIT"},
-    .{.["set"],         "INTERACT_WITH_OPTIONS"},
-    .{.["write"],       "WRITE_TO_FILE"},
+    .{.["none"],        "NONE",                     .{}},
+    .{.["quit"],        "QUIT",                     .{}},
+    .{.["edit"],        "OPEN_FILE",                .{}},
+    .{.["bnext"],       "NEXT_BUFFER",              .{}},
+    .{.["bprev"],       "PREVIOUS_BUFFER",          .{}},
+    .{.["vsplit"],      "VERTICAL_SPLIT",           .{}},
+    .{.["split"],       "HORIZONTAL_SPLIT",         .{}},
+    .{.["set"],         "INTERACT_WITH_OPTIONS",    .{}},
+    .{.["write"],       "WRITE_TO_FILE",            .{}},
 HERE
 );

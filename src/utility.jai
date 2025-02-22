@@ -293,3 +293,21 @@ Memcpy :: (dest: *$T, src: *T, count: s64) #expand {
     memcpy(dest, src, count * size_of(T));
 }
 
+Tokenize_By_Whitespace :: (in_str: []u32, tokens: *[..][]u32) {
+    cur_token := array_add(tokens);
+    for in_str {
+        if Is_Unmarked_Whitespace(it) {
+            if cur_token.data != null {
+                cur_token = array_add(tokens);
+            }
+        } else {
+            if cur_token.data == null {
+                cur_token.data = in_str.data + it_index;
+            }
+            cur_token.count += 1;
+        }
+    }
+    if cur_token.count == 0 {
+        array_unordered_remove_by_index(tokens, tokens.count-1);
+    }
+}

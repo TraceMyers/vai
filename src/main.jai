@@ -107,3 +107,4 @@ Program_Print :: #import "Program_Print";
 #load "circular_buffer.jai";
 #load "bit_array.jai";
 #load "thread_worker.jai";
+#load "commands.jai";

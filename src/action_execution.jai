@@ -155,6 +155,12 @@ Enter_Normal_Mode :: () {
         do_search := false;
         if layer.vim_console.mode == {
         case .COMMAND;
+            if auxiliary_input_buffer.count > 0 {
+                temp_buffer: [..]u32;
+                temp_buffer.allocator = temp;
+                Get_Unmarked_Utf32(auxiliary_input_buffer, *temp_buffer);
+                Parse_And_Execute_Commands(temp_buffer);
+            }
         case .SEARCH;
             if auxiliary_input_buffer.count > 0 {
                 Get_Unmarked_Utf32(auxiliary_input_buffer, *search_pattern);
@@ -822,6 +828,20 @@ Enter_Search_Mode :: () {
     }
 }
 
+Enter_Command_Mode :: () {
+    Init_Cursor_Proc_Or_Return();
+
+    if Active_View_Layer().type == {
+    case .FILE_EDITOR;
+        vi_mode = .COMMAND;
+        background_view_id = active_view_id;
+        active_view_id = vim_console_id;
+        array_reset_keeping_memory(*auxiliary_input_buffer);
+        Active_View_Layer().vim_console.mode = .COMMAND;
+    case;
+    }
+}
+
 Yank_Line :: () {
     Init_Cursor_Proc_Or_Return(true);
     Set_Selected_Register_Text_To_Current_Line(text_buffer, cursor);
@@ -950,6 +970,7 @@ Clamp_X_To_Line :: (x: s32, line: []u32, $TAB_EXPANSION_SKIP: TabExpansionSkip =
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 Action_Executor :: #type ();
+Command_Executor :: #type (args: [][]u32);
 
 TabExpansionSkip :: enum {
     NONE;

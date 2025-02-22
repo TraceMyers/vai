@@ -248,11 +248,16 @@ Render_Text_Selection_Blocks :: (renderer: *TextRenderer, text_buffer: *TextBuff
     }
 }
 
-Immediate_Render_Marked_Line :: (renderer: *TextRenderer, line: []u32, color: bRGB, depth := DEFAULT_DEPTH)  {
+Immediate_Render_Marked_Line :: (renderer: *TextRenderer, line: []u32, color: bRGB, prefix := "", depth := DEFAULT_DEPTH)  {
     Scoped_Immediate_Text_Render(depth);
     color_buffer := TextColorLocation.[.{color, 0}];
     utf8 := Get_Unmarked_Utf8(line);
-    prefixed := tprint("/%", As_String(utf8));
+    prefixed: string;
+    if prefix.count > 0 {
+        prefixed = tprint("%0%", prefix, As_String(utf8));
+    } else {
+        prefixed = As_String(utf8);
+    }
     Render_Text_Line(renderer, *renderer.align_info_main, As_Array(prefixed, u8), color_buffer);    
 }
 
