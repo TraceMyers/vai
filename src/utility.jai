@@ -166,7 +166,7 @@ Inline_Buffer_Append :: inline (buf: *[]$T, item: T) {
 }
 
 Inline_Buffer_Append :: inline (buf: *[]$T, items: []T)  {
-    for items.count {
+    for items {
         Inline_Buffer_Append(buf, it);
     }
 }

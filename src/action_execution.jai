@@ -443,9 +443,10 @@ Delete_Selection :: (enter_normal_mode: bool) {
     do_concatenate := selection_end.y != selection_begin.y;
     edit_y_offset: s32 = 1;
 
+    // prepare a buffer to later save data into a register
     code_point_sum := 0;
     for selection_begin.y..selection_end.y {
-        code_point_sum += Line_Count(text_buffer, it);
+        code_point_sum += Line_Count(text_buffer, it) + 1;
     }
     num_lines := selection_end.y - selection_begin.y + 1;
     register_buffer := Temp_Buffer(u32, code_point_sum + num_lines + 1);
@@ -470,8 +471,20 @@ Delete_Selection :: (enter_normal_mode: bool) {
         } else {
             end_x = line_count;
         }
-
         remove_count := end_x - begin_x;
+
+        // text that'll go into a register. convert from line format to string format
+        if it == selection_begin.y && remove_count == line.count {
+            Inline_Buffer_Append(*register_buffer, #char "\n");
+        }
+        line_section := line;
+        line_section.data += begin_x;
+        line_section.count = remove_count;
+        Inline_Buffer_Append(*register_buffer, line_section);
+        if end_x == line_count && it != selection_end.y {
+            Inline_Buffer_Append(*register_buffer, #char "\n");
+        }
+
         if remove_count <= 0 || remove_count == line_count {
             if it == selection_end.y {
                 do_concatenate = false;
@@ -488,7 +501,8 @@ Delete_Selection :: (enter_normal_mode: bool) {
     cursor.x = Clamp_X_To_Line(selection_begin.x, Line_View(text_buffer, cursor.y));
     cursor.target_x = cursor.x;
 
-    // if this is a multi-line delete and the first and last line both had remaining characters
+    // if this is a multi-line delete and the first and last line both had remaining characters, they become
+    // a single concatenated line
     if do_concatenate {
         Enter_Insert_Mode(false);
         Cursor_Scroll_Down();
@@ -502,6 +516,9 @@ Delete_Selection :: (enter_normal_mode: bool) {
             Cursor_Scroll_Right();
         }
     }
+
+    // whatever text got deleted goes into the selected register
+    Set_Register_Text(selected_register, register_buffer);
 }
 Delete_Selection_And_Enter_Normal_Mode :: #bake_arguments Delete_Selection(enter_normal_mode=true);
 
@@ -822,6 +839,7 @@ Paste :: (after: bool) {
     paste_x := cursor.x;
     prev_count, line_added_count: s64;
     for register_lines {
+        Log("register line: %", it);
         first_line := it_index == 0;
         if it_index == 0 {
             if start_with_newline {
@@ -834,6 +852,7 @@ Paste :: (after: bool) {
         } else {
             Break_Line_At(text_buffer, cursor.y, paste_x);
             paste_x = 0;
+            cursor.y += 1;
         }
         prev_count = Line_Count(text_buffer, cursor.y);
         Insert_Code_Points(text_buffer, cursor.y, paste_x, it);
