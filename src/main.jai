@@ -34,6 +34,8 @@ Vai_Main :: () {
         if resized {
             Post_Resize_Window();
         }
+        Update_Window_Events();
+        if quit then break;
         any_input := Translate_Inputs_To_Actions();
         do_full_update := any_input | resized | ALWAYS_FULL_UPDATE;
 
@@ -44,9 +46,6 @@ Vai_Main :: () {
 
         reset_temporary_storage();
         Sample_Frame_Time();
-
-        // put this at the end so we can exit the loop immediately when the window has been closed by the user
-        Update_Window_Events();
     }
 
     #if DEBUG_MEMORY {

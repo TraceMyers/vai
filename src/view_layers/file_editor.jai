@@ -54,8 +54,11 @@ Render_File_Editor_Text :: (using file_editor: *FileEditor, is_active: bool) {
         Flush_Draws();
         cursor.style = ifx vi_mode == .INSERT then .VERTICAL_LINE else .BLOCK;
         Render_Text_Cursor(*renderer, *file_editor.cursor);
-        Set_Shader_For_Text();
     }
+
+    Render_Cursor_Line_Block(*renderer, *file_editor.cursor);
+
+    Set_Shader_For_Text();
 }
 
 Render_File_Editor_Foreground :: (using file_editor: *FileEditor, is_active: bool) {

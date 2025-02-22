@@ -122,10 +122,23 @@ Render_Line_Numbers :: (renderer: *TextRenderer, line_count: s32) {
 
     color_buffer := TextColorLocation.[.{.{110, 110, 110}, 0}];
 
+    cursor := Layer_Cursor(renderer.view_layer);
+    cursor_y := ifx cursor then cursor.y else 0;
+
     renderer.rendered_line_count = 0;
     start_row := renderer.text_view_clip.y + 1;
     for r : 0..line_count-1 {
-        line_number_text := tprint("%", start_row + r);
+        line_number_text: string;
+        if settings_file_data.relative_line_numbers {
+            relative_number := start_row + r - (cursor_y + 1);
+            if relative_number == 0 {
+                line_number_text = tprint("%", start_row + r);
+            } else {
+                line_number_text = tprint("%", relative_number);
+            }
+        } else {
+            line_number_text = tprint("%", start_row + r);
+        }
         Render_Text_Line(renderer, *renderer.align_info_gutter, As_Array(line_number_text, u8), color_buffer);
     }
 }
@@ -192,6 +205,17 @@ Render_Text_Cursor :: (renderer: *TextRenderer, cursor: *Cursor, just_want_out_r
     }
 
     return IntVector2.{ul_x, ul_y}, IntVector2.{lr_x, lr_y};
+}
+
+Render_Cursor_Line_Block :: (renderer: *TextRenderer, cursor: *Cursor, depth := DEFAULT_DEPTH) {
+    _, ul_y := Text_To_Render_Space(renderer, cursor.x, cursor.y);
+    ul_x := renderer.align_info_main.screen_x;
+    lr_x := rendering_scissor_lr.x;
+    lr_y := ul_y + renderer.screen_line_height;
+
+    Set_Shader_For_Blended_Color();
+    Render_Quad(IntVector2.{ul_x, ul_y}, IntVector2.{lr_x, lr_y}, .{rgb=fRGB_WHITE, a=0.09}, depth=depth);
+    Flush_Draws();
 }
 
 Render_Text_Selection_Blocks :: (renderer: *TextRenderer, text_buffer: *TextBuffer, cursor: *Cursor, y_filter := -1) {

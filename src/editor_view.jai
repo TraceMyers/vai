@@ -233,8 +233,7 @@ Render_Views :: (full_update: bool) {
     if Is_Empty(*view_pool) then return;
     
     if full_update {
-        // walking the view tree multiple times because tree traversal is pretty cheap + number of draw calls can be reduced
-        // by grouping draws into natural batches (background rects, lines, text, etc..)
+        // walking the view tree multiple times because tree traversal is pretty cheap + number of draw calls can be reduced by grouping draws into natural batches (background rects, lines, text, etc..)
         Set_Shader_For_Blended_Color();
         Walk_View_Tree(0, Render_View, ViewRenderPass.BACKGROUND);
         Flush_Draws();
@@ -259,6 +258,8 @@ Render_View :: (view: *View, view_id: s64, viewport_id: s64, render_pass: ViewRe
     if view.layers.data != null {
         rect := viewport_rects[viewport_id];
         rendering_scissor_ul, rendering_scissor_lr = Viewport_Rect_Points(*rect, s32);
+        
+        Flush_Draws();
 
         if render_pass == {
         case .IMAGES;       #through;

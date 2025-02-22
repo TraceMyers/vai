@@ -443,6 +443,14 @@ Delete_Selection :: (enter_normal_mode: bool) {
     do_concatenate := selection_end.y != selection_begin.y;
     edit_y_offset: s32 = 1;
 
+    code_point_sum := 0;
+    for selection_begin.y..selection_end.y {
+        code_point_sum += Line_Count(text_buffer, it);
+    }
+    num_lines := selection_end.y - selection_begin.y + 1;
+    register_buffer := Temp_Buffer(u32, code_point_sum + num_lines + 1);
+    register_buffer.count = 0;
+
     for selection_begin.y..selection_end.y {
         edit_y: s32 = ---;
         begin_x, end_x: s32 = ---;
@@ -454,7 +462,9 @@ Delete_Selection :: (enter_normal_mode: bool) {
             edit_y = selection_begin.y + edit_y_offset;
         }
 
-        line_count: s32 = xx Line_Count(text_buffer, edit_y);
+        line := Line_View(text_buffer, edit_y);
+        line_count: s32 = xx line.count;
+
         if it == selection_end.y {
             end_x = ifx line_count == 0 then 0 else selection_end.x;
         } else {
@@ -819,6 +829,7 @@ Paste :: (after: bool) {
                     cursor.y += 1;
                 }
                 Insert_Line(text_buffer, cursor.y);
+                paste_x = 0;
             }
         } else {
             Break_Line_At(text_buffer, cursor.y, paste_x);

@@ -160,9 +160,15 @@ Inline_Buffer :: inline (from_data: []$T) -> []T {
 }
 
 // appending for when you know how much space you have. manual dynamic array.
-Inline_Buffer_Append :: inline (buf: *[]$T, item: T) #expand {
+Inline_Buffer_Append :: inline (buf: *[]$T, item: T) {
     buf.count += 1;
     buf.*[buf.count-1] = item;
+}
+
+Inline_Buffer_Append :: inline (buf: *[]$T, items: []T)  {
+    for items.count {
+        Inline_Buffer_Append(buf, it);
+    }
 }
 
 Arrays_Equal :: inline (a: []$T, b: []T) -> bool {
