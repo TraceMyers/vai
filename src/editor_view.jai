@@ -31,7 +31,7 @@ Create_Base_Views :: () {
     transparent_blue.b = 0.95;
     vim_console_background_color = transparent_blue;
     top_bar_background_color = transparent_blue.rgb;
-    file_editor_background_color = .{.1, .12, .15};
+    file_editor_background_color = .{.02, .18, .24};
     file_editor_outline_color = .{1,1,1,0.15};
 
     // root
