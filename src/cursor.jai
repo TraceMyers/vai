@@ -21,9 +21,10 @@ Cursor :: struct {
     blink_timer: float32;
     scroll_timer: float32;
     begin_selection: IntVector2 = .{-1, -1};
+    move_history: CursorMoveHistory;
     style: CursorStyle;
     reset_blink: bool;
-    move_history: CursorMoveHistory;
+    just_moved: bool;
 }
 
 TextSelection :: struct {

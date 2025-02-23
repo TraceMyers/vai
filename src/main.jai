@@ -1,6 +1,7 @@
 
 // TODO: font scaling in a not ugly way - how to use scale + loaded font sizes effectively
 // NOTE: put off options implementations for a while, because there are a lot of non-vim and vim options that could be brought together in a nice way, but it's probably hard to see until having gone without it for a bit.
+// TODO: cursor.just_moved isn't handled right
 
 quit: bool;
 

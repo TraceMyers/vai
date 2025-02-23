@@ -77,16 +77,16 @@ Create_Base_Views :: () {
     // active_layer: s8 = -1;
 
     // test split file editor
-    split := Split_View(*view_pool.items[active_view_id], .VERTICAL, false);
-    split.layers[0].type = .FILE_EDITOR;
-    split.layers[0].file_editor = .{};
-    split.layers[0].file_editor.file_buffer = Get_File_Buffer_ID(intro_file_name);
+    // split := Split_View(*view_pool.items[active_view_id], .VERTICAL, false);
+    // split.layers[0].type = .FILE_EDITOR;
+    // split.layers[0].file_editor = .{};
+    // split.layers[0].file_editor.file_buffer = Get_File_Buffer_ID(intro_file_name);
 
     // split_id := Get_Item_Index(*view_pool, split);
-    split_2 := Split_View(split, .HORIZONTAL, false);
-    split_2.layers[0].type = .FILE_EDITOR;
-    split_2.layers[0].file_editor = .{};
-    split_2.layers[0].file_editor.file_buffer = Get_File_Buffer_ID(intro_file_name);
+    // split_2 := Split_View(split, .HORIZONTAL, false);
+    // split_2.layers[0].type = .FILE_EDITOR;
+    // split_2.layers[0].file_editor = .{};
+    // split_2.layers[0].file_editor.file_buffer = Get_File_Buffer_ID(intro_file_name);
 }
 
 Prepare_Intro_File :: () -> string {
@@ -341,6 +341,15 @@ Close_Text_Buffer :: (id: s64) {
     id_pair := IDPair.{id, valid_id};
     Walk_View_Tree(0, Replace_Invalid_File_Buffer, id_pair, false);
 }
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Update_Views :: () {
+//     // not a whole lot happening here rn...
+//     if Active_View_Layer().type == .FILE_EDITOR {
+
+//     }
+// }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

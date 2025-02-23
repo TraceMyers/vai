@@ -11,6 +11,7 @@ Cursor_Scroll_Down :: () {
     cursor.y = min(cursor.y+1, sdw(max(text_buffer.lines.count-1, 0)));
     line := Line_View(text_buffer, cursor.y);
     cursor.x = Clamp_X_To_Line(cursor.target_x, line);
+    cursor.just_moved = true;
 }
 
 Cursor_Scroll_Up :: () {
@@ -18,6 +19,7 @@ Cursor_Scroll_Up :: () {
     cursor.y = max(cursor.y-1, sdw(0));
     line := Line_View(text_buffer, cursor.y);
     cursor.x = Clamp_X_To_Line(cursor.target_x, line);
+    cursor.just_moved = true;
 }
 
 Cursor_Scroll_Right :: () {
@@ -26,6 +28,7 @@ Cursor_Scroll_Right :: () {
     cursor.x += 1;
     cursor.x = Clamp_X_To_Line(cursor.x, line, .FORWARD);
     cursor.target_x = cursor.x;
+    cursor.just_moved = true;
 }
 
 Cursor_Scroll_Left :: () {
@@ -34,6 +37,7 @@ Cursor_Scroll_Left :: () {
     cursor.x -= 1;
     cursor.x = Clamp_X_To_Line(cursor.x, line);
     cursor.target_x = cursor.x;
+    cursor.just_moved = true;
 }
 
 Cursor_Scroll_To_Top :: () {
@@ -41,6 +45,7 @@ Cursor_Scroll_To_Top :: () {
     cursor.y = 0;
     line := Line_View(text_buffer, cursor.y);
     cursor.x = Clamp_X_To_Line(cursor.target_x, line);
+    cursor.just_moved = true;
 }
 
 Cursor_Scroll_To_Bottom :: () {
@@ -48,6 +53,7 @@ Cursor_Scroll_To_Bottom :: () {
     cursor.y = xx (text_buffer.lines.count-1);
     line := Line_View(text_buffer, cursor.y);
     cursor.x = Clamp_X_To_Line(cursor.target_x, line);
+    cursor.just_moved = true;
 }
 
 Cursor_Scroll_To_Line_End :: () {
@@ -56,6 +62,7 @@ Cursor_Scroll_To_Line_End :: () {
     cursor.x = max(sdw(ifx vi_mode == .INSERT then line.count else line.count-1), 0);
     cursor.x = Clamp_X_To_Line(cursor.x, line);
     cursor.target_x = cursor.x;
+    cursor.just_moved = true;
 }
 
 Cursor_Scroll_To_Line_Begin :: () {
@@ -74,12 +81,14 @@ Cursor_Scroll_To_Line_Begin :: () {
         cursor.x = 0;
     }
     cursor.target_x = cursor.x;
+    cursor.just_moved = true;
 }
 
 Cursor_Scroll_To_Line_Zero :: () {
     Init_Cursor_Proc_Or_Return(true);
     cursor.x = 0;
     cursor.target_x = 0;
+    cursor.just_moved = true;
 }
 
 Scroll_To_Next_Editor :: () {
@@ -129,6 +138,7 @@ Insert_New_Line :: () {
     Break_Line_At(text_buffer, cursor.y, cursor.x);
     cursor.y += 1;
     cursor.x = 0;
+    cursor.just_moved = true;
 }
 
 Enter_Insert_Mode :: (append: bool) {
