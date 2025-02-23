@@ -96,7 +96,7 @@ Prepare_Intro_File :: () -> string {
     file_data := read_entire_file(INTRO_FILE_NAME);
     defer free(file_data);
     if file_data.count == 0 {
-        write_entire_file(INTRO_FILE_NAME, "type ':e somefilename' to open a file");
+        write_entire_file(INTRO_FILE_NAME, INTRO_FILE_TEXT);
     }
     return INTRO_FILE_NAME;
 }
@@ -228,10 +228,10 @@ Process_Text_Input :: (utf32: []u32) -> bool {
     return true;
 }
 
-Delete_View :: (id: s64) {
+Clear_View :: (id: s64) {
     view := Get_Item(*view_pool, id);
     for view.children {
-        Delete_View(it);
+        Clear_View(it);
     }
     if view.layers.data != null {
         layer_chunk_id := Get_Item_Index(*view_layer_pool, xx view.layers.data);
@@ -240,6 +240,19 @@ Delete_View :: (id: s64) {
         view.layers.count = 0;
     }
     view.* = .{};
+}
+
+Find_Valid_Child_View_To_Make_Active :: (parent: *View) -> s64 {
+    for child_id : parent.children {
+        child := Get_Item(*view_pool, child_id);
+        if child.layers.data == null {
+            assert(child.children.count > 0);
+            return Find_Valid_Child_View_To_Make_Active(child);
+        } else {
+            return child_id;
+        }
+    }
+    return -1;
 }
 
 // TODO: using dependent id to clean up active view is messy
@@ -251,7 +264,7 @@ Close_View :: (id: s64, dependent_id := -1) {
     if parent.children.count == 1 && parent_id == base_empty_view_id {
         quit = true;
     } else {
-        Delete_View(id);
+        Clear_View(id);
 
         for 0..parent.children.count-1 {
             child := parent.children[it];
@@ -278,11 +291,12 @@ Close_View :: (id: s64, dependent_id := -1) {
             child.viewport.bottom = 0.0;
             child.viewport.inverted = true;
 
+            valid_active_id := Find_Valid_Child_View_To_Make_Active(parent);
             if active_view_id == id || active_view_id == dependent_id {
-                active_view_id = parent.children[0];
+                active_view_id = valid_active_id;
             }
             if background_view_id == id || background_view_id == dependent_id {
-                background_view_id = parent.children[0];
+                background_view_id = valid_active_id;
             }
         }
     }
@@ -744,3 +758,17 @@ base_empty_view_id: s64;
 view_layer_id_counter: u32;
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
+
+INTRO_FILE_TEXT :: #string HERE
+type ':e somefilename' to open a file.
+type ':vsplit somefilename' to open a file with a vertical split.
+type ':close view' or just ':close' to close a view.
+type ':close buffer' to close a text buffer
+type ':write' to write the selected buffer to file.
+type ':quit' to quit the program.
+
+For learning vim motions, check out vim-adventures.com. 
+If you're already familiar with how to use vim, you'll probably notice a few things are different 
+in vai, and many features are missing. In the future, more will be different, and many more
+features will be available... it just takes time ;d 
+HERE

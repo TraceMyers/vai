@@ -15,7 +15,7 @@ Vai_Main :: () {
 
     if !Scoped_Construct(Text_Buffers)          then return;
     if !Scoped_Construct(Runtime_Settings)      then return;
-    if !Create_Window("VAI")                    then return;
+    if !Create_Window("Vai")                    then return;
     if !Scoped_Construct(Graphics_Backend)      then return;
     if !Scoped_Construct(Input)                 then return;
     if !Scoped_Construct(Viewports)             then return;

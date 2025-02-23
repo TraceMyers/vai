@@ -173,6 +173,7 @@ Enter_Normal_Mode :: () {
         assert(background_view_id != -1);
         active_view_id = background_view_id;
         background_view_id = -1;
+        Log("active: %, background: %", active_view_id, background_view_id);
         if do_search  {
             Text_Pattern_Search_Forward();
         }
