@@ -123,19 +123,27 @@ Execute_Command_Close :: (args: [][]u32) {
     }
 }
 
-Execute_Command_Open :: (args: [][]u32) {
-    if args.count == 0 {
-        return;
-    }
+Get_File_Editor_Background_Layer :: () -> *View, *ViewLayer {
     if background_view_id < 0 {
-        return;
+        return null, null;
     }
     bg_view := View_From_ID(background_view_id);
     bg_layer := Active_Layer_Of_View(bg_view);
     if bg_layer == null {
-        return;
+        return null, null;
     }
     if bg_layer.type != .FILE_EDITOR {
+        return null, null;
+    }
+    return bg_view, bg_layer;
+}
+
+Execute_Command_Open :: (args: [][]u32) {
+    if args.count == 0 {
+        return;
+    }
+    _, bg_layer := Get_File_Editor_Background_Layer();
+    if bg_layer == null {
         return;
     }
     filename := Encode(As_String(args[0]), .UTF32, .UTF8);
@@ -144,5 +152,23 @@ Execute_Command_Open :: (args: [][]u32) {
         return;
     }
     bg_layer.file_editor.file_buffer = new_buffer_id;
-
 }
+
+Execute_Command_Split :: (args: [][]u32, vertical: bool) {
+    // note that 'horizontal' and 'vertical' are inverted compared to normal vim, because I don't think vim's version of these this is intuitive
+    bg_view, bg_layer := Get_File_Editor_Background_Layer();
+    if bg_layer == null {
+        return;
+    }
+    new_view := Split_View(bg_view, ifx vertical then .VERTICAL else .HORIZONTAL, false);
+    background_view_id = Get_Item_Index(*view_pool, new_view);
+    file_editor_id := bg_layer.file_editor.file_buffer;
+    if args.count != 0 {
+        filename := Encode(As_String(args[0]), .UTF32, .UTF8);
+        new_buffer_id := Get_File_Buffer_ID(filename);
+        if new_buffer_id != -1 then file_editor_id = new_buffer_id;
+    }
+    new_view.layers[0].file_editor.file_buffer = file_editor_id;
+}
+Execute_Command_Split_Vertical :: #bake_arguments Execute_Command_Split(vertical=true);
+Execute_Command_Split_Horizontal :: #bake_arguments Execute_Command_Split(vertical=false);

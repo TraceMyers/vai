@@ -114,6 +114,7 @@ Scroll_To_Next_Editor :: () {
     for sort_info {
         if it.view_id == active_view_id {
             next_editor = it_index + 1;
+            break;
         }
     }
     if next_editor >= sort_info.count {

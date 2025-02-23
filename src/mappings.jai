@@ -75,8 +75,8 @@ HERE
     .{.["open"],                "OPEN_FILE",                .{proc=Execute_Command_Open}},
     .{.["buffer-next"],         "NEXT_BUFFER",              .{}},
     .{.["buffer-previous"],     "PREVIOUS_BUFFER",          .{}},
-    .{.["split-vertical"],      "VERTICAL_SPLIT",           .{}},
-    .{.["split-horizontal"],    "HORIZONTAL_SPLIT",         .{}},
+    .{.["split-vertical"],      "VERTICAL_SPLIT",           .{proc=Execute_Command_Split_Vertical}},
+    .{.["split-horizontal"],    "HORIZONTAL_SPLIT",         .{proc=Execute_Command_Split_Horizontal}},
     .{.["set"],                 "INTERACT_WITH_OPTION",     .{}},
     .{.["save"],                "SAVE_TO_FILE",             .{}},
 HERE

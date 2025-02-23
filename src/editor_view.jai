@@ -214,7 +214,7 @@ Split_View :: (v: *View, direction: SplitDirection, set_as_active := true) -> *V
     }
     new_view := Get_Item(*view_pool, new_view_id);
 
-    if direction == .HORIZONTAL {
+    if direction == .VERTICAL {
         v.viewport.top = 0.5;
         new_view.viewport.bottom = 0.5;
     } else {
@@ -773,7 +773,7 @@ view_layer_id_counter: u32;
 
 INTRO_FILE_TEXT :: #string HERE
 type ':open somefilename' to open a file.
-type ':split somefilename' to open a file with a vertical split.
+type ':split-horizontal somefilename' to open a file in side-by-side.
 type ':close view' or just ':close' to close a view.
 type ':close buffer' to close a text buffer
 type ':save' to write the selected buffer to file.
