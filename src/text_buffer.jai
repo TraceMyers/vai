@@ -104,8 +104,11 @@ Load_File_Into_Buffer :: (path: string) -> s64 {
     line_count := Process_Per_Line(file_string, Count_Len_Total, *line_len_total);
 
     INEFFICIENCY_FACTOR :: 1.25;
-    avg_line_len := line_len_total / line_count;
-    expected_bin_ct: s64 = xx (cast(float32)(Div_Ceil(avg_line_len, 32) * line_count) * INEFFICIENCY_FACTOR);
+    expected_bin_ct := 32;
+    if line_count != 0 {
+        avg_line_len := line_len_total / line_count;
+        expected_bin_ct = xx (cast(float32)(Div_Ceil(avg_line_len, 32) * line_count) * INEFFICIENCY_FACTOR);
+    }
     buf_index := Request_Item(*file_buffers);
     buffer := Get_Item(*file_buffers, buf_index);
     Initialize_Text_Buffer(buffer, copy_string(path), line_count, expected_bin_ct);

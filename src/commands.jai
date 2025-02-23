@@ -150,9 +150,13 @@ Execute_Command_Open :: (args: [][]u32) {
         return;
     }
     filename := Encode(As_String(args[0]), .UTF32, .UTF8);
+    if filename.count == 0 {
+        return;
+    }
     new_buffer_id := Get_File_Buffer_ID(filename);
     if new_buffer_id == -1 {
-        return;
+        write_entire_file(filename, " ");
+        new_buffer_id = Get_File_Buffer_ID(filename);
     }
     bg_layer.file_editor.file_buffer = new_buffer_id;
 }
