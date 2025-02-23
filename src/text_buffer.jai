@@ -115,6 +115,36 @@ Load_File_Into_Buffer :: (path: string) -> s64 {
     return buf_index;
 }
 
+Save_Buffer_To_File :: (id: s64) {
+    Commit_And_Empty_Utf32_Buffers();
+    text_buffer := *file_buffers.items[id];
+
+    // count bytes for allocation
+    byte_count := 0;
+    for 0..text_buffer.lines.count-1 {
+        line_bytes := Get_Line_Bytes(text_buffer, it);
+        byte_count += line_bytes.count + 1;
+    }
+    byte_count -= 1; // no newline at the end
+
+    out_buffer := Temp_Buffer(u8, byte_count);
+    dest := 0;
+    for 0..text_buffer.lines.count-1 {
+        line_bytes := Get_Line_Bytes(text_buffer, it);
+        if line_bytes.count > 0 {
+            memcpy(out_buffer.data + dest, line_bytes.data, line_bytes.count);
+            dest += line_bytes.count;
+        }
+        if it != text_buffer.lines.count-1 {
+            out_buffer[dest] = #char "\n";
+            dest += 1;
+        }
+    }
+    out_buffer.count = dest;
+
+    write_entire_file(text_buffer.file_path, As_String(out_buffer));
+}
+
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // add/remove lines and get/set line bytes
 

@@ -175,3 +175,13 @@ Execute_Command_Split :: (args: [][]u32, vertical: bool) {
 }
 Execute_Command_Split_Vertical :: #bake_arguments Execute_Command_Split(vertical=true);
 Execute_Command_Split_Horizontal :: #bake_arguments Execute_Command_Split(vertical=false);
+
+Execute_Command_Save :: (args: [][]u32) {
+    // TODO: save to new file using args
+    bg_view, bg_layer := Get_File_Editor_Background_Layer();
+    if bg_layer == null {
+        return;
+    }
+    file_editor_id := bg_layer.file_editor.file_buffer;
+    Save_Buffer_To_File(file_editor_id);
+}

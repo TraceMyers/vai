@@ -337,6 +337,7 @@ Close_Text_Buffer :: (id: s64) {
             }
         }
     }
+
     id_pair := IDPair.{id, valid_id};
     Walk_View_Tree(0, Replace_Invalid_File_Buffer, id_pair, false);
 }
