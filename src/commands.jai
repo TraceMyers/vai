@@ -119,7 +119,10 @@ Execute_Command_Close :: (args: [][]u32) {
     case .VIEW;
         Close_View(background_view_id);
     case .BUFFER;
-        Log_Warning("close buffer isn't yet implemented.");
+        _, layer := Get_File_Editor_Background_Layer();
+        if layer != null {
+            Close_Text_Buffer(layer.file_editor.file_buffer);
+        }
     }
 }
 

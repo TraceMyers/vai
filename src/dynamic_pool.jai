@@ -82,6 +82,10 @@ Request_Item :: (using pool: *DynamicPool($T), grow_behavior := PoolResizeBehavi
     return prev_item_count;
 }
 
+Get_First_Active_Item :: (using pool: *DynamicPool($T), start_index := 0) -> s64 {
+    return Find_Active(in_use, start_index);
+}
+
 Find_Item :: (using pool: *DynamicPool($T), user_data: $T2, Compare: (*T, T2) -> bool) -> s64 {
     lock(*mutex);
     defer unlock(*mutex);

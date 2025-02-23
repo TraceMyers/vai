@@ -314,6 +314,33 @@ Close_View :: (id: s64, dependent_id := -1) {
     }
 }
 
+Close_Text_Buffer :: (id: s64) {
+    buffer := *file_buffers.items[id];
+    Shutdown_Text_Buffer(buffer); 
+    Return_Item(*file_buffers, id);
+
+    valid_id := Get_First_Active_Item(*file_buffers);
+    if valid_id == -1 {
+        intro_file_name := Prepare_Intro_File();
+        valid_id = Get_File_Buffer_ID(intro_file_name);
+        assert(valid_id != -1);
+    }
+
+    IDPair :: struct {
+        invalid_buffer_id: s64;
+        valid_buffer_id: s64;
+    } 
+    Replace_Invalid_File_Buffer :: (v: *View, view_id: s64, viewport_id: s64, id_pair: IDPair) {
+        for *v.layers {
+            if it.type == .FILE_EDITOR && it.file_editor.file_buffer == id_pair.invalid_buffer_id {
+                 it.file_editor.file_buffer = id_pair.valid_buffer_id;
+            }
+        }
+    }
+    id_pair := IDPair.{id, valid_id};
+    Walk_View_Tree(0, Replace_Invalid_File_Buffer, id_pair, false);
+}
+
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 Render_Views :: (full_update: bool) {
@@ -773,7 +800,7 @@ view_layer_id_counter: u32;
 
 INTRO_FILE_TEXT :: #string HERE
 type ':open somefilename' to open a file.
-type ':split-horizontal somefilename' to open a file in side-by-side.
+type ':split-horizontal somefilename' to open a file in side-by-side. (or leave out the filename to split the current file)
 type ':close view' or just ':close' to close a view.
 type ':close buffer' to close a text buffer
 type ':save' to write the selected buffer to file.
