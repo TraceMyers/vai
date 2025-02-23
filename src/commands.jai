@@ -79,3 +79,45 @@ Parse_Command :: (str: []u32) -> Command {
     // TODO: inform when ambiguous
     return .NONE; // no match or ambiguous match
 }
+
+Execute_Command_Quit :: (args: [][]u32) {
+    quit = true;
+}
+
+Execute_Command_Close :: (args: [][]u32) {
+    close_object : enum {
+        NONE;
+        VIEW;
+        BUFFER;
+    }
+
+    if args.count == 0 || args[0].count <= 0 {
+        close_object = .VIEW;
+    } else {
+        objects := string.["view", "buffer"];
+        arg := args[0];
+        for object: objects {
+            if arg.count > object.count {
+                continue;
+            }
+            match := true;
+            for 0..arg.count-1 {
+                if object[it] != arg[it] {
+                    match = false;
+                    break;
+                }
+            }               
+            if match {
+                close_object = cast(type_of(close_object))(it_index + 1);
+                break;
+            }
+        }
+    }
+
+    if close_object == {
+    case .NONE;
+    case .VIEW;
+        Close_View(background_view_id);
+    case .BUFFER;
+    }
+}

@@ -55,9 +55,8 @@ Create_Base_Views :: () {
         vim_console_id = Add_View(.{type=.PIXELS, bottom_pixels=20}, *layer, ROOT_ID);
     }
     // empty background to stage file editors
-    empty_id: s64;
     {
-        empty_id = Add_View(.{type=.PIXELS, inverted=true}, null, ROOT_ID);
+        base_empty_view_id = Add_View(.{type=.PIXELS, inverted=true}, null, ROOT_ID);
     }
     // default file editor
     intro_file_name := Prepare_Intro_File();
@@ -66,7 +65,7 @@ Create_Base_Views :: () {
         layer.type = .FILE_EDITOR;
         layer.file_editor = .{};
         layer.file_editor.file_buffer = Get_File_Buffer_ID(intro_file_name);
-        active_view_id = Add_View(.{inverted=true}, *layer, empty_id);
+        active_view_id = Add_View(.{inverted=true}, *layer, base_empty_view_id);
         // buffer := file_buffers.items[layer.file_editor.file_buffer];
         // view_pool.items[active_view_id].layers[0].view_position.y = xx (buffer.lines.count - 1);
     }
@@ -79,12 +78,15 @@ Create_Base_Views :: () {
 
     // test split file editor
     split := Split_View(*view_pool.items[active_view_id], .VERTICAL, false);
-    // split.layers[0].type = .DEBUG;
-    // split.layers[0].debug.type = .UNDO_REDO;
     split.layers[0].type = .FILE_EDITOR;
     split.layers[0].file_editor = .{};
-    // split.layers[0].file_editor.file_buffer = Get_File_Buffer_ID("test_files/utf8.txt");
     split.layers[0].file_editor.file_buffer = Get_File_Buffer_ID(intro_file_name);
+
+    // split_id := Get_Item_Index(*view_pool, split);
+    split_2 := Split_View(split, .HORIZONTAL, false);
+    split_2.layers[0].type = .FILE_EDITOR;
+    split_2.layers[0].file_editor = .{};
+    split_2.layers[0].file_editor.file_buffer = Get_File_Buffer_ID(intro_file_name);
 }
 
 Prepare_Intro_File :: () -> string {
@@ -224,6 +226,66 @@ Process_Text_Input :: (utf32: []u32) -> bool {
         }
     }
     return true;
+}
+
+Delete_View :: (id: s64) {
+    view := Get_Item(*view_pool, id);
+    for view.children {
+        Delete_View(it);
+    }
+    if view.layers.data != null {
+        layer_chunk_id := Get_Item_Index(*view_layer_pool, xx view.layers.data);
+        Return_Item(*view_layer_pool, layer_chunk_id);
+        view.layers.data = null;
+        view.layers.count = 0;
+    }
+    view.* = .{};
+}
+
+// TODO: using dependent id to clean up active view is messy
+Close_View :: (id: s64, dependent_id := -1) {
+    parent_id := Find_Parent(id);
+    parent := Get_Item(*view_pool, parent_id);
+    assert(parent.children.count > 0);
+
+    if parent.children.count == 1 && parent_id == base_empty_view_id {
+        quit = true;
+    } else {
+        Delete_View(id);
+
+        for 0..parent.children.count-1 {
+            child := parent.children[it];
+            if child == id {
+                if it != parent.children.count-1 {
+                    parent.children[it] = parent.children[parent.children.count-1];
+                } 
+                parent.children.count -= 1;
+                if parent.active_layer == it {
+                    parent.active_layer = 0;
+                }
+                break;
+            }
+        }
+
+        if parent.children.count == 0 {
+            Close_View(parent_id, id);
+        } else {
+            // assuming one child remaining
+            child := Get_Item(*view_pool, parent.children[0]);
+            child.viewport.left = 0.0;
+            child.viewport.right = 0.0;
+            child.viewport.top = 0.0;
+            child.viewport.bottom = 0.0;
+            child.viewport.inverted = true;
+
+            if active_view_id == id || active_view_id == dependent_id {
+                active_view_id = parent.children[0];
+            }
+            if background_view_id == id || background_view_id == dependent_id {
+                background_view_id = parent.children[0];
+            }
+        }
+    }
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -427,14 +489,15 @@ Generate_View_Layer_Switch :: (with_code: string, layer_as_pointer := true) -> s
 }
 
 Find_Parent :: inline (v: *View) -> s64 {
-    return Find_Parent(Element_Index(v, view_pool.items), 0);
+    id := Element_Index(v, view_pool.items);
+    return Find_Parent(id, 0);
 }
 
-Find_Parent :: (of_node: s64, current_node := 0) -> s64 {
-    view := Get_Item(*view_pool, current_node);
+Find_Parent :: (of_node: s64, search_from_node := 0) -> s64 {
+    view := Get_Item(*view_pool, search_from_node);
     for view.children {
         if it == of_node {
-            return current_node;
+            return search_from_node;
         } else {
             search_id := Find_Parent(of_node, it);
             if search_id != -1 {
@@ -676,6 +739,7 @@ rendering_scissor_ul: IntVector2;
 rendering_scissor_lr: IntVector2;
 
 render_full_update: bool;
+base_empty_view_id: s64;
 
 view_layer_id_counter: u32;
 

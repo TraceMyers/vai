@@ -70,7 +70,8 @@ HERE
 #insert #run Generate_Struct_Enum_Mapping("Command", u32, "CommandBinding", "COMPTIME_COMMAND_BINDINGS", TempEnumMapping(string, 1, CommandDataContainer), true, "As_Command", true,
 #string HERE
     .{.["none"],        "NONE",                     .{}},
-    .{.["quit"],        "QUIT",                     .{}},
+    .{.["close"],       "CLOSE_OBJECT",             .{proc=Execute_Command_Close}},
+    .{.["quit"],        "QUIT",                     .{proc=Execute_Command_Quit}},
     .{.["edit"],        "OPEN_FILE",                .{}},
     .{.["bnext"],       "NEXT_BUFFER",              .{}},
     .{.["bprev"],       "PREVIOUS_BUFFER",          .{}},
