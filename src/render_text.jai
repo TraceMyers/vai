@@ -1,7 +1,8 @@
 
 Initialize_Render_Text :: () {
     // font = get_font_at_size("../fonts/cascadia_code", "Cascadia.ttf", pixel_height);
-    font = get_font_at_size("../fonts/IBM_Plex_Mono", "IBMPlexMono-Medium.ttf", pixel_height);
+    fonts_path := tprint("%/../fonts/IBM_Plex_Mono", exe_path);
+    font = get_font_at_size(fonts_path, "IBMPlexMono-Medium.ttf", pixel_height);
     font.temporary_glyphs.allocator = temp;
     font.current_quads.allocator = temp;
     assert(font != null);

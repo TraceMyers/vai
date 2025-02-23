@@ -4,6 +4,7 @@
 // TODO: cursor.just_moved isn't handled right
 
 quit: bool;
+exe_path: string;
 
 Vai_Main :: () {
     #if OS == .WINDOWS {
@@ -11,9 +12,9 @@ Vai_Main :: () {
         timeBeginPeriod(1);
     }
 
-    path := path_strip_filename(get_path_of_running_executable());
+    exe_path = path_strip_filename(get_path_of_running_executable());
     // obviously not great to force the working directory like this, but it's useful for development. I'll try to get rid of it soon.
-    set_working_directory(path);
+    // set_working_directory(path);
 
     if !Scoped_Construct(Text_Buffers)          then return;
     if !Scoped_Construct(Runtime_Settings)      then return;

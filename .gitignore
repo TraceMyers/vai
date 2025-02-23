@@ -1,3 +1,5 @@
 .build/
 bin/
 src/.vs/
+intro.txt
+settings.txt
