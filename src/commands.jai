@@ -119,5 +119,30 @@ Execute_Command_Close :: (args: [][]u32) {
     case .VIEW;
         Close_View(background_view_id);
     case .BUFFER;
+        Log_Warning("close buffer isn't yet implemented.");
     }
+}
+
+Execute_Command_Open :: (args: [][]u32) {
+    if args.count == 0 {
+        return;
+    }
+    if background_view_id < 0 {
+        return;
+    }
+    bg_view := View_From_ID(background_view_id);
+    bg_layer := Active_Layer_Of_View(bg_view);
+    if bg_layer == null {
+        return;
+    }
+    if bg_layer.type != .FILE_EDITOR {
+        return;
+    }
+    filename := Encode(As_String(args[0]), .UTF32, .UTF8);
+    new_buffer_id := Get_File_Buffer_ID(filename);
+    if new_buffer_id == -1 {
+        return;
+    }
+    bg_layer.file_editor.file_buffer = new_buffer_id;
+
 }

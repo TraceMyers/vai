@@ -69,15 +69,15 @@ HERE
 
 #insert #run Generate_Struct_Enum_Mapping("Command", u32, "CommandBinding", "COMPTIME_COMMAND_BINDINGS", TempEnumMapping(string, 1, CommandDataContainer), true, "As_Command", true,
 #string HERE
-    .{.["none"],        "NONE",                     .{}},
-    .{.["close"],       "CLOSE_OBJECT",             .{proc=Execute_Command_Close}},
-    .{.["quit"],        "QUIT",                     .{proc=Execute_Command_Quit}},
-    .{.["edit"],        "OPEN_FILE",                .{}},
-    .{.["bnext"],       "NEXT_BUFFER",              .{}},
-    .{.["bprev"],       "PREVIOUS_BUFFER",          .{}},
-    .{.["vsplit"],      "VERTICAL_SPLIT",           .{}},
-    .{.["split"],       "HORIZONTAL_SPLIT",         .{}},
-    .{.["set"],         "INTERACT_WITH_OPTIONS",    .{}},
-    .{.["write"],       "WRITE_TO_FILE",            .{}},
+    .{.["none"],                "NONE",                     .{}},
+    .{.["close"],               "CLOSE_OBJECT",             .{proc=Execute_Command_Close}},
+    .{.["quit"],                "QUIT",                     .{proc=Execute_Command_Quit}},
+    .{.["open"],                "OPEN_FILE",                .{proc=Execute_Command_Open}},
+    .{.["buffer-next"],         "NEXT_BUFFER",              .{}},
+    .{.["buffer-previous"],     "PREVIOUS_BUFFER",          .{}},
+    .{.["split-vertical"],      "VERTICAL_SPLIT",           .{}},
+    .{.["split-horizontal"],    "HORIZONTAL_SPLIT",         .{}},
+    .{.["set"],                 "INTERACT_WITH_OPTION",     .{}},
+    .{.["save"],                "SAVE_TO_FILE",             .{}},
 HERE
 );

@@ -120,6 +120,17 @@ Active_View_Layer :: inline () -> *ViewLayer {
     return *view.layers[view.active_layer];
 }
 
+View_From_ID :: inline (id: s64) -> *View {
+    return *view_pool.items[id];
+}
+
+Active_Layer_Of_View :: inline (v: *View) -> *ViewLayer {
+    if v.layers.count == 0 {
+        return null;
+    }
+    return *v.layers[v.active_layer];
+}
+
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // View Interface
 
@@ -292,6 +303,7 @@ Close_View :: (id: s64, dependent_id := -1) {
             child.viewport.inverted = true;
 
             valid_active_id := Find_Valid_Child_View_To_Make_Active(parent);
+            assert(valid_active_id != -1);
             if active_view_id == id || active_view_id == dependent_id {
                 active_view_id = valid_active_id;
             }
@@ -760,15 +772,17 @@ view_layer_id_counter: u32;
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 
 INTRO_FILE_TEXT :: #string HERE
-type ':e somefilename' to open a file.
-type ':vsplit somefilename' to open a file with a vertical split.
+type ':open somefilename' to open a file.
+type ':split somefilename' to open a file with a vertical split.
 type ':close view' or just ':close' to close a view.
 type ':close buffer' to close a text buffer
-type ':write' to write the selected buffer to file.
+type ':save' to write the selected buffer to file.
 type ':quit' to quit the program.
 
+Shorthand commands work as long as what you've typed could only resolve to one command.
+For example, ':o somefilename' also loads a file into a buffer.
+
 For learning vim motions, check out vim-adventures.com. 
-If you're already familiar with how to use vim, you'll probably notice a few things are different 
-in vai, and many features are missing. In the future, more will be different, and many more
-features will be available... it just takes time ;d 
+If you're already familiar with vim, you'll notice a few things are different in vai, and many features are missing. 
+In the future, more will be different, and many more features will be available... it just takes time ;d 
 HERE
