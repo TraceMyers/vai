@@ -12,6 +12,7 @@ Cursor_Scroll_Down :: () {
     line := Line_View(text_buffer, cursor.y);
     cursor.x = Clamp_X_To_Line(cursor.target_x, line);
     cursor.just_moved = true;
+    Add_Cursor_Move_Artifact(cursor, .SCROLL_DOWN);
 }
 
 Cursor_Scroll_Up :: () {
@@ -20,6 +21,7 @@ Cursor_Scroll_Up :: () {
     line := Line_View(text_buffer, cursor.y);
     cursor.x = Clamp_X_To_Line(cursor.target_x, line);
     cursor.just_moved = true;
+    Add_Cursor_Move_Artifact(cursor, .SCROLL_UP);
 }
 
 Cursor_Scroll_Right :: () {
@@ -29,6 +31,7 @@ Cursor_Scroll_Right :: () {
     cursor.x = Clamp_X_To_Line(cursor.x, line, .FORWARD);
     cursor.target_x = cursor.x;
     cursor.just_moved = true;
+    Add_Cursor_Move_Artifact(cursor, .SCROLL_RIGHT);
 }
 
 Cursor_Scroll_Left :: () {
@@ -38,6 +41,7 @@ Cursor_Scroll_Left :: () {
     cursor.x = Clamp_X_To_Line(cursor.x, line);
     cursor.target_x = cursor.x;
     cursor.just_moved = true;
+    Add_Cursor_Move_Artifact(cursor, .SCROLL_LEFT);
 }
 
 Cursor_Scroll_To_Top :: () {

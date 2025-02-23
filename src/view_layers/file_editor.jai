@@ -84,6 +84,7 @@ CursorNet :: struct {
     visible_max: float;
     min: float;
     max: float;
+    size: float;
 }
 
 Calculate_Cursor_Net :: (bound_min: float, bound_count: float, ideal_net_size: float) -> CursorNet {
@@ -93,10 +94,10 @@ Calculate_Cursor_Net :: (bound_min: float, bound_count: float, ideal_net_size: f
 
     top_bot_diff := net.visible_max - net.visible_min;
     half_diff := top_bot_diff / 2;
-    net_size := clamp(half_diff - 1, 0, ideal_net_size);
+    net.size = clamp(half_diff - 1, 0, ideal_net_size);
 
-    net.min = net.visible_min + net_size;
-    net.max = net.visible_max - net_size;
+    net.min = net.visible_min + net.size;
+    net.max = net.visible_max - net.size;
     return net;
 }
 
@@ -112,17 +113,41 @@ Teleport_View_Axis_To_Cursor :: (cursor_axis: float, view_axis: *float, net: *Cu
     }
 }
 
+View_Axis_Follow_Cursor_Smoothly :: (cursor: *Cursor, view_axis: *float, cursor_axis: float, net_boundary: float, net_size: float, action: Action, compare_greater: bool, scroll_speed: float) {
+    if cursor.active_scroll_action != action {
+        if compare_greater {
+            if cursor_axis > net_boundary {
+                cursor.active_scroll_action = action;
+            }
+        } else if cursor_axis < net_boundary {
+            cursor.active_scroll_action = action;
+        }
+    }
+    if cursor.active_scroll_action == action {
+        CORRECTION_SPEED :: 1.0;
+        // target_pos_diff := cursor_y - (vt_net.max + (vt_net.visible_max - vt_net.max) * 0.5);
+        target_pos_diff := cursor_axis - net_boundary;
+        correction_norm := target_pos_diff / net_size;
+        if !compare_greater {
+            scroll_speed = -scroll_speed;
+        }
+        view_axis.* += (scroll_speed + CORRECTION_SPEED * correction_norm) * Smoothed_Delta_Time();
+        // layer.view_position.y += scroll_down_speed * Smoothed_Delta_Time();
+        view_axis.* = max(view_axis.*, 0);
+    }
+}
+
 Cursor_Scroll :: (using file_editor: *FileEditor, renderer: *TextRenderer) {
     layer := View_Layer_From_Data(xx file_editor);
     layer_cursor := Layer_Cursor(layer);
-    if !layer_cursor.just_moved then return;
-    layer_cursor.just_moved = false;
 
     IDEAL_NET_SIZE : float : 8.0;
 
     vt_net := Calculate_Cursor_Net(layer.view_position.y, xx renderer.line_count, IDEAL_NET_SIZE);
     cursor_y := cast(float)layer_cursor.y;
-    Teleport_View_Axis_To_Cursor(cursor_y, *layer.view_position.y, *vt_net);
+    if layer_cursor.just_moved {
+        Teleport_View_Axis_To_Cursor(cursor_y, *layer.view_position.y, *vt_net);
+    }
 
     ul := Upper_Left();
     lr := Lower_Right();
@@ -131,5 +156,29 @@ Cursor_Scroll :: (using file_editor: *FileEditor, renderer: *TextRenderer) {
     col_count := (cast(float) viewport_width / cast(float) renderer.screen_char_width) - (IDEAL_NET_SIZE - 1.0);
     hz_net := Calculate_Cursor_Net(layer.view_position.x, col_count, IDEAL_NET_SIZE);
     cursor_x := cast(float)layer_cursor.x;
-    Teleport_View_Axis_To_Cursor(cursor_x, *layer.view_position.x, *hz_net);
+    if layer_cursor.just_moved {
+        Teleport_View_Axis_To_Cursor(cursor_x, *layer.view_position.x, *hz_net);
+    }
+
+    layer_cursor.just_moved = false;
+
+    scroll_down_repeat, scroll_down_speed := Get_Action_Repeat_Rate(layer_cursor, .SCROLL_DOWN);
+    scroll_up_repeat, scroll_up_speed := Get_Action_Repeat_Rate(layer_cursor, .SCROLL_UP);
+    scroll_right_repeat, scroll_right_speed := Get_Action_Repeat_Rate(layer_cursor, .SCROLL_RIGHT);
+    scroll_left_repeat, scroll_left_speed := Get_Action_Repeat_Rate(layer_cursor, .SCROLL_LEFT);
+
+    if scroll_down_repeat {
+        View_Axis_Follow_Cursor_Smoothly(layer_cursor, *layer.view_position.y, cursor_y, vt_net.max, vt_net.size, .SCROLL_DOWN, true, scroll_down_speed);
+    } else if scroll_up_repeat {
+        View_Axis_Follow_Cursor_Smoothly(layer_cursor, *layer.view_position.y, cursor_y, vt_net.min, vt_net.size, .SCROLL_UP, false, scroll_up_speed);
+    } else if scroll_right_repeat {
+        View_Axis_Follow_Cursor_Smoothly(layer_cursor, *layer.view_position.x, cursor_x, hz_net.max, hz_net.size, .SCROLL_RIGHT, true, scroll_right_speed);
+    } else if scroll_left_repeat {
+        View_Axis_Follow_Cursor_Smoothly(layer_cursor, *layer.view_position.x, cursor_x, hz_net.min, hz_net.size, .SCROLL_LEFT, false, scroll_left_speed);
+    } else {
+        cursor.active_scroll_action = .NONE;
+    }
+
+    layer.view_position.y = max(layer.view_position.y, 0);
+    layer.view_position.x = max(layer.view_position.x, 0);
 }
