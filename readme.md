@@ -6,7 +6,7 @@ A gui vim replacement written in Jai, with these goals:
 
 <ul>
     <li>never interrupt the text editing experience with laggy complex features</li>
-    <li>some language integration</li>
+    <li>some programming language integration</li>
     <li>removing common tool window friction</li>
     <li>cross platform</li>
 </ul>
