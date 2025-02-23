@@ -32,6 +32,8 @@ Vai_Main :: () {
     text_colors[0] = bRGB_WHITE;
     text_colors[1] = bRGB_RED;
 
+    // ShowWindow(GetConsoleWindow(), SW_HIDE);
+
     while !quit {
         resized := Update_Window_Dimensions();
         if resized {
@@ -70,9 +72,13 @@ Vai_Main :: () {
 #import "Hash_Table";
 #if OS == .WINDOWS {
     #import "Windows";
+    #import "Windows_Resources";
 }
 Compiler :: #import "Compiler";
 Program_Print :: #import "Program_Print";
+
+kernel32 :: #library,system "kernel32";
+GetConsoleWindow :: () -> HWND #foreign kernel32;
 
 // modified local
 #import "Simp"; // for fonts

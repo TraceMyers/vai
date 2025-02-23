@@ -10,9 +10,11 @@
     build_options.output_executable_name = "vai";
     build_options.output_path = "bin";
     build_options.output_type = .EXECUTABLE;
-    set_optimization(*build_options, .VERY_DEBUG);
-    // set_optimization(*build_options, .VERY_OPTIMIZED);
-    // set_optimization(*build_options, .OPTIMIZED_VERY_SMALL);
+    #if DEBUG {
+        set_optimization(*build_options, .VERY_DEBUG);
+    } else {
+        set_optimization(*build_options, .VERY_OPTIMIZED);
+    }
     set_build_options(build_options, w);
 
     #if DO_PROFILING {
@@ -29,6 +31,10 @@
         Iprof.add_source(iprof);
     }
 
+    #if !DEBUG {
+        // removes console/prints
+        add_build_string("#run disable_runtime_console();", w);
+    }
     add_build_file("src/main.jai", w);
 
     while true {
@@ -47,6 +53,7 @@
     compiler_end_intercept(w);
 }
 
+DEBUG :: true;
 DO_PROFILING :: false;
 
 #import "Basic";
