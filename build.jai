@@ -51,14 +51,42 @@
     }
 
     compiler_end_intercept(w);
+
+    #if MAKE_RELEASE {
+        make_directory_if_it_does_not_exist("release/bin", true);
+        make_directory_if_it_does_not_exist("release/fonts");
+        copy_file("bin/vai.exe", "release/bin/vai.exe");
+        copy_files_recursively("fonts", "release/fonts");
+    }
 }
 
-DEBUG :: true;
+// copied from MacOs_Bundler.jai module
+copy_files_recursively :: (source: string, dest: string) {
+    paths: [2] string;
+    paths[0] = source;
+    paths[1] = dest;
+
+    visitor :: (info: *File_Visit_Info, paths: [2] string) {
+        relative_path := info.full_name;
+        advance(*relative_path, paths[0].count);
+        out_path := join(paths[1], "/", relative_path);
+        make_directory_if_it_does_not_exist(path_strip_filename(out_path), recursive = true);
+        copy_file(info.full_name, out_path);
+    }
+
+    res := visit_files(paths[0], true, paths, visitor);
+    assert(res);
+}
+
+DEBUG :: false;
+MAKE_RELEASE :: true;
 DO_PROFILING :: false;
 
 #import "Basic";
 #import "Compiler";
 #import "File";
+#import "File_Utilities";
+#import "String";
 #if DO_PROFILING {
     prof :: #import "Iprof";
 }

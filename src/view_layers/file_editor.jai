@@ -170,12 +170,16 @@ Cursor_Scroll :: (using file_editor: *FileEditor, renderer: *TextRenderer) {
         scroll_left_repeat, scroll_left_speed := Get_Action_Repeat_Rate(layer_cursor, .SCROLL_LEFT);
 
         if scroll_down_repeat {
+            Log("ey");
             View_Axis_Follow_Cursor_Smoothly(layer_cursor, *layer.view_position.y, cursor_y, vt_net.max, vt_net.size, .SCROLL_DOWN, true, scroll_down_speed);
         } else if scroll_up_repeat {
+            Log("ey");
             View_Axis_Follow_Cursor_Smoothly(layer_cursor, *layer.view_position.y, cursor_y, vt_net.min, vt_net.size, .SCROLL_UP, false, scroll_up_speed);
         } else if scroll_right_repeat {
+            Log("ey");
             View_Axis_Follow_Cursor_Smoothly(layer_cursor, *layer.view_position.x, cursor_x, hz_net.max, hz_net.size, .SCROLL_RIGHT, true, scroll_right_speed);
         } else if scroll_left_repeat {
+            Log("ey");
             View_Axis_Follow_Cursor_Smoothly(layer_cursor, *layer.view_position.x, cursor_x, hz_net.min, hz_net.size, .SCROLL_LEFT, false, scroll_left_speed);
         } else {
             cursor.active_scroll_action = .NONE;

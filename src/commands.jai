@@ -182,7 +182,7 @@ Execute_Command_Split :: (args: [][]u32, vertical: bool) {
             write_entire_file(filename, "");
             file_editor_id = Get_File_Buffer_ID(filename);
         }
-        View_Layer_Soft_Reset(bg_layer);    
+        View_Layer_Soft_Reset(*new_view.layers[0]);    
     }
     new_view.layers[0].file_editor.file_buffer = file_editor_id;
 }
