@@ -113,8 +113,12 @@ Load_File_Into_Buffer :: (path: string) -> s64 {
     buffer := Get_Item(*file_buffers, buf_index);
     Initialize_Text_Buffer(buffer, copy_string(path), line_count, expected_bin_ct);
 
-    Append_Line_To_Buffer :: inline (line: *string, buffer: *TextBuffer) { Append_Line(buffer, line.*, false); }
-    Process_Per_Line(file_string, Append_Line_To_Buffer, buffer);
+    if line_count != 0 {
+        Append_Line_To_Buffer :: inline (line: *string, buffer: *TextBuffer) { Append_Line(buffer, line.*, false); }
+        Process_Per_Line(file_string, Append_Line_To_Buffer, buffer);
+    } else {
+        Append_Line(buffer, .{}, false);
+    }
     return buf_index;
 }
 
@@ -231,17 +235,20 @@ Set_Line_Bytes :: (buffer: *TextBuffer, line_index: s64, line_str: string) {
 // line utf32 temp buffers
 
 Raw_Line_View :: (buffer: *TextBuffer, row: s64) -> []u32 {
+    if buffer.lines.count == 0 then return .[];
     bytes := Get_Line_Bytes(buffer, row);
     utf32_str := Encode(bytes, .UTF8, .UTF32);
     return As_Array(utf32_str, u32);
 }
 
 Line_View :: (buffer: *TextBuffer, row: s64) -> []u32 {
+    if buffer.lines.count == 0 then return .[];
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     return utf32_buffer.array;
 }
 
 Line_Count :: (buffer: *TextBuffer, row: s64) -> s64 {
+    if buffer.lines.count == 0 then return 0;
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     return utf32_buffer.array.count;
 }

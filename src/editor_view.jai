@@ -239,6 +239,12 @@ Process_Text_Input :: (utf32: []u32) -> bool {
     return true;
 }
 
+View_Layer_Soft_Reset :: (layer: *ViewLayer) {
+    cursor := Layer_Cursor(layer);
+    if cursor then cursor.* = .{};
+    layer.view_position = .{};
+}
+
 Clear_View :: (id: s64) {
     view := Get_Item(*view_pool, id);
     for view.children {

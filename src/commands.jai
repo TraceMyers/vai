@@ -141,6 +141,8 @@ Get_File_Editor_Background_Layer :: () -> *View, *ViewLayer {
     return bg_view, bg_layer;
 }
 
+// TODO: need to be able to open buffers without creating files
+
 Execute_Command_Open :: (args: [][]u32) {
     if args.count == 0 {
         return;
@@ -155,8 +157,9 @@ Execute_Command_Open :: (args: [][]u32) {
     }
     new_buffer_id := Get_File_Buffer_ID(filename);
     if new_buffer_id == -1 {
-        write_entire_file(filename, " ");
+        write_entire_file(filename, "");
         new_buffer_id = Get_File_Buffer_ID(filename);
+        View_Layer_Soft_Reset(bg_layer);    
     }
     bg_layer.file_editor.file_buffer = new_buffer_id;
 }
@@ -173,7 +176,13 @@ Execute_Command_Split :: (args: [][]u32, vertical: bool) {
     if args.count != 0 {
         filename := Encode(As_String(args[0]), .UTF32, .UTF8);
         new_buffer_id := Get_File_Buffer_ID(filename);
-        if new_buffer_id != -1 then file_editor_id = new_buffer_id;
+        if new_buffer_id != -1 {
+            file_editor_id = new_buffer_id;
+        } else {
+            write_entire_file(filename, "");
+            file_editor_id = Get_File_Buffer_ID(filename);
+        }
+        View_Layer_Soft_Reset(bg_layer);    
     }
     new_view.layers[0].file_editor.file_buffer = file_editor_id;
 }
@@ -187,5 +196,15 @@ Execute_Command_Save :: (args: [][]u32) {
         return;
     }
     file_editor_id := bg_layer.file_editor.file_buffer;
-    Save_Buffer_To_File(file_editor_id);
+    if args.count == 0 {
+        Save_Buffer_To_File(file_editor_id);
+    } else {
+        // TODO need to copy the file buffer rather than overwriting which file it points to
+        filename := Encode(As_String(args[0]), .UTF32, .UTF8, false, context.allocator);
+        if filename.count != 0 {
+            free(file_buffers.items[file_editor_id].file_path);
+            file_buffers.items[file_editor_id].file_path = filename;
+            Save_Buffer_To_File(file_editor_id);
+        }
+    }
 }
