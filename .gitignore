@@ -1,6 +1,7 @@
 .build/
 bin/
 release/
+release.zip
 src/.vs/
 intro.txt
 settings.txt
