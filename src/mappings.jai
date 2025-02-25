@@ -51,7 +51,8 @@
     .{.["u"],                   "MAKE_SELECTION_LOWERCASE",                     .{modes=.VISUAL,                 proc=Make_Selection_Lowercase}},
     .{.["yy"],                  "YANK_LINE",                                    .{modes=.NORMAL,                 proc=Yank_Line}},
     .{.["p"],                   "PASTE_AFTER",                                  .{modes=.NORMAL,                 proc=Paste_After}},
-    .{.["P"],                   "PASTE_BEFORE",                                  .{modes=.NORMAL,                 proc=Paste_Before}},
+    .{.["P"],                   "PASTE_BEFORE",                                 .{modes=.NORMAL,                 proc=Paste_Before}},
+    .{.["\t"],                  "COMMAND_AUTOCOMPLETE_SUGGESTIONS",             .{modes=.COMMAND,                proc=Create_Command_Autocomplete_Suggestions}},
     .{.["__INTERNAL__"],        "CLAMP_CURSOR_X_TO_BOUNDS"                      .{modes=.NONE}},
     .{.["__INTERNAL__"],        "NONE",                                         .{modes=.NONE}},
     .{.["__INTERNAL__"],        "INTERNAL_MOVE_CURSOR_TO_POSITION",             .{modes=.ALL    ,                proc=Internal_Move_Cursor_To_Position}}

@@ -1,7 +1,15 @@
 
+// TODO: apparently, memory leak when pasting ~10 lines of text ~1k times. OR, absurd numbers
+// of temp allocations are being made but not reset because we're still on the same frame.
+// either way. it freezes up.
 // TODO: font scaling in a not ugly way - how to use scale + loaded font sizes effectively
 // NOTE: put off options implementations for a while, because there are a lot of non-vim and vim options that could be brought together in a nice way, but it's probably hard to see until having gone without it for a bit.
 // TODO: cursor.just_moved isn't handled right
+// TODO: backslash escaping (... rethink?)
+// TODO: when trying to do autocomplete suggestions, the command paerser can be used to determine
+// what kind of thing we're generating suggestions for, which determines the suggestion pool :)
+// TODO: need to be able to open buffers without creating files
+// TODO: lookover actions for 'repeating_action' optimizations
 
 quit: bool;
 exe_path: string;

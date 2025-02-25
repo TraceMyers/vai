@@ -1,5 +1,4 @@
 
-// TODO: backslash escaping (... rethink?)
 
 Parse_And_Execute_Commands :: (in_utf32: []u32) {
     if in_utf32.count == 0 {
@@ -140,8 +139,6 @@ Get_File_Editor_Background_Layer :: () -> *View, *ViewLayer {
     }
     return bg_view, bg_layer;
 }
-
-// TODO: need to be able to open buffers without creating files
 
 Execute_Command_Open :: (args: [][]u32) {
     if args.count == 0 {

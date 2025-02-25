@@ -732,6 +732,10 @@ Change_Selection_Case :: (to_upper: bool) {
 Make_Selection_Uppercase :: #bake_arguments Change_Selection_Case(to_upper=true);
 Make_Selection_Lowercase :: #bake_arguments Change_Selection_Case(to_upper=false);
 
+Create_Command_Autocomplete_Suggestions :: () {
+    // TODO: create suggestions menu
+    Log("hello I'm a suggestion ;)");
+}
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -871,11 +875,12 @@ Set_Selected_Register_Text_To_Current_Line :: inline (text_buffer: *TextBuffer, 
 
 Paste :: (after: bool) {
     Init_Cursor_Proc_Or_Return(true);
-    register_lines, start_with_newline := Get_Register_Lines(selected_register);
+    if !repeating_action {
+        register_lines, start_with_newline = Get_Register_Lines(selected_register);
+    }
     paste_x := cursor.x;
     prev_count, line_added_count: s64;
     for register_lines {
-        Log("register line: %", it);
         first_line := it_index == 0;
         if it_index == 0 {
             if start_with_newline {

@@ -97,7 +97,17 @@ Translate_Inputs_To_Actions :: () -> any_input: bool {
     frame_input_stream_index = -1;
     Array_Append(*frame_input_stream, processed_input);
 
+    // initial_time := seconds_since_init();
+    loop_early_exit := false;
+
     while frame_input_stream_index + 1 < frame_input_stream.count {
+        // current_time := seconds_since_init();
+        // time_spent := current_time - initial_time;
+        // if time_spent > 0.01 {
+        //     loop_early_exit = true;
+        //     break;
+        // }
+
         frame_input_stream_index += 1;
         modified_utf32 := frame_input_stream[frame_input_stream_index];
 
@@ -125,7 +135,9 @@ Translate_Inputs_To_Actions :: () -> any_input: bool {
         }
     }
 
-    array_reset_keeping_memory(*frame_input_stream);
+    if !loop_early_exit {
+        array_reset_keeping_memory(*frame_input_stream);
+    }
 
     if action_input_buffer.count > 0 || action_repeat_buffer.count > 0 {
         action_input_timer -= Smoothed_Delta_Time();
@@ -217,8 +229,10 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
 
                 prev_vi_mode := vi_mode;
 
+                repeating_action = false;
                 for 0..repeat_ct-1 {
                     action_executor_proc();
+                    repeating_action = true;
                 }
 
                 // mid_change is also set to true when stuff is added to a change, but not all actions that begin changes themselves make a change
@@ -566,6 +580,11 @@ last_change_input: [..]u32;
 search_pattern: [..]u32;
 
 key_pressed: BitArray(1);
+
+// temp stuff for paste; need generic data restoration system
+register_lines: [][]u32;
+start_with_newline: bool;
+repeating_action: bool;
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 
