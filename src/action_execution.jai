@@ -115,9 +115,9 @@ Scroll_To_Next_Editor :: () {
 
     View_Compare :: (a: EditorSortInfo, b: EditorSortInfo) -> s32 {
         if a.rect_upper_left.x < b.rect_upper_left.x {
-            return a.rect_upper_left.x - b.rect_upper_left.x;
-        } else {
             return a.rect_upper_left.y - b.rect_upper_left.y;
+        } else {
+            return a.rect_upper_left.x - b.rect_upper_left.x;
         }
     }
 
