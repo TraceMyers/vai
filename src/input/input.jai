@@ -229,10 +229,16 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
 
                 prev_vi_mode := vi_mode;
 
-                repeating_action = false;
+                // repeating actions via this outer loop might be inefficient, as a lot of work might get redone every iteration. so, action executors can make use of a serial buffer (action_repeat_data) to store work that can be repeatedly used.
+                repeating_action = repeat_ct > 1;
+                Clear(*action_repeat_data);
+                action_repeat_data.mode_switch = .SERIALIZE;
+
                 for 0..repeat_ct-1 {
+                    action_repeat_data.deserialize_offset = 0;
+                    action_iteration = xx it;
                     action_executor_proc();
-                    repeating_action = true;
+                    action_repeat_data.mode_switch = .DESERIALIZE;
                 }
 
                 // mid_change is also set to true when stuff is added to a change, but not all actions that begin changes themselves make a change
@@ -581,9 +587,8 @@ search_pattern: [..]u32;
 
 key_pressed: BitArray(1);
 
-// temp stuff for paste; need generic data restoration system
-register_lines: [][]u32;
-start_with_newline: bool;
+action_repeat_data: SerialBuffer;
+action_iteration: s32;
 repeating_action: bool;
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }

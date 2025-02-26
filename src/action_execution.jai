@@ -96,32 +96,36 @@ Cursor_Scroll_To_Line_Zero :: () {
 }
 
 Scroll_To_Next_Editor :: () {
+    //  --- proc specific stuff ---
     EditorSortInfo :: struct {
         view_id: s32;
         rect_upper_left: IntVector2;
     }
-
-    sort_info: [..]EditorSortInfo;
-    sort_info.allocator = temp;
-
     Collect_Sort_Info :: (view: *View, view_id: s64, viewport_id: s64, sort_info: *[..]EditorSortInfo) {
         if view.layers.data == null then return;
         active_layer := view.layers[view.active_layer];
         if active_layer.type != .FILE_EDITOR then return;
         array_add(sort_info, .{xx view_id, Upper_Left()});
     }
-
-    Walk_View_Tree(0, Collect_Sort_Info, *sort_info);
-
     View_Compare :: (a: EditorSortInfo, b: EditorSortInfo) -> s32 {
         if a.rect_upper_left.x < b.rect_upper_left.x {
-            return a.rect_upper_left.y - b.rect_upper_left.y;
+            return b.rect_upper_left.x - a.rect_upper_left.x;
         } else {
-            return a.rect_upper_left.x - b.rect_upper_left.x;
+            return b.rect_upper_left.x - a.rect_upper_left.x;
         }
     }
+    //  ---------------------------
 
-    quick_sort(sort_info, View_Compare);
+    sort_info: [..]EditorSortInfo;
+    sort_info.allocator = temp;
+
+    if action_iteration == 0 {
+        Walk_View_Tree(0, Collect_Sort_Info, *sort_info);
+        quick_sort(sort_info, View_Compare);
+    }
+    if repeating_action {
+        Serialize_Or_Deserialize(*action_repeat_data, *sort_info);
+    }
 
     next_editor := -1;
     for sort_info {
@@ -458,7 +462,7 @@ Delete_Word :: (inside: bool, small: bool, delete_trailing_whitespace: bool) {
 Delete_Word_Small :: #bake_arguments Delete_Word(inside=false, small=true, delete_trailing_whitespace=true);
 Delete_Word_Inside_Small :: #bake_arguments Delete_Word(inside=true, small=true, delete_trailing_whitespace=true);
 
-Delete_Selection :: (enter_normal_mode: bool) {
+Use_Selection :: (delete: bool, enter_normal_mode: bool) {
     Init_Cursor_Proc_Or_Return(true);
 
     selection_begin, selection_end := Cursor_Selection(cursor);
@@ -507,16 +511,18 @@ Delete_Selection :: (enter_normal_mode: bool) {
             Inline_Buffer_Append(*register_buffer, #char "\n");
         }
 
-        if remove_count <= 0 || remove_count == line_count {
-            if it == selection_end.y {
-                do_concatenate = false;
-            } else if it == selection_begin.y {
-                do_concatenate = false;
-                edit_y_offset = 0;
+        if delete {
+            if remove_count <= 0 || remove_count == line_count {
+                if it == selection_end.y {
+                    do_concatenate = false;
+                } else if it == selection_begin.y {
+                    do_concatenate = false;
+                    edit_y_offset = 0;
+                }
+                Remove_Line(text_buffer, edit_y);
+            } else {
+                Remove_Code_Points(text_buffer, edit_y, begin_x, remove_count);
             }
-            Remove_Line(text_buffer, edit_y);
-        } else {
-            Remove_Code_Points(text_buffer, edit_y, begin_x, remove_count);
         }
     }
     cursor.y = min(selection_begin.y, sdw(text_buffer.lines.count-1));
@@ -525,7 +531,7 @@ Delete_Selection :: (enter_normal_mode: bool) {
 
     // if this is a multi-line delete and the first and last line both had remaining characters, they become
     // a single concatenated line
-    if do_concatenate {
+    if delete && do_concatenate {
         Enter_Insert_Mode(false);
         Cursor_Scroll_Down();
         Cursor_Scroll_To_Line_Zero();
@@ -542,7 +548,8 @@ Delete_Selection :: (enter_normal_mode: bool) {
     // whatever text got deleted goes into the selected register
     Set_Register_Text(selected_register, register_buffer);
 }
-Delete_Selection_And_Enter_Normal_Mode :: #bake_arguments Delete_Selection(enter_normal_mode=true);
+Delete_Selection_And_Enter_Normal_Mode :: #bake_arguments Use_Selection(delete=true, enter_normal_mode=true);
+Yank_Selection_And_Enter_Normal_Mode :: #bake_arguments Use_Selection(delete=false, enter_normal_mode=true);
 
 Toggle_Comment_Selection :: () {
     Init_Cursor_Proc_Or_Return(true);
@@ -591,7 +598,7 @@ Toggle_Comment_Selection :: () {
 }
 
 Replace_Selection :: () {
-    Delete_Selection(false);
+    Use_Selection(true, false);
     Enter_Insert_Mode(false);
 }
 
@@ -875,9 +882,17 @@ Set_Selected_Register_Text_To_Current_Line :: inline (text_buffer: *TextBuffer, 
 
 Paste :: (after: bool) {
     Init_Cursor_Proc_Or_Return(true);
-    if !repeating_action {
+
+    register_lines: [][]u32;
+    start_with_newline: bool;
+    if action_iteration == 0 {
         register_lines, start_with_newline = Get_Register_Lines(selected_register);
     }
+    if repeating_action {
+        Serialize_Or_Deserialize(*action_repeat_data, *register_lines);
+        Serialize_Or_Deserialize(*action_repeat_data, *start_with_newline);
+    }
+
     paste_x := cursor.x;
     prev_count, line_added_count: s64;
     for register_lines {

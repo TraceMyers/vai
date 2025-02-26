@@ -34,6 +34,7 @@
     .{.["diw"],                 "DELETE_INSIDE_WORD",                           .{modes=.NORMAL,                 proc=Delete_Word_Inside_Small}},
     .{.["."],                   "REPEAT_LAST_CHANGE",                           .{modes=.NORMAL,                 proc=Repeat_Last_Change}},
     .{.["d"],                   "DELETE_SELECTION",                             .{modes=.VISUAL,                 proc=Delete_Selection_And_Enter_Normal_Mode}},
+    .{.["y"],                   "YANK_SELECTION",                               .{modes=.VISUAL,                 proc=Yank_Selection_And_Enter_Normal_Mode}},
     .{.["<C-/>"],               "TOGGLE_COMMENT_SELECTION"                      .{modes=.NORMAL | .VISUAL,       proc=Toggle_Comment_Selection}},
     .{.["c"],                   "REPLACE_SELECTION",                            .{modes=.VISUAL,                 proc=Replace_Selection}},
     .{.["cc"],                  "REPLACE_LINE",                                 .{modes=.NORMAL,                 proc=Replace_Line}},

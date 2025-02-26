@@ -9,6 +9,7 @@ DEBUG_TEXT_BUFFERS      :: false;
 DEBUG_GRAPHICS          :: false;
 DEBUG_MEMORY            :: false;
 ALWAYS_FULL_UPDATE      :: true;
+SERIALIZE_DEBUG         :: true;
 
 MSAA :: 4;
 
