@@ -462,7 +462,7 @@ Delete_Word :: (inside: bool, small: bool, delete_trailing_whitespace: bool) {
 Delete_Word_Small :: #bake_arguments Delete_Word(inside=false, small=true, delete_trailing_whitespace=true);
 Delete_Word_Inside_Small :: #bake_arguments Delete_Word(inside=true, small=true, delete_trailing_whitespace=true);
 
-Use_Selection :: (delete: bool, enter_normal_mode: bool) {
+Act_On_Selection :: (delete: bool, enter_normal_mode: bool) {
     Init_Cursor_Proc_Or_Return(true);
 
     selection_begin, selection_end := Cursor_Selection(cursor);
@@ -550,8 +550,8 @@ Use_Selection :: (delete: bool, enter_normal_mode: bool) {
     // whatever text got deleted goes into the selected register
     Set_Register_Text(selected_register, register_buffer);
 }
-Delete_Selection_And_Enter_Normal_Mode :: #bake_arguments Use_Selection(delete=true, enter_normal_mode=true);
-Yank_Selection_And_Enter_Normal_Mode :: #bake_arguments Use_Selection(delete=false, enter_normal_mode=true);
+Delete_Selection_And_Enter_Normal_Mode :: #bake_arguments Act_On_Selection(delete=true, enter_normal_mode=true);
+Yank_Selection_And_Enter_Normal_Mode :: #bake_arguments Act_On_Selection(delete=false, enter_normal_mode=true);
 
 Toggle_Comment_Selection :: () {
     Init_Cursor_Proc_Or_Return(true);
@@ -600,7 +600,7 @@ Toggle_Comment_Selection :: () {
 }
 
 Replace_Selection :: () {
-    Use_Selection(true, false);
+    Act_On_Selection(true, false);
     Enter_Insert_Mode(false);
 }
 

@@ -9,7 +9,7 @@
 // TODO: when trying to do autocomplete suggestions, the command paerser can be used to determine
 // what kind of thing we're generating suggestions for, which determines the suggestion pool :)
 // TODO: need to be able to open buffers without creating files
-// TODO: lookover actions for 'repeating_action' optimizations
+// TODO: file explorer with file/folder creation/deletion/renaming
 
 quit: bool;
 exe_path: string;
