@@ -523,6 +523,8 @@ Use_Selection :: (delete: bool, enter_normal_mode: bool) {
             } else {
                 Remove_Code_Points(text_buffer, edit_y, begin_x, remove_count);
             }
+        } else if it != selection_begin.y {
+            edit_y_offset += 1;
         }
     }
     cursor.y = min(selection_begin.y, sdw(text_buffer.lines.count-1));

@@ -334,7 +334,7 @@ Clear :: (buf: *SerialBuffer, keep_allocation := true) {
     buf.mode_switch = .SERIALIZE;
 }
 
-Serialize :: (buffer: *SerialBuffer, item: $T) {
+Serialize :: (buffer: *SerialBuffer, item: *$T) {
     write_offset := buffer.bytes.count;
     write_size := size_of(T);
     #if SERIALIZE_DEBUG {
@@ -347,7 +347,7 @@ Serialize :: (buffer: *SerialBuffer, item: $T) {
         memcpy(buffer.bytes.data + write_offset, *type_tag, size_of(Type_Info_Tag));
         write_offset += size_of(Type_Info_Tag);
     }
-    memcpy(buffer.bytes.data + write_offset, xx *item, size_of(T));
+    memcpy(buffer.bytes.data + write_offset, xx item, size_of(T));
 }
 
 Deserialize :: (buffer: *SerialBuffer, item: *$T) {
@@ -364,7 +364,7 @@ Deserialize :: (buffer: *SerialBuffer, item: *$T) {
 
 Serialize_Or_Deserialize :: (buffer: *SerialBuffer, item: *$T) {
     if buffer.mode_switch == .SERIALIZE {
-        Serialize(buffer, item.*);
+        Serialize(buffer, item);
     } else {
         Deserialize(buffer, item);
     }
