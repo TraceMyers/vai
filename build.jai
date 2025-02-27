@@ -78,8 +78,8 @@ copy_files_recursively :: (source: string, dest: string) {
     assert(res);
 }
 
-DEBUG :: false;
-MAKE_RELEASE :: true;
+DEBUG :: true;
+MAKE_RELEASE :: false;
 DO_PROFILING :: false;
 
 #import "Basic";

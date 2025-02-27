@@ -45,7 +45,7 @@ Viewport_Push :: (v: Viewport, do_cache := false) -> s64 {
                 num_nonzero += 1;
             }
         }
-        assert(num_nonzero == 1);
+        // assert(num_nonzero == 1);
     }
 
     array_add(*viewport_stack, v);

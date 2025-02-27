@@ -309,14 +309,24 @@ Bin_Pool_Initialize :: (using pool: *BinPool($SIZE, $T), small_reserve_count := 
     Initialize_Massive_Allocators_From(pool, 0);
 }
 
-Bin_Pool_Shutdown :: (using pool: *BinPool($SIZE, $T)) {
-    array_reset(*trackers[BinPoolAllocationType.SMALL].in_use);
-    array_reset(*trackers[BinPoolAllocationType.MASSIVE].in_use);
-    array_reset(*small_data);
-    if (massive_data.allocator.proc != temp.proc || massive_data.allocator.data != temp.data) then for *massive_data {
-        array_reset(it);
+Bin_Pool_Shutdown :: (using pool: *BinPool($SIZE, $T), keep_memory := false) {
+    if keep_memory {
+        array_reset_keeping_memory(*trackers[BinPoolAllocationType.SMALL].in_use);
+        array_reset_keeping_memory(*trackers[BinPoolAllocationType.MASSIVE].in_use);
+        array_reset_keeping_memory(*small_data);
+        if (massive_data.allocator.proc != temp.proc || massive_data.allocator.data != temp.data) then for *massive_data {
+            array_reset_keeping_memory(it);
+        }
+        array_reset_keeping_memory(*massive_data);
+    } else {
+        array_reset(*trackers[BinPoolAllocationType.SMALL].in_use);
+        array_reset(*trackers[BinPoolAllocationType.MASSIVE].in_use);
+        array_reset(*small_data);
+        if (massive_data.allocator.proc != temp.proc || massive_data.allocator.data != temp.data) then for *massive_data {
+            array_reset(it);
+        }
+        array_reset(*massive_data);
     }
-    array_reset(*massive_data);
 }
 
 Bin_In_Use_Check_Data :: (using id: BinID) -> u32, u8 {

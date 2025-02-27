@@ -2,6 +2,7 @@
 bin/
 release/
 release.zip
+vai-release.zip
 src/.vs/
 intro.txt
 settings.txt

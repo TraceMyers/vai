@@ -205,3 +205,18 @@ Execute_Command_Save :: (args: [][]u32) {
         }
     }
 }
+
+Execute_Command_Toggle_Tool_View :: (args: [][]u32) {
+    tool_view := *view_pool.items[tool_view_id];
+    base_empty_view := *view_pool.items[base_empty_view_id];
+    settings_file_data.tool_view_screen_proportion = clamp(settings_file_data.tool_view_screen_proportion, 0.05, 1.0);
+    if tool_view_is_active {
+        tool_view.viewport.left = 0.0;
+        base_empty_view.viewport.right = 1.0;
+        tool_view_is_active = false;
+    } else {
+        tool_view.viewport.left = settings_file_data.tool_view_screen_proportion;
+        base_empty_view.viewport.right = 1.0 - settings_file_data.tool_view_screen_proportion;
+        tool_view_is_active = true;
+    }
+}

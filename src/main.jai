@@ -10,6 +10,14 @@
 // what kind of thing we're generating suggestions for, which determines the suggestion pool :)
 // TODO: need to be able to open buffers without creating files
 // TODO: file explorer with file/folder creation/deletion/renaming
+//      - mark ctrl s f search directories
+//      - mark and color-code favorite directories
+//      - show file information at the bottom
+//      - scroll across current path greying out the end parts o the path as we scroll left
+//      - path text edit with suggestions dropdown + highlight + one press complete
+//      - lines so it looks nice
+//      - font size variation
+//      - hotkey key at the top
 
 quit: bool;
 exe_path: string;
@@ -21,8 +29,6 @@ Vai_Main :: () {
     }
 
     exe_path = path_strip_filename(get_path_of_running_executable());
-    // obviously not great to force the working directory like this, but it's useful for development. I'll try to get rid of it soon.
-    // set_working_directory(path);
 
     if !Scoped_Construct(Text_Buffers)          then return;
     if !Scoped_Construct(Runtime_Settings)      then return;
@@ -78,6 +84,7 @@ Vai_Main :: () {
 #import "Sort";
 #import "Bit_Operations";
 #import "Hash_Table";
+#import "File_Utilities";
 #if OS == .WINDOWS {
     #import "Windows";
     #import "Windows_Resources";
@@ -117,6 +124,7 @@ GetConsoleWindow :: () -> HWND #foreign kernel32;
 #load "view_layers/file_editor.jai";
 #load "view_layers/top_bar.jai";
 #load "view_layers/vim_console.jai";
+#load "view_layers/file_explorer.jai";
 #load "view_layers/debug.jai";
 #load "editor_view.jai";
 #load "text_processing.jai";

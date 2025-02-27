@@ -77,6 +77,17 @@ Shutdown_Text_Buffer :: (buffer: *TextBuffer) {
     Opposing_Circular_Buffer_Reset(*buffer.change_history);
 }
 
+Clear_Text_Buffer :: (using buffer: *TextBuffer, keep_allocations: bool) {
+    if (keep_allocations) {
+        array_reset_keeping_memory(*lines);
+    } else {
+        array_reset(*lines);
+    }
+    Bin_Pool_Shutdown(*line_pool, keep_allocations);
+    String_Reset(*file_path);
+    Opposing_Circular_Buffer_Reset(*buffer.change_history);
+}
+
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 Get_File_Buffer_ID :: (file_path: string) -> s64 {

@@ -36,6 +36,7 @@ SettingsFileData :: struct {
     record_processed_input := false;
     arrow_key_scroll_speed := 60.0;
     relative_line_numbers := true;
+    tool_view_screen_proportion := 0.3;
     
     #place window_width;
         window_info: WindowInfo = ---;
@@ -44,6 +45,7 @@ SettingsFileData :: struct {
 settings_file_data: SettingsFileData;
 
 file_editor_background_color: fRGB;
+file_explorer_background_color: fRGB;
 file_editor_outline_color: fRGBA;
 top_bar_background_color: fRGB;
 vim_console_background_color: fRGBA;

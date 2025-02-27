@@ -95,6 +95,10 @@ Render_Text_Buffer_Lines :: (renderer: *TextRenderer, buffer: *TextBuffer, rende
         for 0..renderer.line_count-1 {
             line_index := renderer.text_view_clip.y + it;
             if line_index >= buffer.lines.count then break;
+            if line_index < 0 {
+                renderer.rendered_line_count += 1;
+                continue;
+            }
             marked_utf32 := Line_View(buffer, line_index);
             if marked_utf32.count > renderer.text_view_clip.x {
                 marked_utf32.data += renderer.text_view_clip.x;

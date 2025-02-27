@@ -81,5 +81,6 @@ HERE
     .{.["split-horizontal"],    "HORIZONTAL_SPLIT",         .{proc=Execute_Command_Split_Horizontal}},
     .{.["set"],                 "INTERACT_WITH_OPTION",     .{}},
     .{.["save"],                "SAVE_TO_FILE",             .{proc=Execute_Command_Save}},
+    .{.["tools"],               "TOGGLE_TOOL_VIEW"          .{proc=Execute_Command_Toggle_Tool_View}}
 HERE
 );

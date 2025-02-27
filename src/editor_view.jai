@@ -32,6 +32,7 @@ Create_Base_Views :: () {
     vim_console_background_color = transparent_blue;
     top_bar_background_color = transparent_blue.rgb;
     file_editor_background_color = .{.02, .18, .24};
+    file_explorer_background_color = .{.01, .15, .22};
     file_editor_outline_color = .{1,1,1,0.15};
 
     // root
@@ -54,9 +55,16 @@ Create_Base_Views :: () {
         layer.vim_console = .{};
         vim_console_id = Add_View(.{type=.PIXELS, bottom_pixels=20}, *layer, ROOT_ID);
     }
+    {
+        layer: ViewLayer;
+        layer.type = .FILE_EXPLORER;
+        layer.file_explorer = .{};
+        layer.file_explorer.text_buffer = Request_Item(*file_buffers);
+        tool_view_id = Add_View(.{type=.PROPORTION, left=0.0}, *layer, ROOT_ID);
+    }
     // empty background to stage file editors
     {
-        base_empty_view_id = Add_View(.{type=.PIXELS, inverted=true}, null, ROOT_ID);
+        base_empty_view_id = Add_View(.{type=.PROPORTION, right=1.0}, null, ROOT_ID);
     }
     // default file editor
     intro_file_name := Prepare_Intro_File();
@@ -66,8 +74,6 @@ Create_Base_Views :: () {
         layer.file_editor = .{};
         layer.file_editor.file_buffer = Get_File_Buffer_ID(intro_file_name);
         active_view_id = Add_View(.{inverted=true}, *layer, base_empty_view_id);
-        // buffer := file_buffers.items[layer.file_editor.file_buffer];
-        // view_pool.items[active_view_id].layers[0].view_position.y = xx (buffer.lines.count - 1);
     }
 
     // viewport: Viewport;
@@ -645,8 +651,9 @@ ViewLayerType :: enum_flags u16 {
     TOP_BAR :: 0x01;
     FILE_EDITOR;
     VIM_CONSOLE;
+    FILE_EXPLORER;
     DEBUG;
-    ALL :: TOP_BAR | FILE_EDITOR | VIM_CONSOLE;
+    ALL :: TOP_BAR | FILE_EDITOR | VIM_CONSOLE | FILE_EXPLORER;
 }
 
 ViewLayerData :: union {
@@ -654,6 +661,7 @@ ViewLayerData :: union {
     top_bar: TopBar = ---;
     file_editor: FileEditor = ---;
     vim_console: VimConsole = ---;
+    file_explorer: FileExplorer = ---;
     debug: DebugView = ---;
 }
 
@@ -733,6 +741,12 @@ DebugView :: CursorLayer(
     }   
 );
 
+FileExplorer :: CursorLayer(
+    struct {
+        text_buffer: s64 = -1;
+    }
+);
+
 DebugViewType :: enum u8 {
     NONE :: 0;
     UNDO_REDO :: 1;
@@ -799,6 +813,9 @@ active_view_id: s64;
 background_view_id: s64 = -1; 
 vim_console_id: s64;
 kb_cursor_blink_time := 0.68;
+
+tool_view_id: s64;
+tool_view_is_active: bool;
 
 view_pool: DynamicPool(View);
 view_layer_pool: DynamicPool(ViewLayerChunk);
