@@ -15,6 +15,7 @@ Render_Vim_Console_Text :: (using vim_console: *VimConsole, is_active: bool) {
     view_layer := View_Layer_From_Data(xx vim_console);
     Initialize_Text_Renderer(*renderer, view_layer, 2);
     tabbed_buffer_chars := Expand_Tabs(auxiliary_input_buffer, 4);
+    renderer.screen_render_begin.y -= 3;
 
     prefix := ifx vim_console.mode == .COMMAND then ":" else "/"; // command or search
     Immediate_Render_Marked_Line(*renderer, tabbed_buffer_chars, bRGB_WHITE, prefix, VIM_CONSOLE_TEXT_DEPTH);

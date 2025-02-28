@@ -105,6 +105,7 @@ Get_File_Buffer :: (file_path: string) -> *TextBuffer {
 }
 
 Load_File_Into_Buffer :: (path: string) -> s64 {
+    Log("loading file %/%", get_working_directory(), path);
     file_string, success := Read_Entire_File(path, true);
     if !success {
         Log_Error("unable to open [%]", path);

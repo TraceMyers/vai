@@ -154,7 +154,9 @@ Execute_Command_Open :: (args: [][]u32) {
     }
     new_buffer_id := Get_File_Buffer_ID(filename);
     if new_buffer_id == -1 {
-        write_entire_file(filename, "");
+        if !write_entire_file(filename, "") {
+            return;
+        }
         new_buffer_id = Get_File_Buffer_ID(filename);
         View_Layer_Soft_Reset(bg_layer);    
     }
