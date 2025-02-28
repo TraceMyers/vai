@@ -667,6 +667,7 @@ ViewLayerData :: union {
 
 ViewLayer :: struct {
     type: ViewLayerType;
+    need_reinit: bool;
     id: u32;
     view_position: Vector2; 
     using data: ViewLayerData;
@@ -695,6 +696,13 @@ Layer_Text_Buffer :: (layer: *ViewLayer) -> *TextBuffer {
     if layer.type == {
     case .FILE_EDITOR;
         buffer_index := layer.file_editor.file_buffer;
+        if buffer_index == -1 {
+            return null;
+        } else {
+            return *file_buffers.items[buffer_index];
+        }
+    case .FILE_EXPLORER;
+        buffer_index := layer.file_explorer.text_buffer;
         if buffer_index == -1 {
             return null;
         } else {

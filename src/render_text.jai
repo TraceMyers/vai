@@ -212,19 +212,19 @@ Render_Text_Cursor :: (renderer: *TextRenderer, cursor: *Cursor, just_want_out_r
     return IntVector2.{ul_x, ul_y}, IntVector2.{lr_x, lr_y};
 }
 
-Render_Cursor_Line_Block :: (renderer: *TextRenderer, cursor: *Cursor, depth := DEFAULT_DEPTH) {
+Render_Cursor_Line_Block :: (renderer: *TextRenderer, cursor: *Cursor, alpha := 0.08, depth := DEFAULT_DEPTH) {
     _, ul_y := Text_To_Render_Space(renderer, cursor.x, cursor.y);
     ul_x := renderer.align_info_main.screen_x;
     lr_x := rendering_scissor_lr.x;
     lr_y := ul_y + renderer.screen_line_height;
 
     Set_Shader_For_Blended_Color();
-    Render_Quad(IntVector2.{ul_x, ul_y}, IntVector2.{lr_x, lr_y}, .{rgb=fRGB_WHITE, a=0.09}, depth=depth);
+    Render_Quad(IntVector2.{ul_x, ul_y}, IntVector2.{lr_x, lr_y}, .{rgb=fRGB_WHITE, a=alpha}, depth=depth);
     Flush_Draws();
 }
 
 Render_Text_Selection_Blocks :: (renderer: *TextRenderer, text_buffer: *TextBuffer, cursor: *Cursor, y_filter := -1) {
-    if vi_mode != .VISUAL then return;
+    // if vi_mode != .VISUAL then return;
 
     Set_Shader_For_Blended_Color();
     start, end := Cursor_Selection(cursor);

@@ -18,6 +18,15 @@
 //      - lines so it looks nice
 //      - font size variation
 //      - hotkey key at the top
+//      - path navigation stuff:
+//          - scroll up to path and the bottom level directory will be selected
+//          - if this directory has, during the session, been navigated to by going up one directory, then the source directory in that navigation will appear greyed out to the right of the cur directory, so that you can scroll to the right and go down into that directory
+//          - backspace deletes the currently selected directory in the path, and allows you to type, with completion suggetions and one-tap complete for the top suggestion
+//              - maybe also insert/append/cw/ciw?
+//          - if possible, a preview of the file is shown at the bottom. you can press a key combo to expand the preview
+//              and navigate it like a normal file buffer
+//                 - loading of this needs to be async so it doesn't halt scrolling
+// TODO: file buffer hotkeys, like control groups in an rts
 
 quit: bool;
 exe_path: string;
@@ -53,7 +62,9 @@ Vai_Main :: () {
         if resized {
             Post_Resize_Window();
         }
+        
         Update_Window_Events();
+
         if quit then break;
         any_input := Translate_Inputs_To_Actions();
         do_full_update := any_input | resized | ALWAYS_FULL_UPDATE;

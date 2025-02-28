@@ -172,6 +172,11 @@ Enter_Normal_Mode :: () {
         layer := Active_View_Layer();
         assert(layer.type == .VIM_CONSOLE);
         do_search := false;
+
+        assert(background_view_id != -1);
+        active_view_id = background_view_id;
+        background_view_id = -1;
+        
         if layer.vim_console.mode == {
         case .COMMAND;
             if auxiliary_input_buffer.count > 0 {
@@ -189,10 +194,7 @@ Enter_Normal_Mode :: () {
             }
         }
         array_reset_keeping_memory(*auxiliary_input_buffer);
-        assert(background_view_id != -1);
-        active_view_id = background_view_id;
-        background_view_id = -1;
-        Log("active: %, background: %", active_view_id, background_view_id);
+
         if do_search  {
             Text_Pattern_Search_Forward();
         }
