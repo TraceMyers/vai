@@ -129,7 +129,7 @@ Scroll_To_Next_Editor :: () {
 
     next_editor := -1;
     for sort_info {
-        if it.view_id == active_view_id {
+        if it.view_id == Active_View_ID() {
             next_editor = it_index + 1;
             break;
         }
@@ -138,7 +138,7 @@ Scroll_To_Next_Editor :: () {
         next_editor = 0;
     }
 
-    active_view_id = sort_info[next_editor].view_id;
+    Replace_Active_View_ID(sort_info[next_editor].view_id);
 }
 
 Insert_New_Line :: () {
@@ -173,9 +173,7 @@ Enter_Normal_Mode :: () {
         assert(layer.type == .VIM_CONSOLE);
         do_search := false;
 
-        assert(background_view_id != -1);
-        active_view_id = background_view_id;
-        background_view_id = -1;
+        Pop_Active_View_ID();
         
         if layer.vim_console.mode == {
         case .COMMAND;
@@ -849,24 +847,25 @@ Enter_Search_Mode :: () {
     Init_Cursor_Proc_Or_Return();
 
     if Active_View_Layer().type == {
-    case .FILE_EDITOR;
+    case .FILE_EDITOR; #through;
+    case .FILE_EXPLORER;
         vi_mode = .COMMAND;
-        background_view_id = active_view_id;
-        active_view_id = vim_console_id;
+        Push_Active_View_ID(vim_console_id);
         array_reset_keeping_memory(*auxiliary_input_buffer);
         Active_View_Layer().vim_console.mode = .SEARCH;
     case;
     }
 }
 
+// TODO: boilerplate with Enter_Search_Mode
 Enter_Command_Mode :: () {
     Init_Cursor_Proc_Or_Return();
 
     if Active_View_Layer().type == {
-    case .FILE_EDITOR;
+    case .FILE_EDITOR; #through;
+    case .FILE_EXPLORER;
         vi_mode = .COMMAND;
-        background_view_id = active_view_id;
-        active_view_id = vim_console_id;
+        Push_Active_View_ID(vim_console_id);
         array_reset_keeping_memory(*auxiliary_input_buffer);
         Active_View_Layer().vim_console.mode = .COMMAND;
     case;

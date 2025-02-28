@@ -116,7 +116,7 @@ Execute_Command_Close :: (args: [][]u32) {
     if close_object == {
     case .NONE;
     case .VIEW;
-        Close_View(active_view_id);
+        Close_View(Active_View_ID());
     case .BUFFER;
         _, layer := Get_File_Editor_Background_Layer();
         if layer != null {
@@ -126,10 +126,10 @@ Execute_Command_Close :: (args: [][]u32) {
 }
 
 Get_File_Editor_Background_Layer :: () -> *View, *ViewLayer {
-    if active_view_id < 0 {
+    if Active_View_ID() < 0 {
         return null, null;
     }
-    bg_view := View_From_ID(active_view_id);
+    bg_view := View_From_ID(Active_View_ID());
     bg_layer := Active_Layer_Of_View(bg_view);
     if bg_layer == null {
         return null, null;
@@ -168,7 +168,7 @@ Execute_Command_Split :: (args: [][]u32, vertical: bool) {
         return;
     }
     new_view := Split_View(bg_view, ifx vertical then .VERTICAL else .HORIZONTAL, false);
-    active_view_id = Get_Item_Index(*view_pool, new_view);
+    Replace_Active_View_ID(Get_Item_Index(*view_pool, new_view));
     file_editor_id := bg_layer.file_editor.file_buffer;
     if args.count != 0 {
         filename := Encode(As_String(args[0]), .UTF32, .UTF8);
@@ -212,17 +212,15 @@ Execute_Command_Toggle_Tool_View :: (args: [][]u32) {
     screen_proportion := *settings_file_data.tool_view_screen_proportion;
     screen_proportion.* = clamp(screen_proportion.*, 0.05, 1.0);
     if tool_view_is_active {
+        tool_view_is_active = false;
         tool_view.viewport.left = 0.0;
         base_empty_view.viewport.right = 1.0;
-        tool_view_is_active = false;
-        active_view_id = background_view_id;
-        background_view_id = -1;
+        Pop_Active_View_ID();
     } else {
+        tool_view_is_active = true;
         tool_view.viewport.left = screen_proportion.*;
         base_empty_view.viewport.right = 1.0 - screen_proportion.*;
-        tool_view_is_active = true;
-        background_view_id = background_view_id;
-        active_view_id = tool_view_id;
         tool_view.layers[tool_view.active_layer].need_reinit = true;
+        Push_Active_View_ID(tool_view_id);
     }
 }

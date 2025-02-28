@@ -11,6 +11,8 @@ Editor_Views :: struct {
         Initialize(*view_pool, VIEWS_MAX);
         actions_executed_this_frame.allocator = temp;
 
+        editor_view_stack.data = editor_view_stack_buffer.data;
+
         Create_Base_Views();
         return true;
     }
@@ -73,7 +75,7 @@ Create_Base_Views :: () {
         layer.type = .FILE_EDITOR;
         layer.file_editor = .{};
         layer.file_editor.file_buffer = Get_File_Buffer_ID(intro_file_name);
-        active_view_id = Add_View(.{inverted=true}, *layer, base_empty_view_id);
+        Push_Active_View_ID(Add_View(.{inverted=true}, *layer, base_empty_view_id));
     }
 
     // viewport: Viewport;
@@ -107,18 +109,8 @@ Prepare_Intro_File :: () -> string {
     return INTRO_FILE_NAME;
 }
 
-Activate_Background_View :: () {
-    active_view_id = background_view_id;
-    background_view_id = -1;
-}
-
-Set_Active_View :: (id: s64) {
-    active_view_id = id;
-    background_view_id = -1;
-}
-
 Active_View :: inline () -> *View {
-    return *view_pool.items[active_view_id];
+    return *view_pool.items[Active_View_ID()];
 }
 
 Active_View_Layer :: inline () -> *ViewLayer {
@@ -216,7 +208,7 @@ Split_View :: (v: *View, direction: SplitDirection, set_as_active := true) -> *V
 
     new_view_id = Add_View(.{}, *layer_copy, parent_id);
     if set_as_active {
-        Set_Active_View(new_view_id);
+        Push_Active_View_ID(new_view_id);
     }
     new_view := Get_Item(*view_pool, new_view_id);
 
@@ -316,11 +308,10 @@ Close_View :: (id: s64, dependent_id := -1) {
 
             valid_active_id := Find_Valid_Child_View_To_Make_Active(parent);
             assert(valid_active_id != -1);
-            if active_view_id == id || active_view_id == dependent_id {
-                active_view_id = valid_active_id;
-            }
-            if background_view_id == id || background_view_id == dependent_id {
-                background_view_id = valid_active_id;
+            for *editor_view_stack {
+                if it.* == id || it.* == dependent_id {
+                    it.* = valid_active_id;
+                }
             }
         }
     }
@@ -410,7 +401,7 @@ Render_View :: (view: *View, view_id: s64, viewport_id: s64, render_pass: ViewRe
         }
 
         view_layer := *view.layers[view.active_layer];
-        view_active := view_id == active_view_id;
+        view_active := view_id == Active_View_ID();
         if view_active {
             bounds_ul, bounds_lr := View_Bounds(view_layer);
             scroll_speed := settings_file_data.arrow_key_scroll_speed; 
@@ -436,7 +427,7 @@ Render_View :: (view: *View, view_id: s64, viewport_id: s64, render_pass: ViewRe
 Render_Partial_Update :: (view: *View, view_id: s64, viewport_id: s64, unused: *void) {
     if view.layers.data == null then return;
     active_layer := *view.layers[view.active_layer];
-    if view_id != active_view_id {
+    if view_id != Active_View_ID() {
         active_view_layer := Active_View_Layer();
         if active_layer.type == .FILE_EDITOR 
         && active_view_layer.type == .FILE_EDITOR
@@ -808,6 +799,44 @@ Lower_Right :: inline () -> IntVector2 {
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+Active_View_ID :: () -> s64 {
+    if editor_view_stack.count > 0 {
+        return editor_view_stack[editor_view_stack.count-1];
+    } else return -1;
+}
+
+Background_View_ID :: (bg_steps: u32 = 1) -> s64 {
+    i := editor_view_stack.count - (1 + cast(s64)(bg_steps));
+    assert(i >= 0);
+    return editor_view_stack[i];
+}
+
+Replace_Background_View_ID :: (id: s64, bg_steps: u32 = 1) {
+    i := editor_view_stack.count - (1 + cast(s64)(bg_steps));
+    assert(i >= 0);
+    editor_view_stack[i] = id;
+}
+
+Replace_Active_View_ID :: (id: s64) {
+    assert(editor_view_stack.count > 0);
+    editor_view_stack[editor_view_stack.count-1] = id;
+}
+
+Push_Active_View_ID :: (id: s64) {
+    assert(editor_view_stack.count < editor_view_stack_buffer.count);
+    editor_view_stack.count += 1;
+    editor_view_stack[editor_view_stack.count-1] = id;
+}
+
+Pop_Active_View_ID :: () -> s64 {
+    assert(editor_view_stack.count > 0);
+    id := editor_view_stack[editor_view_stack.count-1];
+    editor_view_stack.count -= 1;
+    return id;
+}
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 VIEW_CHILDREN_MAX :: 16;
 VIEW_LAYERS_MAX :: 16;
 VIEWS_MAX :: 128;
@@ -816,14 +845,14 @@ VIM_CONSOLE_DEPTH :: 0.0;
 VIM_CONSOLE_TEXT_DEPTH :: 0.1;
 TEXT_DEPTH :: 0.0;
 
-active_view_id: s64;
-// for storing the active view id when another view temporarily takes precedence
-background_view_id: s64 = -1; 
 vim_console_id: s64;
 kb_cursor_blink_time := 0.68;
 
 tool_view_id: s64;
 tool_view_is_active: bool;
+
+editor_view_stack_buffer: [128]s64;
+editor_view_stack: []s64;
 
 view_pool: DynamicPool(View);
 view_layer_pool: DynamicPool(ViewLayerChunk);
