@@ -16,6 +16,7 @@
     .{.["v"],                   "ENTER_VISUAL_MODE",                            .{modes=.NORMAL,                 proc=Enter_Visual_Mode}},
     .{.["<CR>"],                "EXECUTE_COMMANDS_AND_ENTER_NORMAL_MODE",       .{modes=.COMMAND,                proc=Enter_Normal_Mode}},
     .{.["<CR>"],                "INSERT_NEW_LINE"           ,                   .{modes=.INSERT,                 proc=Insert_New_Line}},
+    .{.["<CR>"],                "NORMAL_MODE_RETURN"           ,                .{modes=.NORMAL,                 proc=Normal_Mode_Return}},
     .{.["i"],                   "ENTER_INSERT_MODE_PREPEND",                    .{modes=.NORMAL,                 proc=Enter_Insert_Mode_Prepend}},
     .{.["a"],                   "ENTER_INSERT_MODE_APPEND",                     .{modes=.NORMAL,                 proc=Enter_Insert_Mode_Append}},
     .{.["\x08"],                "BACKSPACE",                                    .{modes=.COMMAND | .INSERT,      proc=Backspace}},            

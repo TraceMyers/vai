@@ -78,6 +78,7 @@ Shutdown_Text_Buffer :: (buffer: *TextBuffer) {
 }
 
 Clear_Text_Buffer :: (using buffer: *TextBuffer, keep_allocations: bool) {
+    Commit_And_Empty_Utf32_Buffers();
     if (keep_allocations) {
         array_reset_keeping_memory(*lines);
     } else {

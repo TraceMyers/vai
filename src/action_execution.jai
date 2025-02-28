@@ -8,7 +8,13 @@ Action_Execution :: struct {
 
 Cursor_Scroll_Down :: () {
     Init_Cursor_Proc_Or_Return(true);
-    cursor.y = min(cursor.y+1, sdw(max(text_buffer.lines.count-1, 0)));
+    step_size : s32 = 1;
+    if active_layer.type == {
+    case .FILE_EXPLORER;
+        // file explorer line 1 is a blank space
+        step_size = ifx cursor.y == 0 then sdw(2) else sdw(1);
+    }
+    cursor.y = min(cursor.y + step_size, sdw(max(text_buffer.lines.count-1, 0)));
     line := Line_View(text_buffer, cursor.y);
     cursor.x = Clamp_X_To_Line(cursor.target_x, line);
     cursor.just_moved = true;
@@ -17,9 +23,20 @@ Cursor_Scroll_Down :: () {
 
 Cursor_Scroll_Up :: () {
     Init_Cursor_Proc_Or_Return(true);
-    cursor.y = max(cursor.y-1, sdw(0));
-    line := Line_View(text_buffer, cursor.y);
-    cursor.x = Clamp_X_To_Line(cursor.target_x, line);
+    step_size : s32 = 1;
+    if active_layer.type == {
+    case .FILE_EDITOR;
+        cursor.y = max(cursor.y-1, sdw(0));
+        line := Line_View(text_buffer, cursor.y);
+        cursor.x = Clamp_X_To_Line(cursor.target_x, line);
+    case .FILE_EXPLORER;
+        if cursor.y != 0 {
+            // file explorer line 1 is a blank space
+            step_size = ifx cursor.y == 2 then sdw(2) else sdw(1);
+            cursor.y = max(cursor.y - step_size, sdw(0));
+            File_Explorer_Reset_Cursor_On_Path(cursor, text_buffer);
+        }
+    }
     cursor.just_moved = true;
     Add_Cursor_Move_Artifact(cursor, .SCROLL_UP);
 }
@@ -27,8 +44,23 @@ Cursor_Scroll_Up :: () {
 Cursor_Scroll_Right :: () {
     Init_Cursor_Proc_Or_Return(true);
     line := Line_View(text_buffer, cursor.y);
-    cursor.x += 1;
-    cursor.x = Clamp_X_To_Line(cursor.x, line, .FORWARD);
+    if active_layer.type == {
+    case .FILE_EDITOR;
+        cursor.x += 1;
+        cursor.x = Clamp_X_To_Line(cursor.x, line, .FORWARD);
+    case .FILE_EXPLORER;
+        if cursor.y == 0 {
+            line := Line_View(text_buffer, cursor.y);
+            for cursor.x..line.count-2 {
+                if Is_Slash(line[it]) {
+                    cursor.x = sdw(it + 1);
+                    break;
+                }
+            }
+        } else {
+            Normal_Mode_Return();
+        }
+    }
     cursor.target_x = cursor.x;
     cursor.just_moved = true;
     Add_Cursor_Move_Artifact(cursor, .SCROLL_RIGHT);
@@ -37,18 +69,39 @@ Cursor_Scroll_Right :: () {
 Cursor_Scroll_Left :: () {
     Init_Cursor_Proc_Or_Return(true);
     line := Line_View(text_buffer, cursor.y);
-    cursor.x -= 1;
-    cursor.x = Clamp_X_To_Line(cursor.x, line);
-    cursor.target_x = cursor.x;
+    if active_layer.type == {
+    case .FILE_EDITOR;
+        cursor.x -= 1;
+        cursor.x = Clamp_X_To_Line(cursor.x, line);
+        cursor.target_x = cursor.x;
+    case .FILE_EXPLORER;
+        if cursor.y == 0 {
+            line := Line_View(text_buffer, cursor.y);
+            old_x := cursor.x;
+            cursor.x -= 2;
+            Cursor_Back_Up_To_Slash(cursor, line);
+            if cursor.x != old_x {
+                File_Explorer_Set_Directory_From_Cursor_Pos(cursor, line);
+            }
+        }
+    }
     cursor.just_moved = true;
     Add_Cursor_Move_Artifact(cursor, .SCROLL_LEFT);
 }
 
 Cursor_Scroll_To_Top :: () {
     Init_Cursor_Proc_Or_Return(true);
+    prev_y := cursor.y;
     cursor.y = 0;
-    line := Line_View(text_buffer, cursor.y);
-    cursor.x = Clamp_X_To_Line(cursor.target_x, line);
+    if active_layer.type == {
+    case .FILE_EDITOR;
+        line := Line_View(text_buffer, cursor.y);
+        cursor.x = Clamp_X_To_Line(cursor.target_x, line);
+    case .FILE_EXPLORER;
+        if prev_y != 0 {
+            File_Explorer_Reset_Cursor_On_Path(cursor, text_buffer);
+        }
+    }
     cursor.just_moved = true;
 }
 
@@ -63,8 +116,13 @@ Cursor_Scroll_To_Bottom :: () {
 Cursor_Scroll_To_Line_End :: () {
     Init_Cursor_Proc_Or_Return(true);
     line := Line_View(text_buffer, cursor.y);
-    cursor.x = max(sdw(ifx vi_mode == .INSERT then line.count else line.count-1), 0);
-    cursor.x = Clamp_X_To_Line(cursor.x, line);
+    if active_layer.type == {
+    case .FILE_EDITOR;
+        cursor.x = max(sdw(ifx vi_mode == .INSERT then line.count else line.count-1), 0);
+        cursor.x = Clamp_X_To_Line(cursor.x, line);
+    case .FILE_EXPLORER;
+        File_Explorer_Reset_Cursor_On_Path(cursor, text_buffer);
+    }
     cursor.target_x = cursor.x;
     cursor.just_moved = true;
 }
@@ -96,6 +154,13 @@ Cursor_Scroll_To_Line_Zero :: () {
 }
 
 Scroll_To_Next_Editor :: () {
+    Init_Cursor_Proc_Or_Return(true);
+
+    if active_layer.type == .FILE_EXPLORER {
+        unused: [][]u32;
+        Execute_Command_Toggle_Tool_View(unused);
+    }
+
     //  --- proc specific stuff ---
     EditorSortInfo :: struct {
         view_id: s32;
@@ -279,8 +344,19 @@ Delete_Line :: () {
 
 Word_Scroll :: (forward: bool, small_word: bool) {
     Init_Cursor_Proc_Or_Return(true);
-    line := Line_View(text_buffer, cursor.y);
 
+    if active_layer.type == .FILE_EXPLORER {
+        if cursor.y == 0 {
+            if forward {
+                Cursor_Scroll_Right();
+            } else {
+                Cursor_Scroll_Left();
+            }
+        }
+        return;
+    }
+
+    line := Line_View(text_buffer, cursor.y);
     reference_blob: TextBlobType = ---;
     init_x := ifx forward then cursor.x else cursor.x - 1;
     init_y := cursor.y;
@@ -366,6 +442,14 @@ Word_Scroll_Backward_Large :: #bake_arguments Word_Scroll(forward=false, small_w
 
 Word_Scroll_To_End :: (small: bool) {
     Init_Cursor_Proc_Or_Return(true);
+
+    if active_layer.type == .FILE_EXPLORER {
+        if cursor.y == 0 {
+            Cursor_Scroll_Right();
+        }
+        return;
+    }
+
     line := Line_View(text_buffer, cursor.y);
 
     pre_scroll_x := cursor.x;
@@ -746,7 +830,46 @@ Create_Command_Autocomplete_Suggestions :: () {
     Log("hello I'm a suggestion ;)");
 }
 
+Normal_Mode_Return :: () {
+    Init_Cursor_Proc_Or_Return(true);
+
+    if active_layer.type == {
+    case .FILE_EXPLORER;
+        working_directory := File_Explorer_Get_Directory();
+        if cursor.y == 0 {
+
+        } else {
+            // line 1 is an empty line in the file explorer
+            directory_list := Directory_List(working_directory);
+            target_iter_ct := cursor.y - 2;
+            if target_iter_ct < 0 || target_iter_ct > directory_list.count {
+                return;
+            }
+            i := 0;
+
+            target_index := -1;
+            for directory_list {
+                if it.is_directory || it.is_symlink {
+                    if i == target_iter_ct {
+                        target_index = it_index;
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+
+            if target_index != -1 {
+                new_dir := tprint("%/%", working_directory, directory_list[target_index].name);
+                // Log("setting working directory: %", new_dir);
+                File_Explorer_Set_Directory(copy_string(new_dir));
+                File_Explorer_Clamp_Y_To_Directory_List(cursor, true);
+            }
+        }
+    }
+}
+
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 Repeat_Last_Change :: () {
     Inject_Modified_Utf32_Into_Frame_Input(last_change_input);
@@ -1004,6 +1127,67 @@ Clamp_X_To_Line :: (x: s32, line: []u32, $TAB_EXPANSION_SKIP: TabExpansionSkip =
         }
     }
     return x;
+}
+
+Cursor_Back_Up_To_Slash :: (cursor: *Cursor, line: []u32) {
+    if cursor.x > 1 then for #v2 < 0..cursor.x-1 {
+        if Is_Slash(line[it]) {
+            cursor.x = it + 1;
+            return;
+        }
+    }
+    cursor.x = 0;
+}
+
+File_Explorer_Reset_Cursor_On_Path :: (cursor: *Cursor, text_buffer: *TextBuffer) {
+    if cursor.y == 0 {
+        line := Line_View(text_buffer, cursor.y);
+        cursor.x = sdw(line.count - 1);
+        Cursor_Back_Up_To_Slash(cursor, line);
+    }
+}
+
+File_Explorer_Set_Directory_From_Cursor_Pos :: (cursor: *Cursor, line: []u32) {
+    // maybe not a great name, because it's not a deep copy, just a ptr,count copy
+    line_copy := line;
+    for cursor.x..line_copy.count-1 {
+        if Is_Slash(line_copy[it]) {
+            line_copy.count = it;
+            unmarked_utf32: [..]u32;
+            unmarked_utf32.allocator = temp;
+            Get_Unmarked_Utf32(line_copy, *unmarked_utf32);
+            new_path_utf8 := Encode(As_String(unmarked_utf32), .UTF32, .UTF8, allocator=context.allocator);
+            File_Explorer_Set_Directory(new_path_utf8);
+            File_Explorer_Clamp_Y_To_Directory_List(cursor);
+            break;
+        }
+    }
+}
+
+File_Explorer_Set_Directory :: (dir: string) {
+    tool_view := view_pool.items[tool_view_id];
+    explorer_layer := *tool_view.layers[ToolViewLayer.FILE_EXPLORER];
+    free(explorer_layer.file_explorer.directory);
+    explorer_layer.file_explorer.directory = dir;
+}
+
+File_Explorer_Get_Directory :: () -> string {
+    tool_view := view_pool.items[tool_view_id];
+    explorer_layer := *tool_view.layers[ToolViewLayer.FILE_EXPLORER];
+    return explorer_layer.file_explorer.directory;
+}
+
+File_Explorer_Clamp_Y_To_Directory_List :: (cursor: *Cursor, set_to_min := false) {
+    directory_list := Directory_List(File_Explorer_Get_Directory());
+    if set_to_min {
+        if directory_list.count == 0 {
+            cursor.y = 0;
+        } else {
+            cursor.y = 2;
+        }
+    } else {
+        cursor.y = min(cursor.y, sdw(directory_list.count + 1));
+    }
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -312,6 +312,10 @@ Tokenize_By_Whitespace :: (in_str: []u32, tokens: *[..][]u32) {
     }
 }
 
+Is_Slash :: inline (c: $T) -> bool {
+    return c == #char "/" || c == #char "\\";
+}
+
 SerialBuffer :: struct {
     bytes: [..]u8;
     deserialize_offset: s32;
@@ -367,5 +371,30 @@ Serialize_Or_Deserialize :: (buffer: *SerialBuffer, item: *$T) {
         Serialize(buffer, item);
     } else {
         Deserialize(buffer, item);
+    }
+}
+
+DirectoryListItem :: struct {
+    name:   string;
+    is_symlink:   bool;
+    is_directory: bool;
+}
+
+Directory_List :: (path: string) -> []DirectoryListItem #must {
+    items: [..]DirectoryListItem;
+    items.allocator = temp;
+    Visitor :: (info: *File_Visit_Info, user_data: *[..]DirectoryListItem) {
+        array_add(user_data, .{Temp_Copy_String(info.short_name), info.is_symlink, info.is_directory});
+    }
+
+    visit_files(path, false, *items, Visitor, visit_directories=true);
+    return items;
+}
+
+Convert_To_Forward_Slashes :: (str: string) {
+    for 0..str.count-1 {
+        if str[it] == #char "\\" {
+            str[it] = #char "/";
+        }
     }
 }

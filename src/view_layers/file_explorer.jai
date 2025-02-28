@@ -32,53 +32,83 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
     Initialize_Text_Renderer(*renderer, view_layer, 8);
 
     buf: *TextBuffer = *file_buffers.items[file_explorer.text_buffer];
-    working_directory := get_working_directory();
-
-    // #run log("type of text buffer : %", type_of(text_buffer));
+    working_directory := view_layer.file_explorer.directory;
+    directory_list := Directory_List(working_directory);
+    Convert_To_Forward_Slashes(working_directory);
 
     if buf.file_path != working_directory {
         Clear_Text_Buffer(buf, true);
-        buf.file_path = copy_string(working_directory);
+        Initialize_Text_Buffer(buf, copy_string(working_directory), 64, 64);
 
-        directory := tprint("%", working_directory);
-        Append_Line(buf, directory, false);
+        Append_Line(buf, working_directory, false);
         Append_Line(buf, "", false);
-        
-        directory_list := file_list(working_directory, follow_directory_symlinks=false);
-        for full_path : directory_list {
-            success, left, right := split_from_right(full_path, #char "/");
-            if success {
-                item := tprint("  %", right);
-                Append_Line(buf, item, false);
+
+        for item : directory_list {
+            name: string;
+            if item.is_directory {
+                name = tprint("   %/", item.name);
+            } else if item.is_symlink {
+                name = tprint("   %/", item.name);
+            } else {
+                continue;
             }
+            Append_Line(buf, name, false);
+        }
+        for item : directory_list {
+            if item.is_directory || item.is_symlink {
+                continue;
+            }
+            name := tprint("   %", item.name);
+            Append_Line(buf, name, false);
         }
     }
 
+    // draw icons
+    Set_Shader_For_Blended_Color();
+    line_y : s32 = 2;
+    for item : directory_list {
+        name: string;
+        color: fRGBA;
+        alpha := ifx line_y == cursor.y then 0.8 else 0.5;
+        if item.is_directory {
+            color = fRGBA.{rgb=.{0.94, 0.835, 0.57}, a=alpha};
+        } else if item.is_symlink {
+            color = fRGBA.{rgb=.{0.94, 0.57, 0.835}, a=alpha};
+        } else {
+            continue;
+        }
+        Draw_Folder(*renderer, 0, line_y, *color);
+        line_y += 1;
+    }
+    for item : directory_list {
+        if item.is_directory || item.is_symlink {
+            continue;
+        }
+    }
+
+    // draw text
     Render_Text_Buffer_Lines(*renderer, buf, false);
     Flush_Draws();
 
-    // could just use this when looking at content list
-    // Render_Cursor_Line_Block(*renderer, *file_explorer.cursor, 0.18);
-
     if file_explorer.cursor.y == 0 {
-
         path_view := Line_View(buf, 0);
-        
         if view_layer.need_reinit {
             file_explorer.cursor.x = xx (path_view.count-1);
+            Cursor_Back_Up_To_Slash(*file_explorer.cursor, path_view);
             view_layer.need_reinit = false;
         }
-
-        slash_index := 0;
-        for #v2 < 0..file_explorer.cursor.x {
-            if path_view[it] == #char "\\" {
-                slash_index = it;
+        end_x := file_explorer.cursor.x;
+        if file_explorer.cursor.x <= path_view.count-2 for file_explorer.cursor.x..path_view.count-2 {
+            if Is_Slash(path_view[it]) {
+                end_x -= 1;
                 break;
             }
+            end_x += 1;
         }
-
-        file_explorer.cursor.begin_selection = .{xx (slash_index + 1), file_explorer.cursor.y};
+        file_explorer.cursor.begin_selection = .{end_x, file_explorer.cursor.y};
         Render_Text_Selection_Blocks(*renderer, buf, *file_explorer.cursor);
+    } else {
+        Render_Cursor_Line_Block(*renderer, *file_explorer.cursor, 0.18);
     }
 
     Set_Shader_For_Text();
@@ -95,7 +125,7 @@ Render_File_Explorer_Lines :: (using file_explorer: *FileExplorer, is_active: bo
     dir_inner_box_ul := outer_box_ul;
     dir_inner_box_lr := outer_box_lr;
     dir_inner_box_ul.x += 5;
-    dir_inner_box_ul.y += 30;
+    dir_inner_box_ul.y += 40;
     dir_inner_box_lr.x -= 5;
     dir_inner_box_lr.y -= 400;
     Render_Quad_Lines(dir_inner_box_ul, dir_inner_box_lr, .{rgb=fRGB_WHITE, a=0.3});

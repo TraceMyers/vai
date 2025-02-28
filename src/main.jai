@@ -18,6 +18,7 @@
 //      - lines so it looks nice
 //      - font size variation
 //      - hotkey key at the top
+//      - if view is wide enough, preview directory expansion to the right
 //      - path navigation stuff:
 //          - scroll up to path and the bottom level directory will be selected
 //          - if this directory has, during the session, been navigated to by going up one directory, then the source directory in that navigation will appear greyed out to the right of the cur directory, so that you can scroll to the right and go down into that directory
@@ -144,3 +145,4 @@ GetConsoleWindow :: () -> HWND #foreign kernel32;
 #load "bit_array.jai";
 #load "thread_worker.jai";
 #load "commands.jai";
+#load "draw_icon.jai";

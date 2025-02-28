@@ -62,6 +62,7 @@ Create_Base_Views :: () {
         layer.type = .FILE_EXPLORER;
         layer.file_explorer = .{};
         layer.file_explorer.text_buffer = Request_Item(*file_buffers);
+        layer.file_explorer.directory = copy_string(get_working_directory());
         tool_view_id = Add_View(.{type=.PROPORTION, left=0.0}, *layer, ROOT_ID);
     }
     // empty background to stage file editors
@@ -743,6 +744,7 @@ DebugView :: CursorLayer(
 FileExplorer :: CursorLayer(
     struct {
         text_buffer: s64 = -1;
+        directory: string;
     }
 );
 
@@ -837,6 +839,10 @@ Pop_Active_View_ID :: () -> s64 {
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+ToolViewLayer :: enum {
+    FILE_EXPLORER :: 0;
+}
+
 VIEW_CHILDREN_MAX :: 16;
 VIEW_LAYERS_MAX :: 16;
 VIEWS_MAX :: 128;
@@ -875,9 +881,10 @@ type ':close view' or just ':close' to close a view.
 type ':close buffer' to close a text buffer
 type ':save' to write the selected buffer to file.
 type ':quit' to quit the program.
+type ':tools' to open the tool view. currently the only tool is the file explorer, which is incomplete.
 
 Shorthand commands work as long as what you've typed could only resolve to one command.
-For example, ':o somefilename' also loads a file into a buffer.
+For example, ':o ...' loads a file into a buffer just like ':open ...' would.
 
 For learning vim motions, check out vim-adventures.com. 
 If you're already familiar with vim, you'll notice a few things are different in vai, and many features are missing. 

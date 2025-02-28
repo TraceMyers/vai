@@ -1,8 +1,9 @@
 
 Initialize_Render_Text :: () {
-    // font = get_font_at_size("../fonts/cascadia_code", "Cascadia.ttf", pixel_height);
-    fonts_path := tprint("%/../fonts/IBM_Plex_Mono", exe_path);
-    font = get_font_at_size(fonts_path, "IBMPlexMono-Medium.ttf", pixel_height);
+    fonts_path := tprint("%/../fonts/cascadia_code", exe_path);
+    font = get_font_at_size(fonts_path, "Cascadia.ttf", pixel_height);
+    // fonts_path := tprint("%/../fonts/IBM_Plex_Mono", exe_path);
+    // font = get_font_at_size(fonts_path, "IBMPlexMono-Medium.ttf", pixel_height);
     font.temporary_glyphs.allocator = temp;
     font.current_quads.allocator = temp;
     assert(font != null);
@@ -330,9 +331,9 @@ Render_Text_Line :: (renderer: *TextRenderer, align_info: *AlignInfo, utf8: []u8
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 font: *Dynamic_Font;
-pixel_height: s32 = 12;
+pixel_height: s32 = 14;
 gutter_char_width: s32 = 6;
-line_spacing_factor := 0.4;
+line_spacing_factor := 0.6;
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 
