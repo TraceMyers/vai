@@ -840,7 +840,10 @@ Normal_Mode_Return :: () {
 
         } else {
             // line 1 is an empty line in the file explorer
-            directory_list := Directory_List(working_directory);
+            success, directory_list := Directory_List(working_directory);
+            if !success {
+                return;
+            }
             target_iter_ct := cursor.y - 2;
             if target_iter_ct < 0 || target_iter_ct > directory_list.count {
                 return;
@@ -860,9 +863,13 @@ Normal_Mode_Return :: () {
 
             if target_index != -1 {
                 new_dir := tprint("%/%", working_directory, directory_list[target_index].name);
-                // Log("setting working directory: %", new_dir);
-                File_Explorer_Set_Directory(copy_string(new_dir));
-                File_Explorer_Clamp_Y_To_Directory_List(cursor, true);
+                success, _ := Directory_List(new_dir);
+                if success {
+                    File_Explorer_Set_Directory(copy_string(new_dir));
+                    File_Explorer_Clamp_Y_To_Directory_List(cursor, true);
+                } else {
+                    // TODO: access denie?
+                }
             }
         }
     }
@@ -1178,7 +1185,7 @@ File_Explorer_Get_Directory :: () -> string {
 }
 
 File_Explorer_Clamp_Y_To_Directory_List :: (cursor: *Cursor, set_to_min := false) {
-    directory_list := Directory_List(File_Explorer_Get_Directory());
+    success, directory_list := Directory_List(File_Explorer_Get_Directory());
     if set_to_min {
         if directory_list.count == 0 {
             cursor.y = 0;

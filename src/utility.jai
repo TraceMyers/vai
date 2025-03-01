@@ -380,15 +380,15 @@ DirectoryListItem :: struct {
     is_directory: bool;
 }
 
-Directory_List :: (path: string) -> []DirectoryListItem #must {
+Directory_List :: (path: string) -> bool, []DirectoryListItem #must {
     items: [..]DirectoryListItem;
     items.allocator = temp;
     Visitor :: (info: *File_Visit_Info, user_data: *[..]DirectoryListItem) {
         array_add(user_data, .{Temp_Copy_String(info.short_name), info.is_symlink, info.is_directory});
     }
 
-    visit_files(path, false, *items, Visitor, visit_directories=true);
-    return items;
+    success := visit_files(path, false, *items, Visitor, visit_directories=true);
+    return success, items;
 }
 
 Convert_To_Forward_Slashes :: (str: string) {
@@ -397,4 +397,24 @@ Convert_To_Forward_Slashes :: (str: string) {
             str[it] = #char "/";
         }
     }
+}
+
+Is_Basic_Text_File_Extension :: (ext: string) -> bool {
+    return ext == "txt"
+        || ext == "gitignore";
+}
+
+Is_Code_File_Extension :: (ext: string) -> bool {
+    return ext == "c"
+        || ext == "cpp"
+        || ext == "jai"
+        || ext == "md";
+}
+
+Is_Binary_File_Extension :: (ext: string) -> bool {
+    return ext == "exe"
+        || ext == "lib"
+        || ext == "dll"
+        || ext == "a"
+        || ext == "o";
 }

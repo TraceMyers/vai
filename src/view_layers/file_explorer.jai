@@ -33,7 +33,8 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
 
     buf: *TextBuffer = *file_buffers.items[file_explorer.text_buffer];
     working_directory := view_layer.file_explorer.directory;
-    directory_list := Directory_List(working_directory);
+    // TODO: faildure?
+    success, directory_list := Directory_List(working_directory);
     Convert_To_Forward_Slashes(working_directory);
 
     if buf.file_path != working_directory {
@@ -77,13 +78,28 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
         } else {
             continue;
         }
-        Draw_Folder(*renderer, 0, line_y, *color);
+        Draw_Folder_Icon(*renderer, 0, line_y, *color);
         line_y += 1;
     }
     for item : directory_list {
         if item.is_directory || item.is_symlink {
             continue;
         }
+        succeess, left, ext := split_from_right(item.name, #char ".");
+        if ext.count > 0 {
+            alpha := ifx line_y == cursor.y then 0.8 else 0.5;
+            ext = To_Lower_Temp(ext);
+            if Is_Basic_Text_File_Extension(ext) {
+                Draw_Text_File_Icon(*renderer, 0, line_y, alpha);
+            } else if Is_Code_File_Extension(ext) {
+                Draw_Code_File_Icon(*renderer, 0, line_y, alpha);
+            } else if Is_Binary_File_Extension(ext) {
+                Draw_Binary_File_Icon(*renderer, 0, line_y, alpha);
+            } else {
+                // TODO: ?
+            }
+        }
+        line_y += 1;
     }
 
     // draw text
