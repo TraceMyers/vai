@@ -54,7 +54,7 @@ Render_File_Editor_Text :: (using file_editor: *FileEditor, is_active: bool) {
         Flush_Draws();
         cursor.style = ifx vi_mode == .INSERT then .VERTICAL_LINE else .BLOCK;
         // it's al ittle odd for this to be inside a render function, but it makes use of the text renderer data.
-        Cursor_Scroll(file_editor, *renderer);
+        Cursor_Scroll(View_Layer_From_Data(xx file_editor), *renderer, *file_buffers.items[file_editor.file_buffer]);
         Render_Text_Cursor(*renderer, *file_editor.cursor);
     }
 
@@ -137,8 +137,7 @@ View_Axis_Follow_Cursor_Smoothly :: (cursor: *Cursor, view_axis: *float, cursor_
     }
 }
 
-Cursor_Scroll :: (using file_editor: *FileEditor, renderer: *TextRenderer) {
-    layer := View_Layer_From_Data(xx file_editor);
+Cursor_Scroll :: (layer: *ViewLayer, renderer: *TextRenderer, text_buffer: *TextBuffer) {
     layer_cursor := Layer_Cursor(layer);
 
     IDEAL_NET_SIZE : float : 8.0;
@@ -162,7 +161,6 @@ Cursor_Scroll :: (using file_editor: *FileEditor, renderer: *TextRenderer) {
 
     layer_cursor.just_moved = false;
 
-    text_buffer := *file_buffers.items[file_editor.file_buffer];
     if layer_cursor.y < text_buffer.lines.count - 1 {
         scroll_down_repeat, scroll_down_speed := Get_Action_Repeat_Rate(layer_cursor, .SCROLL_DOWN);
         scroll_up_repeat, scroll_up_speed := Get_Action_Repeat_Rate(layer_cursor, .SCROLL_UP);
@@ -178,7 +176,7 @@ Cursor_Scroll :: (using file_editor: *FileEditor, renderer: *TextRenderer) {
         } else if scroll_left_repeat {
             View_Axis_Follow_Cursor_Smoothly(layer_cursor, *layer.view_position.x, cursor_x, hz_net.min, hz_net.size, .SCROLL_LEFT, false, scroll_left_speed);
         } else {
-            cursor.active_scroll_action = .NONE;
+            layer_cursor.active_scroll_action = .NONE;
         }
     }
 

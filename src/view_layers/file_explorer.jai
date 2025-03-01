@@ -20,16 +20,21 @@ Render_File_Explorer_Background :: (using file_explorer: *FileExplorer, is_activ
 
 Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: bool) {
     view_layer := View_Layer_From_Data(xx file_explorer);
-    view_layer.view_position.y = -1;
 
     ul := Upper_Left();
     lr := Lower_Right();
-    // ul.x += 5;
-    lr.x -= 10;
-    Set_View_Scissor(ul, lr);
+
+    outer_box_ul := ul;
+    outer_box_lr := lr;
+    outer_box_ul.x += 4;
+    outer_box_ul.y += 4;
+    outer_box_lr.x -= 9;
+    outer_box_lr.y -= 404;
+    Set_View_Scissor(outer_box_ul, outer_box_lr);
 
     renderer: TextRenderer;
     Initialize_Text_Renderer(*renderer, view_layer, 8);
+    renderer.screen_render_begin.y += renderer.screen_line_height - 1;
 
     buf: *TextBuffer = *file_buffers.items[file_explorer.text_buffer];
     working_directory := view_layer.file_explorer.directory;
@@ -45,14 +50,10 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
         Append_Line(buf, "", false);
 
         for item : directory_list {
-            name: string;
-            if item.is_directory {
-                name = tprint("   %/", item.name);
-            } else if item.is_symlink {
-                name = tprint("   %/", item.name);
-            } else {
+            if !item.is_directory && !item.is_symlink {
                 continue;
             }
+            name := tprint("   %", item.name);
             Append_Line(buf, name, false);
         }
         for item : directory_list {
@@ -81,7 +82,6 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
         Draw_Folder_Icon(*renderer, 0, line_y, *color);
         line_y += 1;
     }
-    save_line_y := line_y;
     for item : directory_list {
         if item.is_directory || item.is_symlink {
             continue;
@@ -106,6 +106,8 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
     // draw text
     Render_Text_Buffer_Lines(*renderer, buf, false);
     Flush_Draws();
+
+    Cursor_Scroll(View_Layer_From_Data(xx file_explorer), *renderer, *file_buffers.items[file_explorer.text_buffer]);
 
     if file_explorer.cursor.y == 0 {
         path_view := Line_View(buf, 0);
