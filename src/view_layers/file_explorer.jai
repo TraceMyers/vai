@@ -144,13 +144,24 @@ Render_File_Explorer_Lines :: (using file_explorer: *FileExplorer, is_active: bo
     dir_inner_box_ul := outer_box_ul;
     dir_inner_box_lr := outer_box_lr;
     dir_inner_box_ul.x += 5;
-    dir_inner_box_ul.y += 40;
+    dir_inner_box_ul.y += 30;
     dir_inner_box_lr.x -= 5;
     dir_inner_box_lr.y -= 400;
-    // Render_Quad_Lines(dir_inner_box_ul, dir_inner_box_lr, .{rgb=fRGB_WHITE, a=0.3});
+    view_position := View_Layer_From_Data(xx file_explorer).view_position;
+    if view_position.y == 0.0 {
+        file_explorer.directory_list_outline_alpha = min(file_explorer.directory_list_outline_alpha + Smoothed_Delta_Time() * DIRECTORY_LIST_ALPHA_FADE_SPEED, DIRECTORY_LIST_ALPHA_MAX);
+    } else {
+        file_explorer.directory_list_outline_alpha = max(file_explorer.directory_list_outline_alpha - Smoothed_Delta_Time() * DIRECTORY_LIST_ALPHA_FADE_SPEED, 0.0);
+    }
+    Render_Quad_Lines(dir_inner_box_ul, dir_inner_box_lr, .{rgb=fRGB_WHITE, a=file_explorer.directory_list_outline_alpha});
     preview_inner_box_ul := dir_inner_box_ul;
     preview_inner_box_lr := dir_inner_box_lr;
     preview_inner_box_ul.y = dir_inner_box_lr.y + 5;
     preview_inner_box_lr.y = outer_box_lr.y - 5;
     Render_Quad_Lines(preview_inner_box_ul, preview_inner_box_lr, .{rgb=fRGB_WHITE, a=0.3});
 }
+
+#scope_file // ------------------------------------------------------------------------------------------------ { FILE }
+
+DIRECTORY_LIST_ALPHA_MAX :: 0.3;
+DIRECTORY_LIST_ALPHA_FADE_SPEED :: 2.2;

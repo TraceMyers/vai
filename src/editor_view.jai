@@ -745,6 +745,7 @@ FileExplorer :: CursorLayer(
     struct {
         text_buffer: s64 = -1;
         directory: string;
+        directory_list_outline_alpha: float;
     }
 );
 
