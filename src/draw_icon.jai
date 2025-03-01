@@ -58,7 +58,6 @@ Draw_Binary_File_Icon :: (renderer: *TextRenderer, text_x: s32, text_y: s32, alp
     color := fRGBA.{rgb=.{0.72, 0.75, 0.98}, a=alpha};
     c := color;
     urx, ury := Text_To_Render_Space(renderer, text_x, text_y);
-    // main rectangle
     urx += renderer.screen_char_width / 2;
     ury += 3;
     lrx, lry := urx, ury;
@@ -76,4 +75,20 @@ Draw_Binary_File_Icon :: (renderer: *TextRenderer, text_x: s32, text_y: s32, alp
     c.b = 0.72;
     c.g = 0.85;
     Render_Quad(.{lrx-1, lry-1}, .{lrx + (lrx-urx)-1, lry+(lry-ury)-1}, c);
+}
+
+Draw_Unknown_File_Icon :: (renderer: *TextRenderer, text_x: s32, text_y: s32, alpha: float) {
+    color := fRGBA.{rgb=.{0.8, 0.8, 0.85}, a=alpha};
+    urx, ury := Text_To_Render_Space(renderer, text_x, text_y);
+    // main rectangle
+    urx += renderer.screen_char_width / 2;
+    ury += 2;
+    lrx, lry := urx, ury;
+    lrx += renderer.screen_char_width * 3 / 2;
+    lry += renderer.screen_line_height - 4;
+    // Render_Quad(.{urx, ury}, .{lrx, lry}, color);
+    Render_Quad(.{urx, ury}, .{lrx, ury+1}, color);
+    Render_Quad(.{urx, ury}, .{urx+1, lry}, color);
+    Render_Quad(.{lrx-1, ury}, .{lrx, lry}, color);
+    Render_Quad(.{urx, lry-1}, .{lrx, lry}, color);
 }

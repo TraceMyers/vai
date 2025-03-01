@@ -81,6 +81,7 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
         Draw_Folder_Icon(*renderer, 0, line_y, *color);
         line_y += 1;
     }
+    save_line_y := line_y;
     for item : directory_list {
         if item.is_directory || item.is_symlink {
             continue;
@@ -96,7 +97,7 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
             } else if Is_Binary_File_Extension(ext) {
                 Draw_Binary_File_Icon(*renderer, 0, line_y, alpha);
             } else {
-                // TODO: ?
+                Draw_Unknown_File_Icon(*renderer, 0, line_y, alpha);
             }
         }
         line_y += 1;
