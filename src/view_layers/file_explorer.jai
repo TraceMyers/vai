@@ -27,14 +27,14 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
     outer_box_ul := ul;
     outer_box_lr := lr;
     outer_box_ul.x += 4;
-    outer_box_ul.y += 4;
+    outer_box_ul.y += 14;
     outer_box_lr.x -= 9;
     outer_box_lr.y -= 404;
     Set_View_Scissor(outer_box_ul, outer_box_lr);
 
     renderer: TextRenderer;
     Initialize_Text_Renderer(*renderer, view_layer, 8);
-    renderer.screen_render_begin.y += renderer.screen_line_height - 1;
+    renderer.screen_render_begin.y += 1;
 
     buf: *TextBuffer = *file_buffers.items[file_explorer.text_buffer];
     working_directory := view_layer.file_explorer.directory;
@@ -147,7 +147,7 @@ Render_File_Explorer_Lines :: (using file_explorer: *FileExplorer, is_active: bo
     dir_inner_box_ul.y += 40;
     dir_inner_box_lr.x -= 5;
     dir_inner_box_lr.y -= 400;
-    Render_Quad_Lines(dir_inner_box_ul, dir_inner_box_lr, .{rgb=fRGB_WHITE, a=0.3});
+    // Render_Quad_Lines(dir_inner_box_ul, dir_inner_box_lr, .{rgb=fRGB_WHITE, a=0.3});
     preview_inner_box_ul := dir_inner_box_ul;
     preview_inner_box_lr := dir_inner_box_lr;
     preview_inner_box_ul.y = dir_inner_box_lr.y + 5;
