@@ -41,7 +41,7 @@ Render_File_Editor_Text :: (using file_editor: *FileEditor, is_active: bool) {
     Initialize_Text_Renderer(*renderer, view_layer);
 
     text_buffer := *file_buffers.items[file_editor.file_buffer];
-    Render_Text_Buffer_Lines(*renderer, text_buffer, true);
+    Render_Text_Buffer_Lines(view_layer, *renderer, text_buffer, true);
 
     view_max = .{};
     view_line_max := min(cast(s64)(renderer.text_view_clip.y + renderer.line_count - 1), text_buffer.lines.count-1);

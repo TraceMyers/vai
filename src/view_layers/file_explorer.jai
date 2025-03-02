@@ -42,34 +42,18 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
     success, directory_list := Directory_List(working_directory);
     Convert_To_Forward_Slashes(working_directory);
 
+    initializing_text := false;
     if buf.file_path != working_directory {
+        initializing_text = true;
         Clear_Text_Buffer(buf, true);
-        Initialize_Text_Buffer(buf, copy_string(working_directory), 64, 64);
-
+        Initialize_Text_Buffer(buf, copy_string(working_directory), 64, 64, false);
         Append_Line(buf, working_directory, false);
         Append_Line(buf, "", false);
-
-        for item : directory_list {
-            if !item.is_directory && !item.is_symlink {
-                continue;
-            }
-            name := tprint("   %", item.name);
-            Append_Line(buf, name, false);
-        }
-        for item : directory_list {
-            if item.is_directory || item.is_symlink {
-                continue;
-            }
-            name := tprint("   %", item.name);
-            Append_Line(buf, name, false);
-        }
     }
 
-    // draw icons
     Set_Shader_For_Blended_Color();
     line_y : s32 = 2;
     for item : directory_list {
-        name: string;
         color: fRGBA;
         alpha := ifx line_y == cursor.y then 0.8 else 0.5;
         if item.is_directory {
@@ -81,6 +65,11 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
         }
         Draw_Folder_Icon(*renderer, 0, line_y, *color);
         line_y += 1;
+
+        if initializing_text {
+            name := tprint("   %", item.name);
+            Append_Line(buf, name, false);
+        }
     }
     for item : directory_list {
         if item.is_directory || item.is_symlink {
@@ -101,10 +90,15 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
             }
         }
         line_y += 1;
+        
+        if initializing_text {
+            name := tprint("   %", item.name);
+            Append_Line(buf, name, false);
+        }
     }
 
     // draw text
-    Render_Text_Buffer_Lines(*renderer, buf, false);
+    Render_Text_Buffer_Lines(view_layer, *renderer, buf, false);
     Flush_Draws();
 
     Cursor_Scroll(View_Layer_From_Data(xx file_explorer), *renderer, *file_buffers.items[file_explorer.text_buffer]);

@@ -57,7 +57,7 @@ End_Update_Text_Buffers :: () {
     Bin_Pool_Shutdown(*temp_utf32_buffer_pool);
 }
 
-Initialize_Text_Buffer :: (buffer: *TextBuffer, path: string, prealloc_lines := 0, prealloc_bins := 0) {
+Initialize_Text_Buffer :: (buffer: *TextBuffer, path: string, prealloc_lines := 0, prealloc_bins := 0, init_circular_buffer := true) {
     if prealloc_bins > 0 {
         Bin_Pool_Initialize(*buffer.line_pool, prealloc_bins);
     } else {
@@ -67,7 +67,9 @@ Initialize_Text_Buffer :: (buffer: *TextBuffer, path: string, prealloc_lines := 
         array_reserve(*buffer.lines, prealloc_lines);
     }
     buffer.file_path = path;
-    Opposing_Circular_Buffer_Initialize(*buffer.change_history, settings_file_data.change_history_count, Cleanup_Text_Change, true);
+    if init_circular_buffer {
+        Opposing_Circular_Buffer_Initialize(*buffer.change_history, settings_file_data.change_history_count, Cleanup_Text_Change, true);
+    }
 }
 
 Shutdown_Text_Buffer :: (buffer: *TextBuffer) {

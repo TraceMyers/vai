@@ -1,6 +1,6 @@
 
 Draw_Folder_Icon :: (renderer: *TextRenderer, text_x: s32, text_y: s32, color: *fRGBA) {
-    urx, ury := Text_To_Render_Space(renderer, text_x, text_y);
+    urx, ury := Text_To_Render_Space(renderer, text_x, text_y, false);
     // main rectangle
     ury += 4;
     lrx, lry := urx, ury;
@@ -16,7 +16,7 @@ Draw_Folder_Icon :: (renderer: *TextRenderer, text_x: s32, text_y: s32, color: *
 
 Draw_Text_File_Icon :: (renderer: *TextRenderer, text_x: s32, text_y: s32, alpha: float) {
     color := fRGBA.{rgb=.{0.8, 0.8, 0.85}, a=alpha};
-    urx, ury := Text_To_Render_Space(renderer, text_x, text_y);
+    urx, ury := Text_To_Render_Space(renderer, text_x, text_y, false);
     // main rectangle
     urx += renderer.screen_char_width / 2;
     ury += 2;
@@ -35,7 +35,7 @@ Draw_Text_File_Icon :: (renderer: *TextRenderer, text_x: s32, text_y: s32, alpha
 
 Draw_Code_File_Icon :: (renderer: *TextRenderer, text_x: s32, text_y: s32, alpha: float) {
     color := fRGBA.{rgb=.{0.94, 0.77, 0.835}, a=alpha};
-    urx, ury := Text_To_Render_Space(renderer, text_x, text_y);
+    urx, ury := Text_To_Render_Space(renderer, text_x, text_y, false);
     // main rectangle
     urx += renderer.screen_char_width / 2;
     ury += 2;
@@ -57,7 +57,7 @@ Draw_Code_File_Icon :: (renderer: *TextRenderer, text_x: s32, text_y: s32, alpha
 Draw_Binary_File_Icon :: (renderer: *TextRenderer, text_x: s32, text_y: s32, alpha: float) {
     color := fRGBA.{rgb=.{0.72, 0.75, 0.98}, a=alpha};
     c := color;
-    urx, ury := Text_To_Render_Space(renderer, text_x, text_y);
+    urx, ury := Text_To_Render_Space(renderer, text_x, text_y, false);
     urx += renderer.screen_char_width / 2;
     ury += 3;
     lrx, lry := urx, ury;
@@ -79,7 +79,7 @@ Draw_Binary_File_Icon :: (renderer: *TextRenderer, text_x: s32, text_y: s32, alp
 
 Draw_Unknown_File_Icon :: (renderer: *TextRenderer, text_x: s32, text_y: s32, alpha: float) {
     color := fRGBA.{rgb=.{0.8, 0.8, 0.85}, a=alpha};
-    urx, ury := Text_To_Render_Space(renderer, text_x, text_y);
+    urx, ury := Text_To_Render_Space(renderer, text_x, text_y, false);
     // main rectangle
     urx += renderer.screen_char_width / 2;
     ury += 2;

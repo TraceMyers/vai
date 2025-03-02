@@ -14,7 +14,7 @@ Render_Debug_View_Text :: (using tb_view: *DebugView, is_active: bool, render_pa
     Initialize_Text_Renderer(*renderer, view_layer);
 
     text_buffer := Layer_Text_Buffer(view_layer);
-    Render_Text_Buffer_Lines(*renderer, text_buffer, true);
+    Render_Text_Buffer_Lines(view_layer, *renderer, text_buffer, true);
 }
 
 Temp_Text_Buffer :: (using tb_view: *DebugView) -> *TextBuffer {

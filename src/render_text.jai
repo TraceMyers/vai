@@ -79,7 +79,7 @@ Initialize_Text_Renderer :: (using renderer: *TextRenderer, in_view_layer: *View
     text_view_clip = IntVector2.{xx view_layer.view_position.x, xx view_layer.view_position.y};
 }
 
-Render_Text_Buffer_Lines :: (renderer: *TextRenderer, buffer: *TextBuffer, render_line_numbers: bool) {
+Render_Text_Buffer_Lines :: (view_layer: *ViewLayer, renderer: *TextRenderer, buffer: *TextBuffer, render_line_numbers: bool) {
     {
         Scoped_Immediate_Text_Render();
 
@@ -101,9 +101,12 @@ Render_Text_Buffer_Lines :: (renderer: *TextRenderer, buffer: *TextBuffer, rende
                 continue;
             }
             marked_utf32 := Line_View(buffer, line_index);
-            if marked_utf32.count > renderer.text_view_clip.x {
-                marked_utf32.data += renderer.text_view_clip.x;
-                marked_utf32.count -= renderer.text_view_clip.x;
+            no_hz_clip := view_layer && view_layer.type == .FILE_EXPLORER && line_index >= 2;
+            if no_hz_clip || marked_utf32.count > renderer.text_view_clip.x {
+                if !no_hz_clip {
+                    marked_utf32.data += renderer.text_view_clip.x;
+                    marked_utf32.count -= renderer.text_view_clip.x;
+                }
                 Get_Unmarked_Utf8(marked_utf32, *utf8_buffer, *color_buffer);
                 Render_Text_Line(renderer, *renderer.align_info_main, utf8_buffer, color_buffer);
             } else {
@@ -173,10 +176,19 @@ Render_Gutter_Separator_Line :: (color: fRGBA) {
     Render_Line(gutter_line_ul, gutter_line_lr, file_editor_outline_color);
 }
 
-Text_To_Render_Space :: inline (using renderer: *TextRenderer, text_x: s32, text_y: s32) -> (render_x: s32, render_y: s32) {
-    render_x := align_info_main.screen_x + (text_x - text_view_clip.x) * screen_char_width;
-    // this is one line too far, bottom lined up with bottom of letter
-    render_y := screen_render_begin.y + (text_y - xx text_view_clip.y) * screen_line_height;
+Text_To_Render_Space :: inline (using renderer: *TextRenderer, text_x: s32, text_y: s32, clip_x := true, clip_y := true) -> (render_x: s32, render_y: s32) {
+    render_x, render_y : s32 = ---;
+    if clip_x {
+        render_x = align_info_main.screen_x + (text_x - text_view_clip.x) * screen_char_width;
+    } else {
+        render_x = align_info_main.screen_x + text_x * screen_char_width;
+    }
+    if clip_y {
+        // this is one line too far, bottom lined up with bottom of letter
+        render_y = screen_render_begin.y + (text_y - xx text_view_clip.y) * screen_line_height;
+    } else {
+        render_y = screen_render_begin.y + text_y * screen_line_height;
+    }
     // center on line
     render_y -= screen_line_height * 3 / 4;
     return render_x, render_y;
