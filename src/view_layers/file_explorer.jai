@@ -46,18 +46,43 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
     renderer.screen_render_begin.y += 1;
 
     buf: *TextBuffer = *file_buffers.items[file_explorer.text_buffer];
-    working_directory := view_layer.file_explorer.directory;
-    // TODO: failure?
-    success, directory_list := Directory_List(working_directory);
-    Convert_To_Forward_Slashes(working_directory);
+    working_path := file_explorer.directory;
 
-    initializing_text := false;
-    if buf.file_path != working_directory {
-        initializing_text = true;
+    // TODO: failure?
+
+    recreate_directory_list := buf.file_path != working_path;
+    keep_path_as_shown := false;
+
+    if !recreate_directory_list {
+        path_as_shown := Get_Line_Bytes(buf, 0);
+        success_1, upper_path_as_shown, directory_as_shown := split_from_right(path_as_shown, #char "/");
+        success_2, upper_path_true, directory_true := split_from_right(working_path, #char "/");
+        if directory_as_shown != directory_true {
+            if upper_path_as_shown == directory_true {
+                // path being typed is editing the directory at the end of the path.
+                file_explorer.directory = upper_path_true;
+                working_path = file_explorer.directory;
+                recreate_directory_list = true;
+                keep_path_as_shown = vi_mode == .INSERT;
+            }
+        }
+    }
+
+    success, directory_list := Directory_List(working_path);
+    Convert_To_Forward_Slashes(working_path);
+
+    if recreate_directory_list {
+        top_line: string;
+        if keep_path_as_shown {
+            top_line = Temp_Copy_String(Get_Line_Bytes(buf, 0));
+        } else {
+            top_line = working_path;
+        }
         Clear_Text_Buffer(buf, true);
-        Initialize_Text_Buffer(buf, copy_string(working_directory), 64, 64, false);
-        Append_Line(buf, working_directory, false);
+        Initialize_Text_Buffer(buf, copy_string(working_path), 64, 64, false);
+        Append_Line(buf, top_line, false);
         Append_Line(buf, "", false);
+        File_Explorer_Reset_Cursor_On_Path(*file_explorer.cursor, buf);
     }
 
     Set_Shader_For_Blended_Color();
@@ -75,7 +100,7 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
         Draw_Folder_Icon(*renderer, 0, line_y, *color);
         line_y += 1;
 
-        if initializing_text {
+        if recreate_directory_list {
             name := tprint("   %", item.name);
             Append_Line(buf, name, false);
         }
@@ -100,7 +125,7 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
         }
         line_y += 1;
         
-        if initializing_text {
+        if recreate_directory_list {
             name := tprint("   %", item.name);
             Append_Line(buf, name, false);
         }
@@ -167,6 +192,15 @@ Render_File_Explorer_Lines :: (using file_explorer: *FileExplorer, is_active: bo
     preview_inner_box_ul.y = dir_inner_box_lr.y + 5;
     preview_inner_box_lr.y = outer_box_lr.y - 5;
     Render_Quad_Lines(preview_inner_box_ul, preview_inner_box_lr, .{rgb=fRGB_WHITE, a=0.3});
+}
+
+Process_Text_Input :: (using file_explorer: *FileExplorer, utf32: []u32) {
+    if text_buffer < 0 then return;
+    buf := *file_buffers.items[text_buffer];
+    Insert_Code_Points(buf, cursor.y, cursor.x, utf32, false);
+    for 0..utf32.count-1 {
+        Cursor_Scroll_Right();
+    }
 }
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }

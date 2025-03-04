@@ -24,6 +24,7 @@ Cursor_Scroll_Down :: () {
 Cursor_Scroll_Up :: () {
     Init_Cursor_Proc_Or_Return(true);
     step_size : s32 = 1;
+
     if active_layer.type == {
     case .FILE_EDITOR;
         cursor.y = max(cursor.y-1, sdw(0));
@@ -44,21 +45,25 @@ Cursor_Scroll_Up :: () {
 Cursor_Scroll_Right :: () {
     Init_Cursor_Proc_Or_Return(true);
     line := Line_View(text_buffer, cursor.y);
-    if active_layer.type == {
-    case .FILE_EDITOR;
+
+    do_default_scroll := active_layer.type == .FILE_EDITOR || vi_mode == .INSERT;
+    if do_default_scroll {
         cursor.x += 1;
         cursor.x = Clamp_X_To_Line(cursor.x, line, .FORWARD);
-    case .FILE_EXPLORER;
-        if cursor.y == 0 {
-            line := Line_View(text_buffer, cursor.y);
-            for cursor.x..line.count-2 {
-                if Is_Slash(line[it]) {
-                    cursor.x = sdw(it + 1);
-                    break;
+    } else {
+        if active_layer.type == {
+        case .FILE_EXPLORER;
+            if cursor.y == 0 {
+                line := Line_View(text_buffer, cursor.y);
+                for cursor.x..line.count-2 {
+                    if Is_Slash(line[it]) {
+                        cursor.x = sdw(it + 1);
+                        break;
+                    }
                 }
+            } else {
+                Normal_Mode_Return();
             }
-        } else {
-            Normal_Mode_Return();
         }
     }
     cursor.target_x = cursor.x;
@@ -69,19 +74,22 @@ Cursor_Scroll_Right :: () {
 Cursor_Scroll_Left :: () {
     Init_Cursor_Proc_Or_Return(true);
     line := Line_View(text_buffer, cursor.y);
-    if active_layer.type == {
-    case .FILE_EDITOR;
+    
+    do_default_scroll := active_layer.type == .FILE_EDITOR || vi_mode == .INSERT;
+    if do_default_scroll {
         cursor.x -= 1;
         cursor.x = Clamp_X_To_Line(cursor.x, line);
         cursor.target_x = cursor.x;
-    case .FILE_EXPLORER;
-        line := Line_View(text_buffer, 0);
-        if cursor.y != 0 {
-            // cursor not on the path. jump the cursor to the top so that the next action can move through the path
-            cursor.y = 0;
-            cursor.x = xx max((line.count-1), 0);
-            Cursor_Back_Up_To_Slash(cursor, line);
-        } else {
+    } else {
+        if active_layer.type == {
+        case .FILE_EXPLORER;
+            line := Line_View(text_buffer, 0);
+            if cursor.y != 0 {
+                // cursor not on the path. jump the cursor to the top so that the next action can move through the path
+                cursor.y = 0;
+                cursor.x = xx max((line.count-1), 0);
+                Cursor_Back_Up_To_Slash(cursor, line);
+            }
             // try to move the cursor back once in the directory path. make sure we're not on the drive letter
             old_x := cursor.x;
             cursor.x -= 2;
@@ -214,7 +222,13 @@ Scroll_To_Next_Editor :: () {
 
 Insert_New_Line :: () {
     Init_Cursor_Proc_Or_Return(true);
-    Break_Line_At(text_buffer, cursor.y, cursor.x);
+    if active_layer.type == .FILE_EXPLORER {
+        Enter_Normal_Mode();
+        Normal_Mode_Return();
+        return;
+    }
+    is_change := active_layer.type == .FILE_EDITOR;
+    Break_Line_At(text_buffer, cursor.y, cursor.x, is_change);
     cursor.y += 1;
     cursor.x = 0;
     cursor.just_moved = true;
@@ -243,6 +257,9 @@ Enter_Normal_Mode :: () {
         line_count := Line_Count(text_buffer, cursor.y);
         action_executor_data.entered_normal_mode_past_line_end = cursor.x >= line_count; 
         Cursor_Scroll_Left();
+        if active_layer.type == .FILE_EXPLORER {
+            File_Explorer_Reset_Cursor_On_Path(cursor, text_buffer);
+        }
     case .VISUAL;
     case .COMMAND;
         Init_Cursor_Proc_Or_Return(true, false);
@@ -850,15 +867,24 @@ Normal_Mode_Return :: () {
 
     if active_layer.type == {
     case .FILE_EXPLORER;
-        working_directory := File_Explorer_Get_Directory();
         if cursor.y == 0 {
-
+            try_new_path := Get_Line_Bytes(text_buffer, 0);
+            list_success, directory_list := Directory_List(try_new_path);
+            if !list_success {
+                split_success, left, right := split_from_right(try_new_path, #char "/");
+                if split_success {
+                    File_Explorer_Set_Directory(copy_string(left));
+                }
+            } else {
+                File_Explorer_Set_Directory(copy_string(try_new_path));
+            }
         } else {
-            // line 1 is an empty line in the file explorer
+            working_directory := File_Explorer_Get_Directory();
             success, directory_list := Directory_List(working_directory);
             if !success {
                 return;
             }
+            // line 1 is an empty line in the file explorer
             target_iter_ct := cursor.y - 2;
             if target_iter_ct < 0 || target_iter_ct > directory_list.count {
                 return;
@@ -866,17 +892,34 @@ Normal_Mode_Return :: () {
             i := 0;
 
             target_index := -1;
+            item_is_directory := false;
             for directory_list {
-                if it.is_directory || it.is_symlink {
-                    if i == target_iter_ct {
-                        target_index = it_index;
-                        break;
-                    }
-                    i += 1;
+                if !it.is_directory && !it.is_symlink {
+                    continue;
                 }
+                if i == target_iter_ct {
+                    target_index = it_index;
+                    item_is_directory = true;
+                    break;
+                }
+                i += 1;
             }
 
-            if target_index != -1 {
+            for directory_list {
+                if it.is_directory || it.is_symlink {
+                    continue;
+                }
+                 if i == target_iter_ct {
+                    target_index = it_index;
+                    break;
+                }
+                i += 1;           
+            }
+
+            if target_index == -1 {
+                return;
+            }
+            if item_is_directory {
                 new_dir := tprint("%/%", working_directory, directory_list[target_index].name);
                 success, _ := Directory_List(new_dir);
                 if success {
@@ -885,6 +928,26 @@ Normal_Mode_Return :: () {
                 } else {
                     // TODO: access denie?
                 }
+            } else {
+                ext_success, path, extension := split_from_right(directory_list[target_index].name, #char ".");
+                if !ext_success {
+                    return;
+                }
+                if !Is_Basic_Text_File_Extension(extension) && !Is_Code_File_Extension(extension) {
+                    // TODO: try load file anyway?
+                    return;
+                }
+                editor_layer := Find_First_Layer_Of_Type_In_View_Stack(.FILE_EDITOR);
+                if !editor_layer {
+                    // TODO: make one
+                    return;
+                }
+                file_path := tprint("%/%", working_directory, directory_list[target_index].name);
+                new_buffer_id := Get_File_Buffer_ID(file_path);
+                if new_buffer_id == -1 {
+                    return;
+                }
+                editor_layer.file_editor.file_buffer = new_buffer_id;
             }
         }
     }

@@ -363,8 +363,8 @@ Remove_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, count: s64, is_c
     Expand_Utf32_Buffer_Tabs(utf32_buffer);
 }
 
-Break_Line_At :: (buffer: *TextBuffer, row: s64, col: s64) {
-    Insert_Line(buffer, row+1);
+Break_Line_At :: (buffer: *TextBuffer, row: s64, col: s64, is_change := true) {
+    Insert_Line(buffer, row+1, is_change);
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     assert(col <= utf32_buffer.array.count);
     #if DEBUG_TEXT_BUFFERS {
@@ -376,7 +376,7 @@ Break_Line_At :: (buffer: *TextBuffer, row: s64, col: s64) {
         copy_down: []u32 = ---;
         copy_down.data = utf32_buffer.array.data + col;
         copy_down.count = utf32_buffer.array.count - col;
-        Insert_Code_Points(buffer, row+1, 0, copy_down);
+        Insert_Code_Points(buffer, row+1, 0, copy_down, is_change);
         Resize_Utf32_Buffer(utf32_buffer, xx col);
     }
 }

@@ -231,6 +231,9 @@ Process_Text_Input :: (utf32: []u32) -> bool {
         case .FILE_EDITOR;
             Process_Text_Input(*active_view_layer.file_editor, utf32);
             return true;
+        case .FILE_EXPLORER;
+            Process_Text_Input(*active_view_layer.file_explorer, utf32);
+            return true;
         case .VIM_CONSOLE;
             return false;
         }
@@ -837,6 +840,18 @@ Pop_Active_View_ID :: () -> s64 {
     id := editor_view_stack[editor_view_stack.count-1];
     editor_view_stack.count -= 1;
     return id;
+}
+
+Find_First_Layer_Of_Type_In_View_Stack :: (type: ViewLayerType) -> *ViewLayer {
+    assert(editor_view_stack.count > 0);
+    for < editor_view_stack {
+        view := view_pool.items[it];
+        active_layer := *view.layers[view.active_layer];
+        if active_layer.type == type {
+            return active_layer;
+        }
+    }
+    return null;
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
