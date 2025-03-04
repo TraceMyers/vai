@@ -905,7 +905,7 @@ Normal_Mode_Return :: () {
                 i += 1;
             }
 
-            for directory_list {
+            if target_index == -1 then for directory_list {
                 if it.is_directory || it.is_symlink {
                     continue;
                 }
