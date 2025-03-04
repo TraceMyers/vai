@@ -14,6 +14,8 @@ undo_redo_text: BinPool(16, u8);
 register_text: BinPool(TEXT_REGISTER_SMALL_CHUNK_LEN, u32);
 registers: TextRegisters;
 
+small_strings : BinPool(16, u8);
+
 // NOTE TO SELF: be careful not to alias data when working with bins inline then copying into the bin
 // NOTE TO SELF: tab-expanded column is the only real column outside this file, but tab-expanded spaces are invalid to edit
 
@@ -28,6 +30,7 @@ Text_Buffers :: struct {
         Assign_Bin_Pool_Allocator(*temp_utf32_buffer_pool, temp);
         Bin_Pool_Initialize(*undo_redo_text);
         Bin_Pool_Initialize(*register_text);
+        Bin_Pool_Initialize(*small_strings);
         // for register keys 0-9, initialize them all with "";
         Circular_Buffer_Initialize(*registers.number_registers, 10, Cleanup_Text_Register, true);
         for 0..9 {
@@ -41,6 +44,7 @@ Text_Buffers :: struct {
     Shutdown :: () {
         Shutdown(*file_buffers, Shutdown_Text_Buffer);
         Bin_Pool_Shutdown(*undo_redo_text);
+        Bin_Pool_Shutdown(*small_strings);
         Circular_Buffer_Reset(*registers.number_registers);
         Bin_Pool_Shutdown(*register_text);
         deinit(*registers.tack_map);
@@ -331,9 +335,11 @@ Insert_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, code_points: []u
     Expand_Utf32_Buffer_Tabs(utf32_buffer);
 }
 
-Remove_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64) {
+Remove_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64, is_change := true) {
     // TODO: check if line deletion
-    Add_Line_To_Change(buffer, row, 0);
+    if is_change {
+        Add_Line_To_Change(buffer, row, 0);
+    }
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     assert(col < utf32_buffer.array.count);
     #if DEBUG_TEXT_BUFFERS {
@@ -343,9 +349,11 @@ Remove_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64) {
     Expand_Utf32_Buffer_Tabs(utf32_buffer);
 }
 
-Remove_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, count: s64) {
+Remove_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, count: s64, is_change := true) {
     // TODO: check if line deletion
-    Add_Line_To_Change(buffer, row, 0);
+    if is_change {
+        Add_Line_To_Change(buffer, row, 0);
+    }
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     assert(col < utf32_buffer.array.count);
     #if DEBUG_TEXT_BUFFERS {

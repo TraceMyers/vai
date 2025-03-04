@@ -75,8 +75,14 @@ Cursor_Scroll_Left :: () {
         cursor.x = Clamp_X_To_Line(cursor.x, line);
         cursor.target_x = cursor.x;
     case .FILE_EXPLORER;
-        if cursor.y == 0 {
-            line := Line_View(text_buffer, cursor.y);
+        line := Line_View(text_buffer, 0);
+        if cursor.y != 0 {
+            // cursor not on the path. jump the cursor to the top so that the next action can move through the path
+            cursor.y = 0;
+            cursor.x = xx max((line.count-1), 0);
+            Cursor_Back_Up_To_Slash(cursor, line);
+        } else {
+            // try to move the cursor back once in the directory path. make sure we're not on the drive letter
             old_x := cursor.x;
             cursor.x -= 2;
             Cursor_Back_Up_To_Slash(cursor, line);
@@ -216,6 +222,12 @@ Insert_New_Line :: () {
 
 Enter_Insert_Mode :: (append: bool) {
     Init_Cursor_Proc_Or_Return(true);
+    if active_layer.type == {
+    case .FILE_EXPLORER;
+        cursor.y = 0;
+        line := Line_View(text_buffer, cursor.y);
+        cursor.x = xx line.count;
+    }
     vi_mode = .INSERT;
     if append {
         Cursor_Scroll_Right();
@@ -237,9 +249,7 @@ Enter_Normal_Mode :: () {
         layer := Active_View_Layer();
         assert(layer.type == .VIM_CONSOLE);
         do_search := false;
-
         Pop_Active_View_ID();
-        
         if layer.vim_console.mode == {
         case .COMMAND;
             if auxiliary_input_buffer.count > 0 {
@@ -257,7 +267,6 @@ Enter_Normal_Mode :: () {
             }
         }
         array_reset_keeping_memory(*auxiliary_input_buffer);
-
         if do_search  {
             Text_Pattern_Search_Forward();
         }
@@ -266,16 +275,13 @@ Enter_Normal_Mode :: () {
 }
 
 Backspace :: () {
-    Backspace_Impl();
-}
-
-Backspace_Impl :: inline (is_change := true) {
     if vi_mode == .COMMAND {
         Init_Cursor_Proc_Or_Return(true, false);
         auxiliary_input_buffer.count = max(0, auxiliary_input_buffer.count - 1);
         return;
     } else {
         Init_Cursor_Proc_Or_Return(true);
+        is_change := active_layer.type == .FILE_EDITOR;
         if cursor.x > 0 {
             // search backward for valid character to delete
             line := Line_View(text_buffer, cursor.y);
@@ -286,12 +292,12 @@ Backspace_Impl :: inline (is_change := true) {
                 }
                 cursor.x -= 1;
             }
-            Remove_Code_Point(text_buffer, cursor.y, cursor.x);
+            Remove_Code_Point(text_buffer, cursor.y, cursor.x, is_change);
         } else if cursor.y != 0 {
             Cursor_Scroll_Up();
             Cursor_Scroll_To_Line_End();
             src_line := Line_View(text_buffer, cursor.y+1);
-            Insert_Code_Points(text_buffer, cursor.y, cursor.x, src_line, true, true);
+            Insert_Code_Points(text_buffer, cursor.y, cursor.x, src_line, is_change, true);
             Remove_Line(text_buffer, cursor.y+1, is_change);
         }
     }
@@ -301,7 +307,8 @@ Delete_Character :: () {
     Init_Cursor_Proc_Or_Return(true);
     line_count := Line_Count(text_buffer, cursor.y);
     if line_count > 0 {
-        Remove_Code_Point(text_buffer, cursor.y, cursor.x);
+        is_change := active_layer.type == .FILE_EDITOR;
+        Remove_Code_Point(text_buffer, cursor.y, cursor.x, is_change);
         line := Line_View(text_buffer, cursor.y);
         cursor.x = Clamp_X_To_Line(cursor.x, line);
         cursor.target_x = cursor.x;
@@ -310,12 +317,13 @@ Delete_Character :: () {
 
 Insert_Line_And_Enter_Insert_Mode :: (append: bool) {
     Init_Cursor_Proc_Or_Return(true);
+    is_change := active_layer.type == .FILE_EDITOR;
     if append {
         // insert before moving cursor so the state is always valid (if cursor on final line)
-        Insert_Line(text_buffer, cursor.y+1);
+        Insert_Line(text_buffer, cursor.y+1, is_change);
         cursor.y += 1;
     } else {
-        Insert_Line(text_buffer, cursor.y);
+        Insert_Line(text_buffer, cursor.y, is_change);
     }
     cursor.x = 0;
     cursor.target_x = 0;
@@ -327,16 +335,17 @@ Prepend_Line_And_Enter_Insert_Mode :: #bake_arguments Insert_Line_And_Enter_Inse
 Delete_Line :: () {
     Init_Cursor_Proc_Or_Return(true);
     Set_Selected_Register_Text_To_Current_Line(text_buffer, cursor);
+    is_change := active_layer.type == .FILE_EDITOR;
     if cursor.y == 0 && text_buffer.lines.count == 1 {
-        Clear_Line(text_buffer, 0);
+        Clear_Line(text_buffer, 0, is_change);
         cursor.x = 0;
         cursor.target_x = 0;
     } else {
         if cursor.y == text_buffer.lines.count - 1 {
             cursor.y -= 1;
-            Remove_Line(text_buffer, cursor.y+1);
+            Remove_Line(text_buffer, cursor.y+1, is_change);
         } else {
-            Remove_Line(text_buffer, cursor.y);
+            Remove_Line(text_buffer, cursor.y, is_change);
         }
         Cursor_Scroll_To_Line_Begin();
     }
@@ -510,6 +519,7 @@ Word_Scroll_To_End_Large :: #bake_arguments Word_Scroll_To_End(small=false);
 
 Delete_Word :: (inside: bool, small: bool, delete_trailing_whitespace: bool) {
     Init_Cursor_Proc_Or_Return(true);
+    is_change := active_layer.type == .FILE_EDITOR;
     // 'delete inside word' = delete word the cursor is inside
     if inside {
         inside_x := cursor.x;
@@ -539,7 +549,7 @@ Delete_Word :: (inside: bool, small: bool, delete_trailing_whitespace: bool) {
     remove_count := cursor.x - save_x;
     cursor.x = save_x;
     if remove_count > 0 {
-        Remove_Code_Points(text_buffer, cursor.y, cursor.x, remove_count);
+        Remove_Code_Points(text_buffer, cursor.y, cursor.x, remove_count, is_change);
     }
     cursor.x = Clamp_X_To_Line(cursor.x, Line_View(text_buffer, cursor.y));
 }
@@ -548,6 +558,7 @@ Delete_Word_Inside_Small :: #bake_arguments Delete_Word(inside=true, small=true,
 
 Act_On_Selection :: (delete: bool, enter_normal_mode: bool) {
     Init_Cursor_Proc_Or_Return(true);
+    is_change := active_layer.type == .FILE_EDITOR;
 
     selection_begin, selection_end := Cursor_Selection(cursor);
     do_concatenate := selection_end.y != selection_begin.y;
@@ -603,9 +614,9 @@ Act_On_Selection :: (delete: bool, enter_normal_mode: bool) {
                     do_concatenate = false;
                     edit_y_offset = 0;
                 }
-                Remove_Line(text_buffer, edit_y);
+                Remove_Line(text_buffer, edit_y, is_change);
             } else {
-                Remove_Code_Points(text_buffer, edit_y, begin_x, remove_count);
+                Remove_Code_Points(text_buffer, edit_y, begin_x, remove_count, is_change);
             }
         } else if it != selection_begin.y {
             edit_y_offset += 1;
@@ -621,7 +632,7 @@ Act_On_Selection :: (delete: bool, enter_normal_mode: bool) {
         Enter_Insert_Mode(false);
         Cursor_Scroll_Down();
         Cursor_Scroll_To_Line_Zero();
-        Backspace_Impl(true);
+        Backspace();
     }
 
     if enter_normal_mode {
@@ -639,6 +650,9 @@ Yank_Selection_And_Enter_Normal_Mode :: #bake_arguments Act_On_Selection(delete=
 
 Toggle_Comment_Selection :: () {
     Init_Cursor_Proc_Or_Return(true);
+    if active_layer.type != .FILE_EDITOR {
+        return;
+    }
 
     selection_begin, selection_end: IntVector2;
     if vi_mode == .VISUAL {
@@ -690,7 +704,8 @@ Replace_Selection :: () {
 
 Replace_Line :: () {
     Init_Cursor_Proc_Or_Return(true);
-    Clear_Line(text_buffer, cursor.y);
+    is_change := active_layer.type == .FILE_EDITOR;
+    Clear_Line(text_buffer, cursor.y, is_change);
     cursor.x = 0;
     Enter_Insert_Mode(false);
 }

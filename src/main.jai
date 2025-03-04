@@ -146,3 +146,4 @@ GetConsoleWindow :: () -> HWND #foreign kernel32;
 #load "thread_worker.jai";
 #load "commands.jai";
 #load "draw_icon.jai";
+#load "osutil/win32_utils.jai";

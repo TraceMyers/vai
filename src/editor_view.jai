@@ -744,6 +744,7 @@ DebugView :: CursorLayer(
 FileExplorer :: CursorLayer(
     struct {
         text_buffer: s64 = -1;
+        end_path_bin: BinID;
         directory: string;
         directory_list_outline_alpha: float;
     }

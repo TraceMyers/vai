@@ -92,9 +92,11 @@ Render_Text_Buffer_Lines :: (view_layer: *ViewLayer, renderer: *TextRenderer, bu
         color_buffer: [..]TextColorLocation;
         color_buffer.allocator = temp;
 
+        start_line := renderer.text_view_clip.y;
+
         renderer.rendered_line_count = 0;
         for 0..renderer.line_count-1 {
-            line_index := renderer.text_view_clip.y + it;
+            line_index := start_line + it;
             if line_index >= buffer.lines.count then break;
             if line_index < 0 {
                 renderer.rendered_line_count += 1;

@@ -1,3 +1,12 @@
+// TODO: directory tracking by ID rather than by string
+// OpenFileById() and GetFileInformationByHandleEx().
+// GetFileInformationByHandleEx :: (hFile: HANDLE, FileInformationClass: FILE_INFO_BY_HANDLE_CLASS, lpFileInformation: *void, dwBufferSize: u32) -> BOOL #foreign kernel32;
+// TODO: make this interface more flexy, less magic numbery
+// how typing path works:
+// - all editing happens in a false top row, which represents the end of the path
+//      - if the buffer has been validated and is unchanged, the directory list remains the same, otherwise it goes up a directory
+//      - if the buffer is empty and you backspace, the super-directory becomes the edited directory
+//      - if you stop editing and the directory isn't valid, the buffer is emptied
 
 Render_Layer :: (using file_explorer: *FileExplorer, is_active: bool, render_pass: ViewRenderPass) {
     view := *view_pool.items[tool_view_id];
@@ -38,7 +47,7 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
 
     buf: *TextBuffer = *file_buffers.items[file_explorer.text_buffer];
     working_directory := view_layer.file_explorer.directory;
-    // TODO: faildure?
+    // TODO: failure?
     success, directory_list := Directory_List(working_directory);
     Convert_To_Forward_Slashes(working_directory);
 
@@ -104,22 +113,27 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
     Cursor_Scroll(View_Layer_From_Data(xx file_explorer), *renderer, *file_buffers.items[file_explorer.text_buffer]);
 
     if file_explorer.cursor.y == 0 {
-        path_view := Line_View(buf, 0);
-        if view_layer.need_reinit {
-            file_explorer.cursor.x = xx (path_view.count-1);
-            Cursor_Back_Up_To_Slash(*file_explorer.cursor, path_view);
-            view_layer.need_reinit = false;
-        }
-        end_x := file_explorer.cursor.x;
-        if file_explorer.cursor.x <= path_view.count-2 for file_explorer.cursor.x..path_view.count-2 {
-            if Is_Slash(path_view[it]) {
-                end_x -= 1;
-                break;
+        if vi_mode == .NORMAL {
+            path_view := Line_View(buf, 0);
+            if view_layer.need_reinit {
+                file_explorer.cursor.x = xx (path_view.count-1);
+                Cursor_Back_Up_To_Slash(*file_explorer.cursor, path_view);
+                view_layer.need_reinit = false;
             }
-            end_x += 1;
+            end_x := file_explorer.cursor.x;
+            if file_explorer.cursor.x <= path_view.count-2 for file_explorer.cursor.x..path_view.count-2 {
+                if Is_Slash(path_view[it]) {
+                    end_x -= 1;
+                    break;
+                }
+                end_x += 1;
+            }
+            file_explorer.cursor.begin_selection = .{end_x, file_explorer.cursor.y};
+            Render_Text_Selection_Blocks(*renderer, buf, *file_explorer.cursor);
+        } else if vi_mode == .INSERT {
+            cursor.style = .VERTICAL_LINE;
+            Render_Text_Cursor(*renderer, *file_explorer.cursor);
         }
-        file_explorer.cursor.begin_selection = .{end_x, file_explorer.cursor.y};
-        Render_Text_Selection_Blocks(*renderer, buf, *file_explorer.cursor);
     } else {
         Render_Cursor_Line_Block(*renderer, *file_explorer.cursor, 0.18);
     }
