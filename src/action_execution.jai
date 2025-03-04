@@ -1131,6 +1131,40 @@ Paste :: (after: bool) {
 Paste_After :: #bake_arguments Paste(after=true);
 Paste_Before :: #bake_arguments Paste(after=false);
 
+Vertical_Page_Scroll :: (up: bool, half_page: bool) {
+    Init_Cursor_Proc_Or_Return(true);
+    renderer: TextRenderer;
+
+    Initialize_Text_Renderer(*renderer, active_layer);
+
+    scroll_line_count := renderer.line_count;
+    if scroll_line_count == 0 {
+        return;
+    }
+    if half_page {
+        scroll_line_count = max(scroll_line_count >> 1, 1);
+    }
+    if up {
+        scroll_line_count = -scroll_line_count;
+    }
+
+    cursor.y += scroll_line_count;
+    if active_layer.type == .FILE_EXPLORER && cursor.y == 1 {
+        cursor.y = ifx scroll_line_count < 0 then sdw(0) else sdw(2);
+    }
+    cursor.y = clamp(cursor.y, sdw(0), sdw(text_buffer.lines.count-1));
+    line := Line_View(text_buffer, cursor.y);
+    cursor.x = Clamp_X_To_Line(cursor.target_x, line);
+    cursor.just_moved = true;
+
+    if active_layer.type == .FILE_EXPLORER {
+        File_Explorer_Reset_Cursor_On_Path(cursor, text_buffer);
+    }
+}
+Cursor_Scroll_Up_Half_Page :: #bake_arguments Vertical_Page_Scroll(up=true, half_page=true);
+Cursor_Scroll_Down_Half_Page :: #bake_arguments Vertical_Page_Scroll(up=false, half_page=true);
+Cursor_Scroll_Up_Full_Page :: #bake_arguments Vertical_Page_Scroll(up=true, half_page=false);
+Cursor_Scroll_Down_Full_Page :: #bake_arguments Vertical_Page_Scroll(up=false, half_page=false);
     
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1160,6 +1194,7 @@ Get_Register_Lines :: (register: u32) -> (lines: [][]u32, first_line_is_new_line
 }
 
 Init_Cursor_Proc_Or_Return :: ($RESET_BLINK := false, $NEED_TEXT_BUFFER := true) #expand {
+    `active_view := Active_View();
     `active_layer := Active_View_Layer();
     `cursor := Layer_Cursor(`active_layer);
     if `cursor == null then `return;

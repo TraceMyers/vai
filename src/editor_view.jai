@@ -766,6 +766,7 @@ View :: struct {
     layers: []ViewLayer;
     children_buffer: [VIEW_CHILDREN_MAX]s16;
     children: []s16;
+    height_in_rows: s32 = 1;
     active_layer: s8 = -1;
 }
 
