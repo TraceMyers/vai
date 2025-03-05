@@ -1152,10 +1152,7 @@ Vertical_Page_Scroll :: (up: bool, half_page: bool) {
     if active_layer.type == .FILE_EXPLORER && cursor.y == 1 {
         cursor.y = ifx scroll_line_count < 0 then sdw(0) else sdw(2);
     }
-    cursor.y = clamp(cursor.y, sdw(0), sdw(text_buffer.lines.count-1));
-    line := Line_View(text_buffer, cursor.y);
-    cursor.x = Clamp_X_To_Line(cursor.target_x, line);
-    cursor.just_moved = true;
+    Clamp_Cursor(cursor, text_buffer);
 
     if active_layer.type == .FILE_EXPLORER {
         File_Explorer_Reset_Cursor_On_Path(cursor, text_buffer);
@@ -1166,7 +1163,28 @@ Cursor_Scroll_Down_Half_Page :: #bake_arguments Vertical_Page_Scroll(up=false, h
 Cursor_Scroll_Up_Full_Page :: #bake_arguments Vertical_Page_Scroll(up=true, half_page=false);
 Cursor_Scroll_Down_Full_Page :: #bake_arguments Vertical_Page_Scroll(up=false, half_page=false);
     
+Cursor_Scroll_To_Empty_Line :: (scroll_down: bool) {
+    Init_Cursor_Proc_Or_Return(true);
+
+    scroll_dir := ifx scroll_down then sdw(1) else sdw(-1);
+    cursor.y += scroll_dir;
+    while cursor.y > 0 && cursor.y < text_buffer.lines.count && Line_Count(text_buffer, cursor.y) != 0 {
+        cursor.y += scroll_dir;
+    }
+
+    Clamp_Cursor(cursor, text_buffer);
+}
+Cursor_Scroll_Up_To_Empty_Line :: #bake_arguments Cursor_Scroll_To_Empty_Line(scroll_down=false);
+Cursor_Scroll_Down_To_Empty_Line :: #bake_arguments Cursor_Scroll_To_Empty_Line(scroll_down=true);
+
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+Clamp_Cursor :: (cursor: *Cursor, text_buffer: *TextBuffer) {
+    cursor.y = clamp(cursor.y, sdw(0), sdw(text_buffer.lines.count-1));
+    line := Line_View(text_buffer, cursor.y);
+    cursor.x = Clamp_X_To_Line(cursor.target_x, line);
+    cursor.just_moved = true;
+}
 
 Get_Register_Lines :: (register: u32) -> (lines: [][]u32, first_line_is_new_line: bool) {
     register_text := Get_Register_Text(selected_register);
