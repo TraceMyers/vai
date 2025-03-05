@@ -193,13 +193,15 @@ Find_Active_Backwards_From :: (in_use: [..]u8, item_index: s64) -> s64 #expand {
 
 Find_Active :: (in_use: [..]u8, from_index := 0, $INDEXING_INFO := PoolUsageIndexingInfo(1)) -> s64 #expand {
     start_byte, start_bit := Item_Index_To_Byte_Index(from_index);
-    for byte : start_byte..in_use.count-1 {
+    iter_check := (in_use.count - 1) - start_byte + ((7 - start_bit) >> INDEXING_INFO.STEP_SHIFT);
+    if iter_check > 0 then for byte : start_byte..in_use.count-1 {
         in_use_chunk := in_use[byte];
         if (in_use_chunk & U8_MAX) != 0 {
-            for shift_count : 0..INDEXING_INFO.STEP_COUNT-1 {
+            start_step := ub(start_bit >> INDEXING_INFO.STEP_SHIFT);
+            for shift_count : start_step..INDEXING_INFO.STEP_COUNT-1 {
                 shift := (INDEXING_INFO.STEP_SIZE * shift_count);
                 shifted_flags := INDEXING_INFO.FLAGS << shift;
-                if (in_use_chunk & shifted_flags) != 0 && shifted_flags >= start_bit {
+                if (in_use_chunk & shifted_flags) != 0 {
                     item_index := Byte_Index_To_Item_Index(byte, shift);
                     return item_index;
                 }
@@ -210,6 +212,7 @@ Find_Active :: (in_use: [..]u8, from_index := 0, $INDEXING_INFO := PoolUsageInde
     return -1;
 }
 
+// TODO: this isn't written correctly. pattern fixes after Find_Active
 Find_Inactive :: (in_use: [..]u8, $c: string, from_index := 0, $INDEXING_INFO := PoolUsageIndexingInfo(1)) -> s64 #expand {
     start_byte, start_bit := Item_Index_To_Byte_Index(from_index);
     for byte : start_byte..in_use.count-1 {
@@ -566,18 +569,22 @@ PoolUsageIndexingInfo :: struct($BIN_COUNT: u8) {
         FLAGS: u8: 0x01;
         STEP_SIZE: u8 : 1;
         STEP_COUNT: u8 : 8;
+        STEP_SHIFT: u8: 0;
     } else #if BIN_COUNT == 2 {
         FLAGS: u8: 0x03;
         STEP_SIZE: u8 : 2;
         STEP_COUNT: u8 : 4;
+        STEP_SHIFT: u8: 1;
     } else #if BIN_COUNT == 4 {
         FLAGS: u8: 0x0f;
         STEP_SIZE: u8 : 4;
         STEP_COUNT: u8 : 2;
+        STEP_SHIFT: u8: 2;
     } else #if BIN_COUNT == 8 {
         FLAGS: u8: 0xff;
         STEP_SIZE: u8 : 8;
         STEP_COUNT: u8 : 1;
+        STEP_SHIFT: u8: 3;
     } else {
         #run assert(false);
     }

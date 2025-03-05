@@ -173,6 +173,7 @@ Scroll_To_Next_Editor :: () {
     if active_layer.type == .FILE_EXPLORER {
         unused: [][]u32;
         Execute_Command_Toggle_Tool_View(unused);
+        return;
     }
 
     //  --- proc specific stuff ---
