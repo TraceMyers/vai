@@ -152,15 +152,7 @@ Execute_Command_Open :: (args: [][]u32) {
     if filename.count == 0 {
         return;
     }
-    new_buffer_id := Get_File_Buffer_ID(filename);
-    if new_buffer_id == -1 {
-        if !write_entire_file(filename, "") {
-            return;
-        }
-        new_buffer_id = Get_File_Buffer_ID(filename);
-        View_Layer_Soft_Reset(bg_layer);    
-    }
-    bg_layer.file_editor.file_buffer = new_buffer_id;
+    Open_File_In_Editor(*bg_layer.file_editor, filename, true);
 }
 
 Execute_Command_Split :: (args: [][]u32, vertical: bool) {
@@ -174,16 +166,10 @@ Execute_Command_Split :: (args: [][]u32, vertical: bool) {
     file_editor_id := bg_layer.file_editor.file_buffer;
     if args.count != 0 {
         filename := Encode(As_String(args[0]), .UTF32, .UTF8);
-        new_buffer_id := Get_File_Buffer_ID(filename);
-        if new_buffer_id != -1 {
-            file_editor_id = new_buffer_id;
-        } else {
-            write_entire_file(filename, "");
-            file_editor_id = Get_File_Buffer_ID(filename);
-        }
-        View_Layer_Soft_Reset(*new_view.layers[0]);    
+        Open_File_In_Editor(*new_view.layers[0].file_editor, filename, true);
+    } else {
+        new_view.layers[0].file_editor.file_buffer = file_editor_id;
     }
-    new_view.layers[0].file_editor.file_buffer = file_editor_id;
 }
 Execute_Command_Split_Vertical :: #bake_arguments Execute_Command_Split(vertical=true);
 Execute_Command_Split_Horizontal :: #bake_arguments Execute_Command_Split(vertical=false);

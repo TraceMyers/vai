@@ -944,11 +944,7 @@ Normal_Mode_Return :: () {
                     return;
                 }
                 file_path := tprint("%/%", working_directory, directory_list[target_index].name);
-                new_buffer_id := Get_File_Buffer_ID(file_path);
-                if new_buffer_id == -1 {
-                    return;
-                }
-                editor_layer.file_editor.file_buffer = new_buffer_id;
+                Open_File_In_Editor(*editor_layer.file_editor, file_path, false);
             }
         }
     }

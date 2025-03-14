@@ -826,6 +826,7 @@ TextBuffer :: struct {
     line_pool: BinPool(TEXT_BUFFER_SMALL_CHUNK_LEN, u8);
     file_path: string;
     change_history: OpposingCircularBuffer(TextChange);
+    saved_cursor: Cursor;
 }
 
 Utf32Buffer :: struct {

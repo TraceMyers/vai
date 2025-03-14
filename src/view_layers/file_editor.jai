@@ -142,6 +142,10 @@ Cursor_Scroll :: (layer: *ViewLayer, renderer: *TextRenderer, text_buffer: *Text
 
     IDEAL_NET_SIZE : float : 8.0;
 
+    if layer_cursor.just_moved {
+        text_buffer.saved_cursor = layer_cursor.*;
+    }
+
     vt_net := Calculate_Cursor_Net(layer.view_position.y, xx renderer.line_count, IDEAL_NET_SIZE);
     cursor_y := cast(float)layer_cursor.y;
     if layer_cursor.just_moved {
@@ -180,6 +184,23 @@ Cursor_Scroll :: (layer: *ViewLayer, renderer: *TextRenderer, text_buffer: *Text
         }
     }
 
-    layer.view_position.y = max(layer.view_position.y, 0);
+    layer.view_position.y = clamp(layer.view_position.y, 0, cast(float)(text_buffer.lines.count-1));
     layer.view_position.x = max(layer.view_position.x, 0);
+}
+
+Open_File_In_Editor :: (file_editor: *FileEditor, filename: string, create_if_doesnt_exist: bool) -> bool {
+    new_buffer_id := Get_File_Buffer_ID(filename);
+    if new_buffer_id == -1 {
+        if !create_if_doesnt_exist {
+            return false;
+        }
+        write_entire_file(filename, "");
+        new_buffer_id = Get_File_Buffer_ID(filename);
+    }
+    file_editor.file_buffer = new_buffer_id;
+    // each file buffer has its a cursor position cached by file editors when they move
+    file_editor.cursor = file_buffers.items[new_buffer_id].saved_cursor;
+    // reset view position
+    Center_View_On_Cursor(View_Layer_From_Data(xx file_editor), xx file_buffers.items[new_buffer_id].lines.count);
+    return true;
 }

@@ -35,7 +35,7 @@ SettingsFileData :: struct {
     change_history_count: s32 = 100;
     record_processed_input := false;
     arrow_key_scroll_speed := 60.0;
-    relative_line_numbers := true;
+    relative_line_numbers := false;
     tool_view_screen_proportion := 0.3;
     
     #place window_width;

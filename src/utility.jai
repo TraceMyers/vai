@@ -404,10 +404,30 @@ Is_Basic_Text_File_Extension :: (ext: string) -> bool {
         || ext == "gitignore";
 }
 
+// TODO: probably map
 Is_Code_File_Extension :: (ext: string) -> bool {
     return ext == "c"
         || ext == "cpp"
         || ext == "jai"
+        || ext == "py"
+        || ext == "h"
+        || ext == "hpp"
+        || ext == "cs"
+        || ext == "java"
+        || ext == "php"
+        || ext == "sh"
+        || ext == "swift"
+        || ext == "vb"
+        || ext == "bas"
+        || ext == "r"
+        || ext == "asm"
+        || ext == "a51"
+        || ext == "inc"
+        || ext == "nasm"
+        || ext == "ahk"
+        || ext == "ahkl"
+        || ext == "bat"
+        || ext == "cmd"
         || ext == "md";
 }
 

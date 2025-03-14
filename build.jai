@@ -1,4 +1,17 @@
 
+// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// ------------------------------------------------------------------------------------------------------- build options
+// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// [heavy optimization=false] or [not + debug info=true]
+debug_build := true; 
+// packaging stuff into release folder
+make_release := false; 
+// auto-places profiler hooks throughout program; profiling data is printed after a run
+do_profiling := false; 
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #run {
     set_build_options_dc(.{do_output=false});
 
@@ -10,16 +23,16 @@
     build_options.output_executable_name = "vai";
     build_options.output_path = "bin";
     build_options.output_type = .EXECUTABLE;
-    #if DEBUG {
+    if debug_build {
         set_optimization(*build_options, .VERY_DEBUG);
     } else {
         set_optimization(*build_options, .VERY_OPTIMIZED);
     }
     set_build_options(build_options, w);
 
-    #if DO_PROFILING {
+    iprof := Iprof.get_plugin();
+    if do_profiling {
         iprof_flags: Intercept_Flags;
-        iprof := Iprof.get_plugin();
         defer Iprof.finish(iprof);
         Iprof.before_intercept(iprof, *iprof_flags);
         iprof.workspace = w;
@@ -27,11 +40,11 @@
 
     compiler_begin_intercept(w);
 
-    #if DO_PROFILING {
+    if do_profiling {
         Iprof.add_source(iprof);
     }
 
-    #if !DEBUG {
+    if !debug_build {
         // removes console/prints
         add_build_string("#run disable_runtime_console();", w);
     }
@@ -39,7 +52,7 @@
 
     while true {
         message := compiler_wait_for_message();
-        #if DO_PROFILING {
+        if do_profiling {
             Iprof.message(iprof, message);
         }
         if message.kind == {
@@ -52,7 +65,7 @@
 
     compiler_end_intercept(w);
 
-    #if MAKE_RELEASE {
+    if make_release {
         make_directory_if_it_does_not_exist("release/bin", true);
         make_directory_if_it_does_not_exist("release/fonts");
         copy_file("bin/vai.exe", "release/bin/vai.exe");
@@ -78,15 +91,9 @@ copy_files_recursively :: (source: string, dest: string) {
     assert(res);
 }
 
-DEBUG :: true;
-MAKE_RELEASE :: false;
-DO_PROFILING :: false;
-
 #import "Basic";
 #import "Compiler";
 #import "File";
 #import "File_Utilities";
 #import "String";
-#if DO_PROFILING {
-    Iprof :: #import "Iprof";
-}
+Iprof :: #import "Iprof";

@@ -247,6 +247,20 @@ View_Layer_Soft_Reset :: (layer: *ViewLayer) {
     layer.view_position = .{};
 }
 
+Center_View_On_Cursor :: (layer: *ViewLayer, y_max: float, renderer: *TextRenderer = null) {
+    layer_cursor := Layer_Cursor(layer);
+    if layer_cursor == null {
+        return;
+    }
+    backup_renderer: TextRenderer;
+    if renderer == null {
+        renderer = *backup_renderer;
+        Initialize_Text_Renderer(renderer, layer);
+    }
+    half_view_line_count := cast(float)(renderer.line_count / 2);
+    layer.view_position.y = clamp(cast(float)layer_cursor.y - half_view_line_count, 0, y_max);
+}
+
 Clear_View :: (id: s64) {
     view := Get_Item(*view_pool, id);
     for view.children {
