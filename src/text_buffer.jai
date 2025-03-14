@@ -827,6 +827,9 @@ TextBuffer :: struct {
     file_path: string;
     change_history: OpposingCircularBuffer(TextChange);
     saved_cursor: Cursor;
+    flags: enum_flags {
+        FILE_EXPLORER;
+    }
 }
 
 Utf32Buffer :: struct {
@@ -841,7 +844,7 @@ Utf32Buffer :: struct {
 line_id_counter: u32;
 debug_line_id_counter: u32;
 
-DEFAULT_REGISTER : u32 : 0xff_ff_ff_ff;
+DEFAULT_REGISTER : u32 : 0xffff_ffff;
 
 TextRegisters :: struct {
     tack_map: Table(u32, BinTack);

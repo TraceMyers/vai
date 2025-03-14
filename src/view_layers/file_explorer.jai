@@ -45,8 +45,8 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
     Initialize_Text_Renderer(*renderer, view_layer, 8);
     renderer.screen_render_begin.y += 1;
 
-    buf: *TextBuffer = *file_buffers.items[file_explorer.text_buffer];
-    working_path := file_explorer.directory;
+    buf: *TextBuffer = Layer_Text_Buffer(view_layer);
+    working_path := Temp_Copy_String(file_explorer.directory);
 
     // TODO: failure?
 
@@ -61,7 +61,7 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
             if upper_path_as_shown == directory_true {
                 // path being typed is editing the directory at the end of the path.
                 file_explorer.directory = upper_path_true;
-                working_path = file_explorer.directory;
+                working_path = Temp_Copy_String(file_explorer.directory);
                 recreate_directory_list = true;
                 keep_path_as_shown = vi_mode == .INSERT;
             }
@@ -135,7 +135,7 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
     Render_Text_Buffer_Lines(view_layer, *renderer, buf, false);
     Flush_Draws();
 
-    Cursor_Scroll(View_Layer_From_Data(xx file_explorer), *renderer, *file_buffers.items[file_explorer.text_buffer]);
+    Cursor_Scroll(View_Layer_From_Data(xx file_explorer), *renderer, buf);
 
     if file_explorer.cursor.y == 0 {
         if vi_mode == .NORMAL {

@@ -118,33 +118,18 @@ Execute_Command_Close :: (args: [][]u32) {
     case .VIEW;
         Close_View(Active_View_ID());
     case .BUFFER;
-        _, layer := Get_File_Editor_Background_Layer();
+        _, layer := Get_Active_Layer_Of_Type(.FILE_EDITOR);
         if layer != null {
             Close_Text_Buffer(layer.file_editor.file_buffer);
         }
     }
 }
 
-Get_File_Editor_Background_Layer :: () -> *View, *ViewLayer {
-    if Active_View_ID() < 0 {
-        return null, null;
-    }
-    bg_view := View_From_ID(Active_View_ID());
-    bg_layer := Active_Layer_Of_View(bg_view);
-    if bg_layer == null {
-        return null, null;
-    }
-    if bg_layer.type != .FILE_EDITOR {
-        return null, null;
-    }
-    return bg_view, bg_layer;
-}
-
 Execute_Command_Open :: (args: [][]u32) {
     if args.count == 0 {
         return;
     }
-    _, bg_layer := Get_File_Editor_Background_Layer();
+    _, bg_layer := Get_Active_Layer_Of_Type(.FILE_EDITOR);
     if bg_layer == null {
         return;
     }
@@ -157,7 +142,7 @@ Execute_Command_Open :: (args: [][]u32) {
 
 Execute_Command_Split :: (args: [][]u32, vertical: bool) {
     // note that 'horizontal' and 'vertical' are inverted compared to normal vim, because I don't think vim's version of these this is intuitive
-    bg_view, bg_layer := Get_File_Editor_Background_Layer();
+    bg_view, bg_layer := Get_Active_Layer_Of_Type(.FILE_EDITOR);
     if bg_layer == null {
         return;
     }
@@ -176,7 +161,7 @@ Execute_Command_Split_Horizontal :: #bake_arguments Execute_Command_Split(vertic
 
 Execute_Command_Save :: (args: [][]u32) {
     // TODO: save to new file using args
-    bg_view, bg_layer := Get_File_Editor_Background_Layer();
+    bg_view, bg_layer := Get_Active_Layer_Of_Type(.FILE_EDITOR);
     if bg_layer == null {
         return;
     }
@@ -212,3 +197,17 @@ Execute_Command_Toggle_Tool_View :: (args: [][]u32) {
         Push_Active_View_ID(tool_view_id);
     }
 }
+
+Execute_Command_Scroll_Buffer :: (args: [][]u32, next: bool) {
+    if file_buffers.items.count == 0 {
+        return;
+    }
+    bg_view, bg_layer := Get_Active_Layer_Of_Type(.FILE_EDITOR);
+    if bg_layer == null {
+        return;
+    }   
+
+    Scroll_File_Buffer(bg_layer, next);
+}
+Execute_Command_Scroll_Buffer_Next :: #bake_arguments Execute_Command_Scroll_Buffer(next=true);
+Execute_Command_Scroll_Buffer_Previous :: #bake_arguments Execute_Command_Scroll_Buffer(next=false);

@@ -221,6 +221,16 @@ Scroll_To_Next_Editor :: () {
     Replace_Active_View_ID(sort_info[next_editor].view_id);
 }
 
+Scroll_File_Buffer_Action :: (next: bool) {
+    view, layer := Get_Active_Layer_Of_Type(.FILE_EDITOR);
+    if layer == null {
+        return;
+    }
+    Scroll_File_Buffer(layer, next);
+}
+Scroll_File_Buffer_Action_Next :: #bake_arguments Scroll_File_Buffer_Action(next=true);
+Scroll_File_Buffer_Action_Previous :: #bake_arguments Scroll_File_Buffer_Action(next=false);
+
 Insert_New_Line :: () {
     Init_Cursor_Proc_Or_Return(true);
     if active_layer.type == .FILE_EXPLORER {

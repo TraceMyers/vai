@@ -200,7 +200,6 @@ Open_File_In_Editor :: (file_editor: *FileEditor, filename: string, create_if_do
     file_editor.file_buffer = new_buffer_id;
     // each file buffer has its a cursor position cached by file editors when they move
     file_editor.cursor = file_buffers.items[new_buffer_id].saved_cursor;
-    // reset view position
     Center_View_On_Cursor(View_Layer_From_Data(xx file_editor), xx file_buffers.items[new_buffer_id].lines.count);
     return true;
 }

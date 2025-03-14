@@ -62,6 +62,7 @@ Create_Base_Views :: () {
         layer.type = .FILE_EXPLORER;
         layer.file_explorer = .{};
         layer.file_explorer.text_buffer = Request_Item(*file_buffers);
+        file_buffers.items[layer.file_explorer.text_buffer].flags = .FILE_EXPLORER;
         layer.file_explorer.directory = copy_string(get_working_directory());
         tool_view_id = Add_View(.{type=.PROPORTION, left=0.0}, *layer, ROOT_ID);
     }
@@ -128,6 +129,21 @@ Active_Layer_Of_View :: inline (v: *View) -> *ViewLayer {
         return null;
     }
     return *v.layers[v.active_layer];
+}
+
+Get_Active_Layer_Of_Type :: (type: ViewLayerType) -> *View, *ViewLayer {
+    if Active_View_ID() < 0 {
+        return null, null;
+    }
+    active_view := View_From_ID(Active_View_ID());
+    active_layer := Active_Layer_Of_View(active_view);
+    if active_layer == null {
+        return null, null;
+    }
+    if (active_layer.type & type) == 0 {
+        return null, null;
+    }
+    return active_view, active_layer;
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -656,8 +672,8 @@ View_Bounds :: (layer: *ViewLayer) -> (ul: Vector2, lr: Vector2) {
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ViewLayerType :: enum_flags u16 {
-    EMPTY   :: 0x00;
-    TOP_BAR :: 0x01;
+    EMPTY;
+    TOP_BAR;
     FILE_EDITOR;
     VIM_CONSOLE;
     FILE_EXPLORER;
@@ -724,6 +740,30 @@ Layer_Text_Buffer :: (layer: *ViewLayer) -> *TextBuffer {
         }
     }
     return null;
+}
+
+Scroll_File_Buffer :: (layer: *ViewLayer, forward: bool) {
+    assert(layer.type == .FILE_EDITOR);
+
+    i := 0;
+    found_buffer := false;
+    scroll_dir := ifx forward then 1 else -1;
+    buf_id := layer.file_editor.file_buffer + scroll_dir;
+
+    while i < file_buffers.items.count {
+        if buf_id >= file_buffers.items.count {
+            buf_id = 0;
+        } else if buf_id < 0 {
+            buf_id = file_buffers.items.count-1;
+        }
+        if Is_Item_In_Use(*file_buffers, buf_id) && file_buffers.items[buf_id].flags == 0 {
+            layer.file_editor.file_buffer = buf_id;
+            found_buffer = true;
+            break;
+        }
+        buf_id += scroll_dir;
+        i += 1;
+    }
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
