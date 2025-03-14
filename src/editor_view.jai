@@ -746,7 +746,6 @@ Scroll_File_Buffer :: (layer: *ViewLayer, forward: bool) {
     assert(layer.type == .FILE_EDITOR);
 
     i := 0;
-    found_buffer := false;
     scroll_dir := ifx forward then 1 else -1;
     buf_id := layer.file_editor.file_buffer + scroll_dir;
 
@@ -758,7 +757,10 @@ Scroll_File_Buffer :: (layer: *ViewLayer, forward: bool) {
         }
         if Is_Item_In_Use(*file_buffers, buf_id) && file_buffers.items[buf_id].flags == 0 {
             layer.file_editor.file_buffer = buf_id;
-            found_buffer = true;
+            file_editor := *layer.file_editor;
+            // each file buffer has its a cursor position cached by file editors when they move
+            layer.file_editor.cursor = file_buffers.items[buf_id].saved_cursor;
+            Center_View_On_Cursor(View_Layer_From_Data(xx file_editor), xx file_buffers.items[buf_id].lines.count);
             break;
         }
         buf_id += scroll_dir;
