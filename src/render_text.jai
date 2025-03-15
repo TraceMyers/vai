@@ -131,7 +131,8 @@ Render_Line_Numbers :: (renderer: *TextRenderer, line_count: s32) {
     gutter_scissor_lr.x = renderer.align_info_main.screen_x;
     Set_Scissor(rendering_scissor_ul, gutter_scissor_lr);
 
-    color_buffer := TextColorLocation.[.{.{110, 110, 110}, 0}];
+    inactive_line_color := TextColorLocation.[.{.{110, 110, 110}, 0}];
+    active_line_color := TextColorLocation.[.{.{180, 180, 180}, 0}];
 
     cursor := Layer_Cursor(renderer.view_layer);
     cursor_y := ifx cursor then cursor.y else 0;
@@ -140,17 +141,18 @@ Render_Line_Numbers :: (renderer: *TextRenderer, line_count: s32) {
     start_row := renderer.text_view_clip.y + 1;
     for r : 0..line_count-1 {
         line_number_text: string;
+        line_color := ifx (start_row + r) == (cursor_y + 1) then *active_line_color else *inactive_line_color;
         if settings_file_data.relative_line_numbers {
             relative_number := start_row + r - (cursor_y + 1);
             if relative_number == 0 {
                 line_number_text = tprint("%", start_row + r);
             } else {
-                line_number_text = tprint("%", relative_number);
+                line_number_text = tprint("%", abs(relative_number));
             }
         } else {
             line_number_text = tprint("%", start_row + r);
         }
-        Render_Text_Line(renderer, *renderer.align_info_gutter, As_Array(line_number_text, u8), color_buffer);
+        Render_Text_Line(renderer, *renderer.align_info_gutter, As_Array(line_number_text, u8), line_color.*);
     }
 }
 

@@ -60,6 +60,7 @@ Add_Cursor_Move_Artifact :: (cursor: *Cursor, action: Action) {
 
 MAX_KEY_REPEAT_TIME :: 0.09;
 
+// TODO: should just return whatever action is repeating, if one is
 Get_Action_Repeat_Rate :: (cursor: *Cursor, action: Action) -> bool, float32 {
     using cursor.move_history;
     t := seconds_since_init();

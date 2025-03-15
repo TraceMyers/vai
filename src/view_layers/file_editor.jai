@@ -40,6 +40,12 @@ Render_File_Editor_Text :: (using file_editor: *FileEditor, is_active: bool) {
     view_layer := View_Layer_From_Data(xx file_editor);
     Initialize_Text_Renderer(*renderer, view_layer);
 
+    if is_active {
+        // it's al ittle odd for this to be inside a render function, but it makes use of the text renderer data.
+        Cursor_Scroll(View_Layer_From_Data(xx file_editor), *renderer, *file_buffers.items[file_editor.file_buffer]);
+        Initialize_Text_Renderer(*renderer, view_layer);
+    }
+
     text_buffer := *file_buffers.items[file_editor.file_buffer];
     Render_Text_Buffer_Lines(view_layer, *renderer, text_buffer, true);
 
@@ -53,13 +59,10 @@ Render_File_Editor_Text :: (using file_editor: *FileEditor, is_active: bool) {
     if is_active {
         Flush_Draws();
         cursor.style = ifx vi_mode == .INSERT then .VERTICAL_LINE else .BLOCK;
-        // it's al ittle odd for this to be inside a render function, but it makes use of the text renderer data.
-        Cursor_Scroll(View_Layer_From_Data(xx file_editor), *renderer, *file_buffers.items[file_editor.file_buffer]);
         Render_Text_Cursor(*renderer, *file_editor.cursor);
     }
 
     Render_Cursor_Line_Block(*renderer, *file_editor.cursor);
-
     Set_Shader_For_Text();
 }
 
@@ -101,15 +104,26 @@ Calculate_Cursor_Net :: (bound_min: float, bound_count: float, ideal_net_size: f
     return net;
 }
 
-// when the cursor's x or y is outside the visible range, teleport the view to the cursor
+// when the cursor's x or y is outside the visible net range, teleport the view to the cursor
 Teleport_View_Axis_To_Cursor :: (cursor_axis: float, view_axis: *float, net: *CursorNet) {
-    if cursor_axis < net.visible_min {
-        net_diff := cursor_axis - net.min;
-        view_axis.* += net_diff;
+    half_net_size := net.size * 0.5;
+    hard_scroll_min := net.visible_min + half_net_size;
+    hard_scroll_max := net.visible_max - half_net_size;
+    if cursor_axis < hard_scroll_min {
+        if abs(cursor_axis - net.visible_min) <= half_net_size {
+            view_axis.* -= 1;
+        } else {
+            net_diff := cursor_axis - net.min;
+            view_axis.* += net_diff;
+        }
         view_axis.* = max(view_axis.*, 0);
-    } else if cursor_axis > net.visible_max {
-        net_diff := cursor_axis - net.max;
-        view_axis.* += net_diff;
+    } else if cursor_axis > hard_scroll_max {
+        if abs(cursor_axis - net.visible_max) <= half_net_size {
+            view_axis.* += 1;
+        } else {
+            net_diff := cursor_axis - net.max;
+            view_axis.* += net_diff;
+        }
     }
 }
 
