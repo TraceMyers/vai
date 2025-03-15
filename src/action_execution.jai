@@ -146,7 +146,7 @@ Cursor_Scroll_To_Line_Begin :: () {
     cursor.x = 0;
     line := Line_View(text_buffer, cursor.y);
     if line.count == 0 then return;
-    while cursor.x < line.count - 1{
+    while cursor.x < line.count - 1 {
         if Is_Whitespace(line[cursor.x]) {
             cursor.x += 1;
         } else {
@@ -154,7 +154,11 @@ Cursor_Scroll_To_Line_Begin :: () {
         }
     }
     if Is_Whitespace(line[cursor.x]) {
-        cursor.x = 0;
+        if vi_mode != .INSERT {
+            cursor.x = 0;
+        } else {
+            cursor.x += 1;
+        }
     }
     cursor.target_x = cursor.x;
     cursor.just_moved = true;
@@ -175,6 +179,7 @@ Scroll_To_Next_Editor :: () {
         Execute_Command_Toggle_Tool_View(unused);
         return;
     }
+
 
     //  --- proc specific stuff ---
     EditorSortInfo :: struct {
@@ -239,10 +244,10 @@ Insert_New_Line :: () {
         return;
     }
     is_change := active_layer.type == .FILE_EDITOR;
-    Break_Line_At(text_buffer, cursor.y, cursor.x, is_change);
+    added_indent := Break_Line_At(text_buffer, cursor.y, cursor.x, is_change);
     cursor.y += 1;
-    cursor.x = 0;
     cursor.just_moved = true;
+    Cursor_Scroll_To_Line_Begin();
 }
 
 Enter_Insert_Mode :: (append: bool) {
@@ -346,16 +351,20 @@ Delete_Character :: () {
 Insert_Line_And_Enter_Insert_Mode :: (append: bool) {
     Init_Cursor_Proc_Or_Return(true);
     is_change := active_layer.type == .FILE_EDITOR;
+    indentation_added := false;
     if append {
         // insert before moving cursor so the state is always valid (if cursor on final line)
-        Insert_Line(text_buffer, cursor.y+1, is_change);
+        indentation_added = Insert_Line(text_buffer, cursor.y+1, is_change);
         cursor.y += 1;
     } else {
-        Insert_Line(text_buffer, cursor.y, is_change);
+        indentation_added = Insert_Line(text_buffer, cursor.y, is_change);
     }
     cursor.x = 0;
     cursor.target_x = 0;
     Enter_Insert_Mode_Prepend();
+    if indentation_added {
+        Cursor_Scroll_To_Line_End();
+    }
 }
 Append_Line_And_Enter_Insert_Mode :: #bake_arguments Insert_Line_And_Enter_Insert_Mode(append=true);
 Prepend_Line_And_Enter_Insert_Mode :: #bake_arguments Insert_Line_And_Enter_Insert_Mode(append=false);
@@ -796,7 +805,7 @@ Text_Pattern_Search :: (forward: bool) {
     }
 
     // smartcase option = if the search pattern doesn't have uppercase letters, then it's assumed we want to match against any case.
-    search_lowercase := Is_Bool_Option_Set(.PATTERN_SEARCH_SMART_CASE);
+    search_lowercase := Bool_Option_Value(.PATTERN_SEARCH_SMART_CASE);
     if search_lowercase then for search_pattern {
         if it <= #char "Z" && it >= #char "A" {
             search_lowercase = false;

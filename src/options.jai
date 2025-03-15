@@ -9,10 +9,17 @@ Options :: struct {
 
     }
 }
-Is_Bool_Option_Set :: (option: Option) -> bool {
+
+Bool_Option_Value :: (option: Option) -> bool {
     using option_mappings[option].extension;
     assert(type == .BOOL);
     return _bool;
+}
+
+Integer_Option_Value :: (option: Option) -> s32 {
+    using option_mappings[option].extension;
+    assert(type == .INTEGER);
+    return _integer;
 }
 
 OptionSetting :: struct {

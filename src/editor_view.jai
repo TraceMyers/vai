@@ -80,23 +80,22 @@ Create_Base_Views :: () {
         Push_Active_View_ID(Add_View(.{inverted=true}, *layer, base_empty_view_id));
     }
 
-    // viewport: Viewport;
-    // layers: []ViewLayer;
-    // children_buffer: [VIEW_CHILDREN_MAX]s16;
-    // children: []s16;
-    // active_layer: s8 = -1;
-
-    // test split file editor
-    // split := Split_View(*view_pool.items[active_view_id], .VERTICAL, false);
-    // split.layers[0].type = .FILE_EDITOR;
-    // split.layers[0].file_editor = .{};
-    // split.layers[0].file_editor.file_buffer = Get_File_Buffer_ID(intro_file_name);
-
-    // split_id := Get_Item_Index(*view_pool, split);
-    // split_2 := Split_View(split, .HORIZONTAL, false);
-    // split_2.layers[0].type = .FILE_EDITOR;
-    // split_2.layers[0].file_editor = .{};
-    // split_2.layers[0].file_editor.file_buffer = Get_File_Buffer_ID(intro_file_name);
+    #if DEBUG_BIN_POOL {
+        split := Split_View(*view_pool.items[Active_View_ID()], .HORIZONTAL, false);
+        split.layers[0].type = .DEBUG;
+        split.layers[0].debug = .{};
+        split.layers[0].debug.type = .BIN_POOL;
+    } else #if DEBUG_UNDO_REDO {
+        split := Split_View(*view_pool.items[Active_View_ID()], .HORIZONTAL, false);
+        split.layers[0].type = .DEBUG;
+        split.layers[0].debug = .{};
+        split.layers[0].debug.type = .UNDO_REDO;
+    } else #if DEBUG_TEXT_BUFFER {
+        split := Split_View(*view_pool.items[Active_View_ID()], .HORIZONTAL, false);
+        split.layers[0].type = .DEBUG;
+        split.layers[0].debug = .{};
+        split.layers[0].debug.type = .TEXT_BUFFER;
+    }
 }
 
 Prepare_Intro_File :: () -> string {
@@ -810,9 +809,9 @@ FileExplorer :: CursorLayer(
 );
 
 DebugViewType :: enum u8 {
-    NONE :: 0;
-    UNDO_REDO :: 1;
+    UNDO_REDO;
     BIN_POOL;
+    TEXT_BUFFER;
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

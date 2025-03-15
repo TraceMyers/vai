@@ -71,10 +71,11 @@ HERE
 
 #insert #run Generate_Struct_Enum_Mapping("Option", u16, "OptionMapping", "option_mappings", TempEnumMapping(string, 2, OptionSetting), true, "As_Option", false,
 #string HERE
-    .{.["number", "nu"],        "LINE_NUMBERS",                 .{type=.BOOL, _bool=true}},
-    .{.["smartcase", "scs"],    "PATTERN_SEARCH_SMART_CASE",    .{type=.BOOL, _bool=true}},
-    .{.["indentation", "ind"],  "INDENTATION_WIDTH"             .{type=.INTEGER, _integer=4}},
-    .{.["softwrap", "swp"],     "SOFT_WRAP_INDENTATION_WIDTH"   .{type=.INTEGER, _integer=2}}
+    .{.["line-numbers", "nu"],  "LINE_NUMBERS",                 .{type=.BOOL, _bool=true}},
+    .{.["smart-case", "scs"],   "PATTERN_SEARCH_SMART_CASE",    .{type=.BOOL, _bool=true}},
+    .{.["tab-width", "tbw"],    "TAB_WIDTH"                     .{type=.INTEGER, _integer=4}},
+    .{.["auto-indent", "ind"],  "AUTO_INDENT",                  .{type=.BOOL, _bool=true}},
+    .{.["soft-wrap", "swp"],    "SOFT_WRAP_INDENTATION_WIDTH"   .{type=.INTEGER, _integer=2}}
 HERE
 );
 

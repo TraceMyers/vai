@@ -111,7 +111,6 @@ Get_File_Buffer :: (file_path: string) -> *TextBuffer {
 }
 
 Load_File_Into_Buffer :: (path: string) -> s64 {
-    Log("loading file %/%", get_working_directory(), path);
     file_string, success := Read_Entire_File(path, true);
     if !success {
         Log_Error("unable to open [%]", path);
@@ -191,7 +190,8 @@ Append_Line :: (buffer: *TextBuffer, line_str: string, is_change := true, $FOR_D
     if is_change then Add_Line_To_Change(buffer, buffer.lines.count-1, .INSERT_LINE);
 }
 
-Insert_Line :: (buffer: *TextBuffer, i: s64, is_change := true, $FOR_DEBUG := false) {
+// returns whether or not indentation was inserted
+Insert_Line :: (buffer: *TextBuffer, i: s64, is_change := true, $FOR_DEBUG := false) -> bool {
     Commit_And_Empty_Utf32_Buffers();
     #if FOR_DEBUG {
         array_insert_at(*buffer.lines, .{unique_id=debug_line_id_counter}, i);
@@ -200,7 +200,24 @@ Insert_Line :: (buffer: *TextBuffer, i: s64, is_change := true, $FOR_DEBUG := fa
         array_insert_at(*buffer.lines, .{unique_id=line_id_counter}, i);
         line_id_counter += 1;
     }
-    if is_change then Add_Line_To_Change(buffer, i, .INSERT_LINE);
+
+    added_indent := false;
+    if is_change {
+        do_auto_indent := Bool_Option_Value(.AUTO_INDENT);
+        if do_auto_indent {
+            indent_level := Get_Indent_Level(buffer, i);
+            col := 0;
+            if indent_level > 0 {
+                for 0..indent_level-1 {
+                    Insert_Code_Point(buffer, i, col, #char "\t", false);
+                    col += 1;
+                }
+                added_indent = true;
+            }
+        }
+        Add_Line_To_Change(buffer, i, .INSERT_LINE);
+    }
+    return added_indent;
 }
 
 Remove_Line :: (buffer: *TextBuffer, line_index: s64, is_change := true, moving_backward := false) {
@@ -303,10 +320,42 @@ Replace_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64, code_point: u32,
     }
 }
 
+Try_Collapsed_Utf32_Unindent :: (buffer: *[]u32, evaluated_indent: s64) {
+    try_unindent := true;
+    if buffer.count <= 1 {
+        return;
+    }
+    fail_code_point := 0;
+    for 0..buffer.count - 2 {
+        if buffer.*[it] != #char "\t" {
+            try_unindent = false;
+            fail_code_point = buffer.*[it];
+            break;
+        }
+    }
+    if !try_unindent {
+        return;
+    }
+    true_indent_level := buffer.count - 1;
+    if true_indent_level != evaluated_indent {
+        return;
+    }
+    for 0..buffer.count - 2 {
+        buffer.*[it] = buffer.*[it+1];
+    }
+    buffer.count -= 1;
+}
+
 Insert_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64, code_point: u32, is_change := true) {
     if is_change then Add_Line_To_Change(buffer, row, 0);
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     assert(col <= utf32_buffer.array.count);
+    try_auto_unindent := 
+        row > 0 
+        && utf32_buffer.array.count > 0
+        && col == utf32_buffer.array.count 
+        && code_point == #char "}" 
+        && Bool_Option_Value(.AUTO_INDENT);
     #if DEBUG_TEXT_BUFFERS {
         if col < utf32_buffer.array.count {
             assert(!Is_Tab_Expanded_Space(utf32_buffer.array[col]));
@@ -314,6 +363,10 @@ Insert_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64, code_point: u32, 
     }
     Resize_Utf32_Buffer(utf32_buffer, xx (utf32_buffer.array.count + 1));
     Collapse_Tabs_Inline_And_Insert(*utf32_buffer.array, col, code_point);
+    if try_auto_unindent {
+        cur_indent := Get_Indent_Level(buffer, row);
+        Try_Collapsed_Utf32_Unindent(*utf32_buffer.array, cur_indent);
+    }
     Expand_Utf32_Buffer_Tabs(utf32_buffer);
 }
 
@@ -323,6 +376,13 @@ Insert_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, code_points: []u
     if is_change then Add_Line_To_Change(buffer, row, flags);
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     assert(col <= utf32_buffer.array.count);
+    try_auto_unindent := 
+        row > 0 
+        && utf32_buffer.array.count > 0
+        && col == utf32_buffer.array.count 
+        && code_points.count == 1
+        && code_points[0] == #char "}" 
+        && Bool_Option_Value(.AUTO_INDENT);
     #if DEBUG_TEXT_BUFFERS {
         if col < utf32_buffer.array.count {
             assert(!Is_Tab_Expanded_Space(utf32_buffer.array[col]));
@@ -332,6 +392,13 @@ Insert_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, code_points: []u
     Resize_Utf32_Buffer(utf32_buffer, xx (utf32_buffer.array.count + code_points.count));
     utf32_buffer.array.count = prev_count; // below proc depends on this
     Collapse_Tabs_Inline_And_Insert(*utf32_buffer.array, col, code_points);
+    if try_auto_unindent {
+        debug_thing = true;
+        cur_indent := Get_Indent_Level(buffer, row);
+        Log("indent: %", cur_indent);
+        debug_thing = false;
+        Try_Collapsed_Utf32_Unindent(*utf32_buffer.array, cur_indent);
+    }
     Expand_Utf32_Buffer_Tabs(utf32_buffer);
 }
 
@@ -363,8 +430,8 @@ Remove_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, count: s64, is_c
     Expand_Utf32_Buffer_Tabs(utf32_buffer);
 }
 
-Break_Line_At :: (buffer: *TextBuffer, row: s64, col: s64, is_change := true) {
-    Insert_Line(buffer, row+1, is_change);
+Break_Line_At :: (buffer: *TextBuffer, row: s64, col: s64, is_change := true) -> added_indent: bool {
+    added_indent := Insert_Line(buffer, row+1, is_change);
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     assert(col <= utf32_buffer.array.count);
     #if DEBUG_TEXT_BUFFERS {
@@ -379,6 +446,7 @@ Break_Line_At :: (buffer: *TextBuffer, row: s64, col: s64, is_change := true) {
         Insert_Code_Points(buffer, row+1, 0, copy_down, is_change);
         Resize_Utf32_Buffer(utf32_buffer, xx col);
     }
+    return added_indent;
 }
 
 Clear_Line :: (buffer: *TextBuffer, row: s64, is_change := true) {
@@ -533,7 +601,6 @@ Resize_Utf32_Buffer :: (utf32_buffer: *Utf32Buffer, count: u32) {
     } else {
         Resize_Bin(*temp_utf32_buffer_pool, *utf32_buffer.temp_bin_id, count);
     }
-
     if utf32_buffer.temp_bin_id.index != -1 {
         bin := Get_Bin(*temp_utf32_buffer_pool, utf32_buffer.temp_bin_id);
         utf32_buffer.array.data = bin.data;
@@ -604,7 +671,7 @@ Collapse_Tabs_Inline_And_Insert :: (data: *[]u32, col: s64, code_point: u32) {
                     Inline_Buffer_Append(*inline_buffer, Strip_Markup(prev_remember_code_point));
                 }
             } else {
-                remember_code_point = Strip_Markup(data.*[i]);
+                remember_code_point = data.*[i];
             }
         }
     }
@@ -885,4 +952,37 @@ Push_Text_To_Number_Registers :: (text: []u32) {
         Set_Bin_Data(*register_text, *tack.bin_id, text);
         tack.count = text.count;
     }
+}
+
+debug_thing := false;
+
+// TODO: support non-curly brace languages
+// TODO: support non-tab indent
+Get_Indent_Level :: (buffer: *TextBuffer, i: s64) -> s64 {
+    ITER_MAX :: 1000;
+    curly_open_level := 0;
+    iter_ct := 1;
+    while (i - iter_ct) >= 0 {
+        line := Raw_Line_View(buffer, i - iter_ct);
+        if debug_thing then Log("line: %", line);
+        if line.count > 0 then for #v2 < cback : 0..line.count-1 {
+            if line[cback] == #char "{" {
+                curly_open_level += 1;
+            } else if line[cback] == #char "}" {
+                curly_open_level -= 1;
+            }
+            if curly_open_level > 0 {
+                tab_count := 0;
+                for cfore : 0..cback {
+                    if line[cfore] != #char "\t" {
+                        break;
+                    }
+                    tab_count += 1;
+                }
+                return tab_count + 1;
+            }
+        }
+        iter_ct += 1;
+    }
+    return 0;
 }

@@ -204,10 +204,6 @@ Execute_Command_Scroll_Buffer :: (args: [][]u32, next: bool) {
         return;
     }
     Scroll_File_Buffer(layer, next);
-    file_editor := *layer.file_editor;
-    // each file buffer has its a cursor position cached by file editors when they move
-    layer.file_editor.cursor = file_buffers.items[file_editor.file_buffer].saved_cursor;
-    Center_View_On_Cursor(View_Layer_From_Data(xx file_editor), xx file_buffers.items[file_editor.file_buffer].lines.count);
 }
 Execute_Command_Scroll_Buffer_Next :: #bake_arguments Execute_Command_Scroll_Buffer(next=true);
 Execute_Command_Scroll_Buffer_Previous :: #bake_arguments Execute_Command_Scroll_Buffer(next=false);

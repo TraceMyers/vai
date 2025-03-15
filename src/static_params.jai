@@ -10,6 +10,9 @@ DEBUG_GRAPHICS          :: false;
 DEBUG_MEMORY            :: false;
 ALWAYS_FULL_UPDATE      :: true;
 SERIALIZE_DEBUG         :: false;
+DEBUG_BIN_POOL          :: false;
+DEBUG_UNDO_REDO         :: false;
+DEBUG_TEXT_BUFFER       :: false;
 
 MSAA :: 4;
 

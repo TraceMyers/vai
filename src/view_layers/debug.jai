@@ -29,9 +29,33 @@ Temp_Text_Buffer :: (using tb_view: *DebugView) -> *TextBuffer {
         Create_Debug_View_Undo_Redo(buf);
     case .BIN_POOL;
         Create_Debug_View_Bin_Pool(buf);
+    case .TEXT_BUFFER;
+        Create_Debug_View_Text_Buffer(buf);
     }
 
     return buf;
+}
+
+Create_Debug_View_Text_Buffer :: (out_buffer: *TextBuffer) {
+    Init_Cursor_Proc_Or_Return();
+
+    for text_buffer.lines {
+        line_data := Get_Line_Bytes(text_buffer, it_index);
+        builder: String_Builder;
+        builder.allocator = temp;
+        for 0..line_data.count - 1 {
+            if line_data[it] == #char "\t" {
+                print_to_builder(*builder, "\\t");
+            } else if line_data [it] == #char " " {
+                print_to_builder(*builder, "\\s");
+            } else {
+                char_str := string.{1, *line_data[it]};
+                print_to_builder(*builder, tprint(" %", char_str));
+            }
+        }
+        s := builder_to_string(*builder);
+        Append_Line_To_Debug_Buffer(out_buffer, s);
+    }
 }
 
 Create_Debug_View_Undo_Redo :: (out_buffer: *TextBuffer) {

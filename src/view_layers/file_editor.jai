@@ -76,6 +76,7 @@ Render_File_Editor_Foreground :: (using file_editor: *FileEditor, is_active: boo
 Process_Text_Input :: (using file_editor: *FileEditor, utf32: []u32) {
     if file_buffer < 0 then return;
     text_buffer := *file_buffers.items[file_buffer];
+    at_line_end := cursor.x == Line_Count(text_buffer, cursor.y);
     Insert_Code_Points(text_buffer, cursor.y, cursor.x, utf32);
     for 0..utf32.count-1 {
         Cursor_Scroll_Right();
