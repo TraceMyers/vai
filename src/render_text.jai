@@ -22,7 +22,7 @@ Render_Text :: struct {
 }
 
 Reinitialize_Font :: () {
-    // Render_Text.Shutdown();
+    Render_Text.Shutdown();
     Render_Text.Initialize();
 }
 
@@ -96,9 +96,15 @@ Initialize_Text_Renderer :: (using renderer: *TextRenderer, in_view_layer: *View
     text_view_clip = IntVector2.{xx view_layer.view_position.x, xx view_layer.view_position.y};
 }
 
+// TODO: soft wrap made a mess out of this
 Render_Text_Buffer_Lines :: (view_layer: *ViewLayer, renderer: *TextRenderer, buffer: *TextBuffer, render_line_numbers: bool) {
+    rendered_lines_at: [..]s32;
+    rendered_lines_at.allocator = temp;
+
     {
         Scoped_Immediate_Text_Render();
+
+        layer_cursor := Layer_Cursor(view_layer);
 
         text_scissor_ul := rendering_scissor_lr;
         text_scissor_ul.x = renderer.align_info_main.screen_x;
@@ -111,6 +117,16 @@ Render_Text_Buffer_Lines :: (view_layer: *ViewLayer, renderer: *TextRenderer, bu
 
         start_line := renderer.text_view_clip.y;
 
+        do_line_wrap := Bool_Option_Value(.SOFT_WRAP);
+        wrap_indent := Integer_Option_Value(.SOFT_WRAP_INDENT_WIDTH);
+        indent_width := Integer_Option_Value(.INDENT_WIDTH);
+        view_width := max(rendering_scissor_lr.x - renderer.align_info_main.screen_x, sdw(1));
+        wrap_max_render_ct := view_width / renderer.screen_char_width;
+
+        if layer_cursor {
+            renderer.cursor_pos = .{layer_cursor.x, layer_cursor.y};
+        }
+
         renderer.rendered_line_count = 0;
         for 0..renderer.line_count-1 {
             line_index := start_line + it;
@@ -121,14 +137,100 @@ Render_Text_Buffer_Lines :: (view_layer: *ViewLayer, renderer: *TextRenderer, bu
             }
             marked_utf32 := Line_View(buffer, line_index);
             no_hz_clip := view_layer && view_layer.type == .FILE_EXPLORER && line_index >= 2;
-            if no_hz_clip || marked_utf32.count > renderer.text_view_clip.x {
+
+            save_cursor_pos := false;
+            save_cursor_pos_x: s32;
+            if layer_cursor {
+                save_cursor_pos = line_index == layer_cursor.y;
+                save_cursor_pos_x = layer_cursor.x;
+            }
+            array_add(*rendered_lines_at, renderer.rendered_line_count);
+
+            if (no_hz_clip || marked_utf32.count > renderer.text_view_clip.x) && marked_utf32.count != 0 {
                 if !no_hz_clip {
                     marked_utf32.data += renderer.text_view_clip.x;
                     marked_utf32.count -= renderer.text_view_clip.x;
                 }
                 Get_Unmarked_Utf8(marked_utf32, *utf8_buffer, *color_buffer);
-                Render_Text_Line(renderer, *renderer.align_info_main, utf8_buffer, color_buffer);
+                // TODO: this is def just chopping up utf8 into incomprehensible bits...
+                // TODO: cursor x,y can be an output of this proc
+                if do_line_wrap && view_layer.type == .FILE_EDITOR {
+                    remaining_utf8 := utf8_buffer;
+                    total_reindent := Get_Marked_Line_Indent(marked_utf32) * indent_width + wrap_indent;
+                    indent_header: string;
+                    if total_reindent > 0 {
+                        indented_builder: String_Builder;
+                        indented_builder.allocator = temp;
+                        for 0..total_reindent-1 {
+                            print_to_builder(*indented_builder, " ");
+                        }
+                        indent_header = builder_to_string(*indented_builder);
+                    }
+                    line_wrap_ct := 0;
+                    while remaining_utf8.count > 0 {
+                        partial_render_buf := remaining_utf8;
+                        render_remain_ct := remaining_utf8.count;
+                        wrap_render_buf := remaining_utf8;
+                        use_indent_str: string;
+
+                        if line_wrap_ct > 0 {
+                            render_remain_ct += indent_header.count;
+                            use_indent_str = indent_header;
+                        }
+
+                        max_render_with_indent_ct := wrap_max_render_ct - use_indent_str.count;
+                        if partial_render_buf.count >= max_render_with_indent_ct-1 {
+                            partial_render_buf.count = max(max_render_with_indent_ct-1, sdw(1));
+                            // wrap on word. search back for space
+                            if partial_render_buf.count > 1 then for #v2 < 1..partial_render_buf.count-1 {
+                                if partial_render_buf[it] == #char " " {
+                                    // make sure we're not digging into the indent
+                                    maybe_split_on_space_index := it;
+                                    for #v2 < 0..maybe_split_on_space_index-1 {
+                                        if partial_render_buf[it] != #char " " {
+                                            partial_render_buf.count = it + 1;
+                                            break;
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+
+                        if save_cursor_pos {
+                            // is_end := remaining_utf8.count == partial_render_buf.count;
+                            if save_cursor_pos_x < partial_render_buf.count /*|| is_end*/ {
+                                renderer.cursor_pos.y = start_line + renderer.rendered_line_count;
+                                if line_wrap_ct > 0 {
+                                    renderer.cursor_pos.x = sdw(save_cursor_pos_x + indent_header.count);
+                                } else {
+                                    renderer.cursor_pos.x = sdw(save_cursor_pos_x);
+                                }
+                                save_cursor_pos = false;
+                            } else {
+                                save_cursor_pos_x -= sdw(partial_render_buf.count);
+                            }
+                        }
+
+                        if use_indent_str.count > 0 {
+                            indented := tprint("%0%", indent_header, As_String(partial_render_buf));
+                            Render_Text_Line(renderer, *renderer.align_info_main, As_Array(indented, u8), color_buffer);
+                        } else {
+                            Render_Text_Line(renderer, *renderer.align_info_main, partial_render_buf, color_buffer);
+                        }
+
+                        remaining_utf8.count -= partial_render_buf.count;
+                        remaining_utf8.data += partial_render_buf.count;
+                        line_wrap_ct += 1;
+                    }
+                } else {
+                    Render_Text_Line(renderer, *renderer.align_info_main, utf8_buffer, color_buffer);
+                }
             } else {
+                if save_cursor_pos {
+                    renderer.cursor_pos.x = 0;
+                    renderer.cursor_pos.y = start_line + renderer.rendered_line_count;
+                }
                 renderer.rendered_line_count += 1;
             }
         }
@@ -137,11 +239,11 @@ Render_Text_Buffer_Lines :: (view_layer: *ViewLayer, renderer: *TextRenderer, bu
     // TODO: check line numbers option
     if render_line_numbers {
         line_count := renderer.rendered_line_count;
-        Render_Line_Numbers(renderer, line_count);
+        Render_Line_Numbers(renderer, line_count, rendered_lines_at);
     }
 }
 
-Render_Line_Numbers :: (renderer: *TextRenderer, line_count: s32) {
+Render_Line_Numbers :: (renderer: *TextRenderer, line_count: s32, rendered_lines_at: []s32) {
     Scoped_Immediate_Text_Render();
 
     gutter_scissor_lr := rendering_scissor_lr;
@@ -156,20 +258,27 @@ Render_Line_Numbers :: (renderer: *TextRenderer, line_count: s32) {
 
     renderer.rendered_line_count = 0;
     start_row := renderer.text_view_clip.y + 1;
+    line_number := 0;
+
     for r : 0..line_count-1 {
+        if rendered_lines_at[line_number] > r {
+            renderer.rendered_line_count += 1;
+            continue;
+        }
         line_number_text: string;
-        line_color := ifx (start_row + r) == (cursor_y + 1) then *active_line_color else *inactive_line_color;
+        line_color := ifx (start_row + line_number) == (cursor_y + 1) then *active_line_color else *inactive_line_color;
         if settings_file_data.relative_line_numbers {
-            relative_number := start_row + r - (cursor_y + 1);
+            relative_number := start_row + line_number - (cursor_y + 1);
             if relative_number == 0 {
-                line_number_text = tprint("%", start_row + r);
+                line_number_text = tprint("%", start_row + line_number);
             } else {
                 line_number_text = tprint("%", abs(relative_number));
             }
         } else {
-            line_number_text = tprint("%", start_row + r);
+            line_number_text = tprint("%", start_row + line_number);
         }
         Render_Text_Line(renderer, *renderer.align_info_gutter, As_Array(line_number_text, u8), line_color.*);
+        line_number += 1;
     }
 }
 
@@ -216,7 +325,7 @@ Text_To_Render_Space :: inline (using renderer: *TextRenderer, text_x: s32, text
 }
 
 Render_Text_Cursor :: (renderer: *TextRenderer, cursor: *Cursor, just_want_out_rect := false, depth := DEFAULT_DEPTH) -> (ul: IntVector2, lr: IntVector2) {
-    ul_x, ul_y := Text_To_Render_Space(renderer, cursor.x, cursor.y);
+    ul_x, ul_y := Text_To_Render_Space(renderer, renderer.cursor_pos.x, renderer.cursor_pos.y);
     lr_x := ul_x;
     lr_y := ul_y + renderer.screen_line_height;
     if #complete cursor.style == {
@@ -247,7 +356,7 @@ Render_Text_Cursor :: (renderer: *TextRenderer, cursor: *Cursor, just_want_out_r
 }
 
 Render_Cursor_Line_Block :: (renderer: *TextRenderer, cursor: *Cursor, alpha := 0.08, depth := DEFAULT_DEPTH) {
-    _, ul_y := Text_To_Render_Space(renderer, cursor.x, cursor.y);
+    _, ul_y := Text_To_Render_Space(renderer, renderer.cursor_pos.x, renderer.cursor_pos.y);
     ul_x := renderer.align_info_main.screen_x;
     lr_x := rendering_scissor_lr.x;
     lr_y := ul_y + renderer.screen_line_height;
@@ -332,6 +441,8 @@ TextRenderer :: struct {
     rendered_line_count: s32;
     text_view_clip: IntVector2; // which row, col to start rendering, as clipped by the viewport
     selection: TextSelection;
+    // set inside Render_Text_Buffer_Lines()
+    cursor_pos: IntVector2;
 }
 
 Render_Text_Line :: (renderer: *TextRenderer, align_info: *AlignInfo, utf8: []u8, colors: []TextColorLocation) {

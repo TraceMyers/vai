@@ -235,7 +235,20 @@ Execute_Command_Set_Options :: (args: [][]u32) {
                         Log_Warning("failed to parse int option value from %", option_value_str);
                     }
                 case .BOOL;
-                    value, success := parse_bool(*option_value_str);
+                    value, success: bool;
+                    if option_value_str.count == 1 {
+                        if option_value_str[0] == #char "0" {
+                            value = false;
+                            success = true;
+                        } else if option_value_str[0] == #char "1" {
+                            value = true; 
+                            success = true;
+                        } else {
+                            success = false;
+                        }
+                    } else {
+                        value, success = parse_bool(*option_value_str);
+                    }
                     if success {
                         Set_Option(option_enum, value);
                     } else {

@@ -74,9 +74,10 @@ HERE
 #string HERE
     .{.["line-numbers"],    "LINE_NUMBERS",                 .{type=.BOOL,      default_value._bool=true}},
     .{.["smart-case"],      "PATTERN_SEARCH_SMART_CASE",    .{type=.BOOL,      default_value._bool=true}},
-    .{.["tab-width"],       "TAB_WIDTH"                     .{type=.INTEGER,   default_value._integer=4}},
+    .{.["indent-width"],    "INDENT_WIDTH"                  .{type=.INTEGER,   default_value._integer=4}},
     .{.["auto-indent"],     "AUTO_INDENT",                  .{type=.BOOL,      default_value._bool=true}},
-    .{.["soft-wrap"],       "SOFT_WRAP_INDENTATION_WIDTH"   .{type=.INTEGER,   default_value._integer=2}},
+    .{.["soft-wrap"],       "SOFT_WRAP",                    .{type=.BOOL,      default_value._bool=true}},
+    .{.["soft-wrap-indent"],"SOFT_WRAP_INDENT_WIDTH"        .{type=.INTEGER,   default_value._integer=2}},
     .{.["font-size"],       "FONT_SIZE",                    .{type=.INTEGER,   default_value._integer=14}}
 HERE
 );

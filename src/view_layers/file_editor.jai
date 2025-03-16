@@ -46,7 +46,8 @@ Render_File_Editor_Text :: (using file_editor: *FileEditor, is_active: bool) {
 
     if is_active {
         // it's al ittle odd for this to be inside a render function, but it makes use of the text renderer data.
-        Cursor_Scroll(View_Layer_From_Data(xx file_editor), *renderer, *file_buffers.items[file_editor.file_buffer]);
+        Cursor_Scroll(view_layer, *renderer, *file_buffers.items[file_editor.file_buffer]);
+        // view might move, need to reinit
         Initialize_Text_Renderer(*renderer, view_layer, override_gutter_size);
     }
 
@@ -114,20 +115,18 @@ Teleport_View_Axis_To_Cursor :: (cursor_axis: float, view_axis: *float, net: *Cu
     half_net_size := net.size * 0.5;
     hard_scroll_min := net.visible_min + half_net_size;
     hard_scroll_max := net.visible_max - half_net_size;
-    if cursor_axis < hard_scroll_min {
-        if abs(cursor_axis - net.visible_min) <= half_net_size {
+    if cursor_axis < net.visible_min {
+        net_diff := cursor_axis - net.min;
+        view_axis.* += net_diff;
+    } else if cursor_axis > net.visible_max {
+        net_diff := cursor_axis - net.max;
+        view_axis.* += net_diff;
+    } else {
+        if cursor_axis < hard_scroll_min {
             view_axis.* -= 1;
-        } else {
-            net_diff := cursor_axis - net.min;
-            view_axis.* += net_diff;
-        }
-        view_axis.* = max(view_axis.*, 0);
-    } else if cursor_axis > hard_scroll_max {
-        if abs(cursor_axis - net.visible_max) <= half_net_size {
+            view_axis.* = max(view_axis.*, 0);
+        } else if cursor_axis > hard_scroll_max {
             view_axis.* += 1;
-        } else {
-            net_diff := cursor_axis - net.max;
-            view_axis.* += net_diff;
         }
     }
 }
@@ -204,7 +203,11 @@ Cursor_Scroll :: (layer: *ViewLayer, renderer: *TextRenderer, text_buffer: *Text
     }
 
     layer.view_position.y = clamp(layer.view_position.y, 0, cast(float)(text_buffer.lines.count-1));
-    layer.view_position.x = max(layer.view_position.x, 0);
+    if Bool_Option_Value(.SOFT_WRAP) {
+        layer.view_position.x = 0;
+    } else {
+        layer.view_position.x = max(layer.view_position.x, 0);
+    }
 }
 
 Open_File_In_Editor :: (file_editor: *FileEditor, filename: string, create_if_doesnt_exist: bool) -> bool {

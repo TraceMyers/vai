@@ -938,7 +938,7 @@ Push_Text_To_Number_Registers :: (text: []u32) {
 Get_Raw_Line_Indent :: (line: []u32) -> s64 {
     tab_count := 0;
     space_count := 0;
-    spaces_per_tab := Integer_Option_Value(.TAB_WIDTH);
+    spaces_per_tab := Integer_Option_Value(.INDENT_WIDTH);
     for c : 0..line.count-1 {
         if line[c] == #char "\t" {
             tab_count += 1;
@@ -949,6 +949,20 @@ Get_Raw_Line_Indent :: (line: []u32) -> s64 {
         }
     }
     return tab_count + (space_count / spaces_per_tab);
+}
+
+Get_Marked_Line_Indent :: (line: []u32) -> s64 {
+    space_count := 0;
+    spaces_per_tab := Integer_Option_Value(.INDENT_WIDTH);
+    for c : 0..line.count-1 {
+        code_point := Strip_Markup(line[c]);
+        if code_point == #char " " {
+            space_count += 1;
+        } else {
+            break;
+        }
+    }
+    return space_count / spaces_per_tab;
 }
 
 // TODO: support non-curly brace languages

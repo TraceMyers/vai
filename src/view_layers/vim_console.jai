@@ -27,6 +27,7 @@ Render_Vim_Console_Text :: (using vim_console: *VimConsole, is_active: bool) {
     cursor.style = .VERTICAL_LINE;
     cursor.x = xx (tabbed_buffer_chars.count + 1);
     cursor.y = 0;
+    renderer.cursor_pos = .{cursor.x, cursor.y};
     ul, lr := Render_Text_Cursor(*renderer, *vim_console.cursor, false, VIM_CONSOLE_TEXT_DEPTH);
     Set_Shader_For_Text();
 }
