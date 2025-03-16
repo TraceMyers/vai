@@ -206,11 +206,9 @@ Insert_Line :: (buffer: *TextBuffer, i: s64, is_change := true, $FOR_DEBUG := fa
         do_auto_indent := Bool_Option_Value(.AUTO_INDENT);
         if do_auto_indent {
             indent_level := Get_Indent_Level(buffer, i);
-            col := 0;
             if indent_level > 0 {
                 for 0..indent_level-1 {
-                    Insert_Code_Point(buffer, i, col, #char "\t", false);
-                    col += 1;
+                    Insert_Code_Point(buffer, i, it, #char "\t", false);
                 }
                 added_indent = true;
             }
@@ -321,23 +319,17 @@ Replace_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64, code_point: u32,
 }
 
 Try_Collapsed_Utf32_Unindent :: (buffer: *[]u32, evaluated_indent: s64) {
-    try_unindent := true;
     if buffer.count <= 1 {
         return;
     }
-    fail_code_point := 0;
-    for 0..buffer.count - 2 {
+    counted_indent := 0;
+    for 0..buffer.count - 1 {
         if buffer.*[it] != #char "\t" {
-            try_unindent = false;
-            fail_code_point = buffer.*[it];
             break;
         }
+        counted_indent += 1;
     }
-    if !try_unindent {
-        return;
-    }
-    true_indent_level := buffer.count - 1;
-    if true_indent_level != evaluated_indent {
+    if counted_indent != evaluated_indent {
         return;
     }
     for 0..buffer.count - 2 {
@@ -350,17 +342,12 @@ Insert_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64, code_point: u32, 
     if is_change then Add_Line_To_Change(buffer, row, 0);
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     assert(col <= utf32_buffer.array.count);
-    try_auto_unindent := 
-        row > 0 
-        && utf32_buffer.array.count > 0
-        && col == utf32_buffer.array.count 
-        && code_point == #char "}" 
-        && Bool_Option_Value(.AUTO_INDENT);
     #if DEBUG_TEXT_BUFFERS {
         if col < utf32_buffer.array.count {
             assert(!Is_Tab_Expanded_Space(utf32_buffer.array[col]));
         }
     }
+    try_auto_unindent := Insert_Code_Point_Should_Try_Unindent(row, col, utf32_buffer, code_point);
     Resize_Utf32_Buffer(utf32_buffer, xx (utf32_buffer.array.count + 1));
     Collapse_Tabs_Inline_And_Insert(*utf32_buffer.array, col, code_point);
     if try_auto_unindent {
@@ -376,27 +363,18 @@ Insert_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, code_points: []u
     if is_change then Add_Line_To_Change(buffer, row, flags);
     utf32_buffer := Get_Utf32_Buffer(buffer, row);
     assert(col <= utf32_buffer.array.count);
-    try_auto_unindent := 
-        row > 0 
-        && utf32_buffer.array.count > 0
-        && col == utf32_buffer.array.count 
-        && code_points.count == 1
-        && code_points[0] == #char "}" 
-        && Bool_Option_Value(.AUTO_INDENT);
     #if DEBUG_TEXT_BUFFERS {
         if col < utf32_buffer.array.count {
             assert(!Is_Tab_Expanded_Space(utf32_buffer.array[col]));
         }
     }
+    try_auto_unindent := Insert_Code_Point_Should_Try_Unindent(row, col, utf32_buffer, code_points[0]);
     prev_count := utf32_buffer.array.count;
     Resize_Utf32_Buffer(utf32_buffer, xx (utf32_buffer.array.count + code_points.count));
     utf32_buffer.array.count = prev_count; // below proc depends on this
     Collapse_Tabs_Inline_And_Insert(*utf32_buffer.array, col, code_points);
     if try_auto_unindent {
-        debug_thing = true;
         cur_indent := Get_Indent_Level(buffer, row);
-        Log("indent: %", cur_indent);
-        debug_thing = false;
         Try_Collapsed_Utf32_Unindent(*utf32_buffer.array, cur_indent);
     }
     Expand_Utf32_Buffer_Tabs(utf32_buffer);
@@ -954,17 +932,15 @@ Push_Text_To_Number_Registers :: (text: []u32) {
     }
 }
 
-debug_thing := false;
-
 // TODO: support non-curly brace languages
 // TODO: support non-tab indent
 Get_Indent_Level :: (buffer: *TextBuffer, i: s64) -> s64 {
     ITER_MAX :: 1000;
     curly_open_level := 0;
     iter_ct := 1;
+    spaces_per_tab := Integer_Option_Value(.TAB_WIDTH);
     while (i - iter_ct) >= 0 {
         line := Raw_Line_View(buffer, i - iter_ct);
-        if debug_thing then Log("line: %", line);
         if line.count > 0 then for #v2 < cback : 0..line.count-1 {
             if line[cback] == #char "{" {
                 curly_open_level += 1;
@@ -973,16 +949,28 @@ Get_Indent_Level :: (buffer: *TextBuffer, i: s64) -> s64 {
             }
             if curly_open_level > 0 {
                 tab_count := 0;
+                space_count := 0;
                 for cfore : 0..cback {
-                    if line[cfore] != #char "\t" {
+                    if line[cfore] == #char "\t" {
+                        tab_count += 1;
+                    } else if line[cfore] == #char " " {
+                        space_count += 1;
+                    } else {
                         break;
                     }
-                    tab_count += 1;
                 }
-                return tab_count + 1;
+                return tab_count + (space_count / spaces_per_tab) + 1;
             }
         }
         iter_ct += 1;
     }
     return 0;
+}
+
+Insert_Code_Point_Should_Try_Unindent :: (row: s64, col: s64, utf32_buffer: *Utf32Buffer, code_point: u32) -> bool {
+    return row > 0 
+        && utf32_buffer.array.count > 0
+        && col == utf32_buffer.array.count 
+        && code_point == #char "}" 
+        && Bool_Option_Value(.AUTO_INDENT);
 }
