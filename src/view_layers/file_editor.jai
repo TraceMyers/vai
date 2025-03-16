@@ -29,25 +29,29 @@ Render_File_Editor_Background :: (using file_editor: *FileEditor, is_active: boo
 
 Render_File_Editor_Lines :: (using file_editor: *FileEditor, is_active: bool) {
     Render_Quad_Lines(Upper_Left(), Lower_Right(), file_editor_outline_color);
-    // TODO: line numbers option
-    Render_Gutter_Separator_Line(file_editor_outline_color);
+    if Bool_Option_Value(.LINE_NUMBERS) {
+        Render_Gutter_Separator_Line(file_editor_outline_color);
+    }
 }
 
 Render_File_Editor_Text :: (using file_editor: *FileEditor, is_active: bool) {
     if file_editor.file_buffer < 0 then return;
 
+    draw_line_numbers := Bool_Option_Value(.LINE_NUMBERS);
+    override_gutter_size := ifx draw_line_numbers then sdw(-1) else sdw(0);
+
     renderer: TextRenderer;
     view_layer := View_Layer_From_Data(xx file_editor);
-    Initialize_Text_Renderer(*renderer, view_layer);
+    Initialize_Text_Renderer(*renderer, view_layer, override_gutter_size);
 
     if is_active {
         // it's al ittle odd for this to be inside a render function, but it makes use of the text renderer data.
         Cursor_Scroll(View_Layer_From_Data(xx file_editor), *renderer, *file_buffers.items[file_editor.file_buffer]);
-        Initialize_Text_Renderer(*renderer, view_layer);
+        Initialize_Text_Renderer(*renderer, view_layer, override_gutter_size);
     }
 
     text_buffer := *file_buffers.items[file_editor.file_buffer];
-    Render_Text_Buffer_Lines(view_layer, *renderer, text_buffer, true);
+    Render_Text_Buffer_Lines(view_layer, *renderer, text_buffer, draw_line_numbers);
 
     view_max = .{};
     view_line_max := min(cast(s64)(renderer.text_view_clip.y + renderer.line_count - 1), text_buffer.lines.count-1);

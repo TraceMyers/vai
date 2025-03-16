@@ -28,6 +28,7 @@ Integer_Option_Value :: (option: Option) -> s32 {
 Set_Option :: (option: Option, in_value: bool) {
     using option_mappings[option].extension;
     assert(type == .BOOL);
+    Log("setting % to %", option, in_value);
     _bool = in_value;
 }
 

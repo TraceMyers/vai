@@ -231,11 +231,15 @@ Execute_Command_Set_Options :: (args: [][]u32) {
                     value, success := parse_int(*option_value_str, s32);
                     if success {
                         Set_Option(option_enum, value);
+                    } else {
+                        Log_Warning("failed to parse int option value from %", option_value_str);
                     }
                 case .BOOL;
                     value, success := parse_bool(*option_value_str);
                     if success {
                         Set_Option(option_enum, value);
+                    } else {
+                        Log_Warning("failed to parse bool option value from %", option_value_str);
                     }
                 case .STRING;
                     Set_Option(option_enum, copy_string(option_value_str));
