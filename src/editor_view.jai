@@ -355,7 +355,7 @@ Close_Text_Buffer :: (id: s64) {
     Shutdown_Text_Buffer(buffer); 
     Return_Item(*file_buffers, id);
 
-    valid_id := Get_First_Active_Item(*file_buffers);
+    valid_id := Find_Valid_File_Editor_Buffer(id, true);
     if valid_id == -1 {
         intro_file_name := Prepare_Intro_File();
         valid_id = Get_File_Buffer_ID(intro_file_name);
@@ -741,12 +741,10 @@ Layer_Text_Buffer :: (layer: *ViewLayer) -> *TextBuffer {
     return null;
 }
 
-Scroll_File_Buffer :: (layer: *ViewLayer, forward: bool) {
-    assert(layer.type == .FILE_EDITOR);
-
+Find_Valid_File_Editor_Buffer :: (pivot_id: s64, forward: bool) -> s64 {
     i := 0;
     scroll_dir := ifx forward then 1 else -1;
-    buf_id := layer.file_editor.file_buffer + scroll_dir;
+    buf_id := pivot_id + scroll_dir;
 
     while i < file_buffers.items.count {
         if buf_id >= file_buffers.items.count {
@@ -755,16 +753,28 @@ Scroll_File_Buffer :: (layer: *ViewLayer, forward: bool) {
             buf_id = file_buffers.items.count-1;
         }
         if Is_Item_In_Use(*file_buffers, buf_id) && file_buffers.items[buf_id].flags == 0 {
-            layer.file_editor.file_buffer = buf_id;
-            file_editor := *layer.file_editor;
-            // each file buffer has its a cursor position cached by file editors when they move
-            layer.file_editor.cursor = file_buffers.items[buf_id].saved_cursor;
-            Center_View_On_Cursor(View_Layer_From_Data(xx file_editor), xx file_buffers.items[buf_id].lines.count);
-            break;
+            return buf_id;
+
         }
         buf_id += scroll_dir;
         i += 1;
     }
+    return -1;
+}
+
+Scroll_File_Buffer :: (layer: *ViewLayer, forward: bool) {
+    assert(layer.type == .FILE_EDITOR);
+
+    valid_buf_id := Find_Valid_File_Editor_Buffer(layer.file_editor.file_buffer, forward);
+    if valid_buf_id == -1 {
+        return;
+    }
+
+    layer.file_editor.file_buffer = valid_buf_id;
+    file_editor := *layer.file_editor;
+    // each file buffer has its a cursor position cached by file editors when they move
+    layer.file_editor.cursor = file_buffers.items[valid_buf_id].saved_cursor;
+    Center_View_On_Cursor(View_Layer_From_Data(xx file_editor), xx file_buffers.items[valid_buf_id].lines.count);
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
