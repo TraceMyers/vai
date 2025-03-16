@@ -112,23 +112,16 @@ Calculate_Cursor_Net :: (bound_min: float, bound_count: float, ideal_net_size: f
 
 // when the cursor's x or y is outside the visible net range, teleport the view to the cursor
 Teleport_View_Axis_To_Cursor :: (cursor_axis: float, view_axis: *float, net: *CursorNet) {
-    half_net_size := net.size * 0.5;
-    hard_scroll_min := net.visible_min + half_net_size;
-    hard_scroll_max := net.visible_max - half_net_size;
-    if cursor_axis < net.visible_min {
-        net_diff := cursor_axis - net.min;
+    hard_scroll_min := net.visible_min + net.size;
+    hard_scroll_max := net.visible_max - net.size;
+    if cursor_axis < hard_scroll_min {
+        net_diff := cursor_axis - hard_scroll_min;
         view_axis.* += net_diff;
-    } else if cursor_axis > net.visible_max {
-        net_diff := cursor_axis - net.max;
+    } else if cursor_axis > hard_scroll_max {
+        net_diff := cursor_axis - hard_scroll_max;
         view_axis.* += net_diff;
-    } else {
-        if cursor_axis < hard_scroll_min {
-            view_axis.* -= 1;
-            view_axis.* = max(view_axis.*, 0);
-        } else if cursor_axis > hard_scroll_max {
-            view_axis.* += 1;
-        }
     }
+    view_axis.* = max(view_axis.*, 0);
 }
 
 View_Axis_Follow_Cursor_Smoothly :: (cursor: *Cursor, view_axis: *float, cursor_axis: float, net_boundary: float, net_size: float, action: Action, compare_greater: bool, scroll_speed: float) {
