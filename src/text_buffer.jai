@@ -205,7 +205,7 @@ Insert_Line :: (buffer: *TextBuffer, i: s64, is_change := true, $FOR_DEBUG := fa
     if is_change {
         do_auto_indent := Bool_Option_Value(.AUTO_INDENT);
         if do_auto_indent {
-            indent_level := Get_Indent_Level(buffer, i);
+            indent_level := Get_Indent_Level_From_Context(buffer, i);
             if indent_level > 0 {
                 for 0..indent_level-1 {
                     Insert_Code_Point(buffer, i, it, #char "\t", false);
@@ -319,6 +319,9 @@ Replace_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64, code_point: u32,
 }
 
 Try_Collapsed_Utf32_Unindent :: (buffer: *[]u32, evaluated_indent: s64) {
+    if evaluated_indent <= 0 {
+        return;
+    }
     if buffer.count <= 1 {
         return;
     }
@@ -351,7 +354,7 @@ Insert_Code_Point :: (buffer: *TextBuffer, row: s64, col: s64, code_point: u32, 
     Resize_Utf32_Buffer(utf32_buffer, xx (utf32_buffer.array.count + 1));
     Collapse_Tabs_Inline_And_Insert(*utf32_buffer.array, col, code_point);
     if try_auto_unindent {
-        cur_indent := Get_Indent_Level(buffer, row);
+        cur_indent := Get_Indent_Level_From_Context(buffer, row);
         Try_Collapsed_Utf32_Unindent(*utf32_buffer.array, cur_indent);
     }
     Expand_Utf32_Buffer_Tabs(utf32_buffer);
@@ -374,7 +377,7 @@ Insert_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, code_points: []u
     utf32_buffer.array.count = prev_count; // below proc depends on this
     Collapse_Tabs_Inline_And_Insert(*utf32_buffer.array, col, code_points);
     if try_auto_unindent {
-        cur_indent := Get_Indent_Level(buffer, row);
+        cur_indent := Get_Indent_Level_From_Context(buffer, row);
         Try_Collapsed_Utf32_Unindent(*utf32_buffer.array, cur_indent);
     }
     Expand_Utf32_Buffer_Tabs(utf32_buffer);
@@ -932,39 +935,47 @@ Push_Text_To_Number_Registers :: (text: []u32) {
     }
 }
 
+Get_Raw_Line_Indent :: (line: []u32) -> s64 {
+    tab_count := 0;
+    space_count := 0;
+    spaces_per_tab := Integer_Option_Value(.TAB_WIDTH);
+    for c : 0..line.count-1 {
+        if line[c] == #char "\t" {
+            tab_count += 1;
+        } else if line[c] == #char " " {
+            space_count += 1;
+        } else {
+            break;
+        }
+    }
+    return tab_count + (space_count / spaces_per_tab);
+}
+
 // TODO: support non-curly brace languages
 // TODO: support non-tab indent
-Get_Indent_Level :: (buffer: *TextBuffer, i: s64) -> s64 {
-    ITER_MAX :: 1000;
+Get_Indent_Level_From_Context :: (buffer: *TextBuffer, i: s64) -> s64 {
+    ITER_MAX :: 256;
+    if i == 0 then return 0;
     curly_open_level := 0;
     iter_ct := 1;
-    spaces_per_tab := Integer_Option_Value(.TAB_WIDTH);
-    while (i - iter_ct) >= 0 {
+    line_min := max(0, i - ITER_MAX);
+    // try using curly braces relative to our current pos
+    while (i - iter_ct) >= line_min {
         line := Raw_Line_View(buffer, i - iter_ct);
         if line.count > 0 then for #v2 < cback : 0..line.count-1 {
             if line[cback] == #char "{" {
                 curly_open_level += 1;
+                if curly_open_level > 0 {
+                    return Get_Raw_Line_Indent(line) + 1;
+                }
             } else if line[cback] == #char "}" {
                 curly_open_level -= 1;
-            }
-            if curly_open_level > 0 {
-                tab_count := 0;
-                space_count := 0;
-                for cfore : 0..cback {
-                    if line[cfore] == #char "\t" {
-                        tab_count += 1;
-                    } else if line[cfore] == #char " " {
-                        space_count += 1;
-                    } else {
-                        break;
-                    }
-                }
-                return tab_count + (space_count / spaces_per_tab) + 1;
             }
         }
         iter_ct += 1;
     }
-    return 0;
+    // fallback: prev line might be good enough
+    return Get_Raw_Line_Indent(Raw_Line_View(buffer, i - 1));
 }
 
 Insert_Code_Point_Should_Try_Unindent :: (row: s64, col: s64, utf32_buffer: *Utf32Buffer, code_point: u32) -> bool {
