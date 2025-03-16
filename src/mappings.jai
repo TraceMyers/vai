@@ -70,13 +70,14 @@
 HERE
 );
 
-#insert #run Generate_Struct_Enum_Mapping("Option", u16, "OptionMapping", "option_mappings", TempEnumMapping(string, 2, OptionSetting), true, "As_Option", false,
+#insert #run Generate_Struct_Enum_Mapping("Option", u16, "OptionMapping", "option_mappings", TempEnumMapping(string, 1, OptionSetting), true, "As_Option", false,
 #string HERE
-    .{.["line-numbers", "nu"],  "LINE_NUMBERS",                 .{type=.BOOL, _bool=true}},
-    .{.["smart-case", "scs"],   "PATTERN_SEARCH_SMART_CASE",    .{type=.BOOL, _bool=true}},
-    .{.["tab-width", "tbw"],    "TAB_WIDTH"                     .{type=.INTEGER, _integer=4}},
-    .{.["auto-indent", "ind"],  "AUTO_INDENT",                  .{type=.BOOL, _bool=true}},
-    .{.["soft-wrap", "swp"],    "SOFT_WRAP_INDENTATION_WIDTH"   .{type=.INTEGER, _integer=2}}
+    .{.["line-numbers"],    "LINE_NUMBERS",                 .{type=.BOOL,      default_value._bool=true}},
+    .{.["smart-case"],      "PATTERN_SEARCH_SMART_CASE",    .{type=.BOOL,      default_value._bool=true}},
+    .{.["tab-width"],       "TAB_WIDTH"                     .{type=.INTEGER,   default_value._integer=4}},
+    .{.["auto-indent"],     "AUTO_INDENT",                  .{type=.BOOL,      default_value._bool=true}},
+    .{.["soft-wrap"],       "SOFT_WRAP_INDENTATION_WIDTH"   .{type=.INTEGER,   default_value._integer=2}},
+    .{.["font-size"],       "FONT_SIZE",                    .{type=.INTEGER,   default_value._integer=14}}
 HERE
 );
 
@@ -90,7 +91,7 @@ HERE
     .{.["buffer-previous"],     "PREVIOUS_BUFFER",          .{proc=Execute_Command_Scroll_Buffer_Previous}},
     .{.["split-vertical"],      "VERTICAL_SPLIT",           .{proc=Execute_Command_Split_Vertical}},
     .{.["split-horizontal"],    "HORIZONTAL_SPLIT",         .{proc=Execute_Command_Split_Horizontal}},
-    .{.["set"],                 "INTERACT_WITH_OPTION",     .{}},
+    .{.["set"],                 "INTERACT_WITH_OPTION",     .{proc=Execute_Command_Set_Options}},
     .{.["save"],                "SAVE_TO_FILE",             .{proc=Execute_Command_Save}},
     .{.["tools"],               "TOGGLE_TOOL_VIEW"          .{proc=Execute_Command_Toggle_Tool_View}}
 HERE

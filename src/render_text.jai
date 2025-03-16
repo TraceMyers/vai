@@ -1,12 +1,29 @@
 
-Initialize_Render_Text :: () {
-    fonts_path := tprint("%/../fonts/cascadia_code", exe_path);
-    font = get_font_at_size(fonts_path, "Cascadia.ttf", pixel_height);
-    // fonts_path := tprint("%/../fonts/IBM_Plex_Mono", exe_path);
-    // font = get_font_at_size(fonts_path, "IBMPlexMono-Medium.ttf", pixel_height);
-    font.temporary_glyphs.allocator = temp;
-    font.current_quads.allocator = temp;
-    assert(font != null);
+Render_Text :: struct {
+
+    Initialize :: () -> success: bool {
+        fonts_path := tprint("%/../fonts/cascadia_code", exe_path);
+        font_pixel_height := Integer_Option_Value(.FONT_SIZE);
+        font = get_font_at_size(fonts_path, "Cascadia.ttf", font_pixel_height);
+        // fonts_path := tprint("%/../fonts/IBM_Plex_Mono", exe_path);
+        // font = get_font_at_size(fonts_path, "IBMPlexMono-Medium.ttf", pixel_height);
+        font.temporary_glyphs.allocator = temp;
+        font.current_quads.allocator = temp;
+        return font != null;
+    }    
+
+    Shutdown :: () {
+        if font != null {
+            free(font);
+            font = null;
+        }
+    }
+
+}
+
+Reinitialize_Font :: () {
+    // Render_Text.Shutdown();
+    Render_Text.Initialize();
 }
 
 Render_Text_End_Frame :: () {
@@ -347,7 +364,6 @@ Render_Text_Line :: (renderer: *TextRenderer, align_info: *AlignInfo, utf8: []u8
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 font: *Dynamic_Font;
-pixel_height: s32 = 14;
 gutter_char_width: s32 = 6;
 line_spacing_factor := 0.6;
 

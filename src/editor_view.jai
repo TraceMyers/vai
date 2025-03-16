@@ -366,7 +366,7 @@ Close_Text_Buffer :: (id: s64) {
         invalid_buffer_id: s64;
         valid_buffer_id: s64;
     } 
-    Replace_Invalid_File_Buffer :: (v: *View, view_id: s64, viewport_id: s64, id_pair: IDPair) {
+    Replace_Invalid_File_Buffer :: (v: *View, view_id: s64, viewport_id: s64, id_pair: *IDPair) {
         for *v.layers {
             if it.type == .FILE_EDITOR && it.file_editor.file_buffer == id_pair.invalid_buffer_id {
                  it.file_editor.file_buffer = id_pair.valid_buffer_id;
@@ -375,7 +375,7 @@ Close_Text_Buffer :: (id: s64) {
     }
 
     id_pair := IDPair.{id, valid_id};
-    Walk_View_Tree(0, Replace_Invalid_File_Buffer, id_pair, false);
+    Walk_View_Tree(0, Replace_Invalid_File_Buffer, *id_pair, false);
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

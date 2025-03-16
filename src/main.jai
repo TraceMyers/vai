@@ -38,7 +38,8 @@ Vai_Main :: () {
         timeBeginPeriod(1);
     }
 
-    exe_path = path_strip_filename(get_path_of_running_executable());
+    exe_path = copy_string(path_strip_filename(get_path_of_running_executable()));
+    defer free(exe_path);
 
     if !Scoped_Construct(Text_Buffers)          then return;
     if !Scoped_Construct(Runtime_Settings)      then return;
@@ -48,8 +49,8 @@ Vai_Main :: () {
     if !Scoped_Construct(Viewports)             then return;
     if !Scoped_Construct(Editor_Views)          then return;
     if !Scoped_Construct(Options)               then return;
+    if !Scoped_Construct(Render_Text)           then return;
 
-    Initialize_Render_Text();
     Initialize_Time();
 
     // TODO: syntax highlighting

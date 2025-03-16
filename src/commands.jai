@@ -207,3 +207,42 @@ Execute_Command_Scroll_Buffer :: (args: [][]u32, next: bool) {
 }
 Execute_Command_Scroll_Buffer_Next :: #bake_arguments Execute_Command_Scroll_Buffer(next=true);
 Execute_Command_Scroll_Buffer_Previous :: #bake_arguments Execute_Command_Scroll_Buffer(next=false);
+
+Execute_Command_Set_Options :: (args: [][]u32) {
+    for i : 0..args.count-2 {
+        arg := args[i];
+        for option_mappings {
+            option_input := it.input;
+            if option_input.count != arg.count {
+                continue;
+            }
+            match := true;
+            for 0..option_input.count-1 {
+                if arg[it] != option_input[it] {
+                    match = false;
+                    break;
+                }
+            }
+            if match {
+                option_value_str := Encode(As_String(args[i+1]), .UTF32, .UTF8);
+                option_enum := cast(Option)it_index;
+                if it.extension.type == {
+                case .INTEGER;
+                    value, success := parse_int(*option_value_str, s32);
+                    if success {
+                        Set_Option(option_enum, value);
+                    }
+                case .BOOL;
+                    value, success := parse_bool(*option_value_str);
+                    if success {
+                        Set_Option(option_enum, value);
+                    }
+                case .STRING;
+                    Set_Option(option_enum, copy_string(option_value_str));
+                }
+                i += 1;
+                break;
+            }
+        }
+    }
+}
