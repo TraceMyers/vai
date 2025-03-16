@@ -62,6 +62,7 @@
     .{.["yy"],                  "YANK_LINE",                                    .{modes=.NORMAL,                 proc=Yank_Line}},
     .{.["p"],                   "PASTE_AFTER",                                  .{modes=.NORMAL,                 proc=Paste_After}},
     .{.["P"],                   "PASTE_BEFORE",                                 .{modes=.NORMAL,                 proc=Paste_Before}},
+    .{.["r*"],                  "REPLACE_CHARACTER",                            .{modes=.NORMAL,                 proc=Replace_Character}},
     .{.["\t"],                  "COMMAND_AUTOCOMPLETE_SUGGESTIONS",             .{modes=.COMMAND,                proc=Create_Command_Autocomplete_Suggestions}},
     .{.["__INTERNAL__"],        "CLAMP_CURSOR_X_TO_BOUNDS"                      .{modes=.NONE}},
     .{.["__INTERNAL__"],        "NONE",                                         .{modes=.NONE}},

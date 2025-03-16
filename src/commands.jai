@@ -43,7 +43,7 @@ Parse_And_Execute_Command :: (command_str: []u32) {
     if executor {
         executor(tokens);
     } else {
-        Log("no procedure bound to command %", command);
+        Log_Warning("no procedure bound to command %", command);
     }
 }
 

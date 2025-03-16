@@ -1147,6 +1147,12 @@ Paste :: (after: bool) {
 Paste_After :: #bake_arguments Paste(after=true);
 Paste_Before :: #bake_arguments Paste(after=false);
 
+Replace_Character :: () {
+    Init_Cursor_Proc_Or_Return(true);
+    assert(action_input_string.count == 2);
+    Replace_Code_Point(text_buffer, cursor.y, cursor.x, action_input_string[1]);
+}
+
 Vertical_Page_Scroll :: (up: bool, half_page: bool) {
     Init_Cursor_Proc_Or_Return(true);
     renderer: TextRenderer;

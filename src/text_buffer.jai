@@ -371,8 +371,8 @@ Insert_Code_Points :: (buffer: *TextBuffer, row: s64, col: s64, code_points: []u
             assert(!Is_Tab_Expanded_Space(utf32_buffer.array[col]));
         }
     }
-    try_auto_unindent := Insert_Code_Point_Should_Try_Unindent(row, col, utf32_buffer, code_points[0]);
     prev_count := utf32_buffer.array.count;
+    try_auto_unindent := Insert_Code_Point_Should_Try_Unindent(row, col, utf32_buffer, code_points[0]);
     Resize_Utf32_Buffer(utf32_buffer, xx (utf32_buffer.array.count + code_points.count));
     utf32_buffer.array.count = prev_count; // below proc depends on this
     Collapse_Tabs_Inline_And_Insert(*utf32_buffer.array, col, code_points);

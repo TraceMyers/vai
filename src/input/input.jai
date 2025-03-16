@@ -187,16 +187,26 @@ Get_Input_Buffer_Action_Matches :: (matches: *[..]ActionMatch, mode: ViMode) -> 
         if it.code_point_string_count < action_input_buffer.count then continue;
         code_point_string := Action_Code_Point_String(it);
         match := true;
+        any_wildcards := false;
         for action_input_buffer {
-            if Remove_Flags_For_Comparison(it) != code_point_string[it_index] {
+            if code_point_string[it_index] == #char "*" {
+                // wild card
+                any_wildcards = true;
+                continue;
+            }
+            unflagged_code_point := Remove_Flags_For_Comparison(it);
+            if unflagged_code_point != code_point_string[it_index] {
                 match = false;
                 break;
             }
         }
         if match {
             exact_match := action_input_buffer.count == it.code_point_string_count;
-
-            array_add(matches, .{it.action, code_point_string, exact_match});
+            if any_wildcards {
+                array_add(matches, .{it.action, Temp_Copy_Array(action_input_buffer), exact_match});
+            } else {
+                array_add(matches, .{it.action, code_point_string, exact_match});
+            }
             if exact_match {
                 exact_match_count += 1;
             }
@@ -233,6 +243,7 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
                 repeating_action = repeat_ct > 1;
                 Clear(*action_repeat_data);
                 action_repeat_data.mode_switch = .SERIALIZE;
+                action_input_string = it.input;
 
                 for 0..repeat_ct-1 {
                     action_repeat_data.deserialize_offset = 0;
@@ -240,6 +251,8 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
                     action_executor_proc();
                     action_repeat_data.mode_switch = .DESERIALIZE;
                 }
+
+                action_input_string = u32.[];
 
                 // mid_change is also set to true when stuff is added to a change, but not all actions that begin changes themselves make a change
                 if prev_vi_mode != .INSERT && vi_mode == .INSERT {
@@ -590,6 +603,8 @@ key_pressed: BitArray(1);
 action_repeat_data: SerialBuffer;
 action_iteration: s32;
 repeating_action: bool;
+
+action_input_string: []u32;
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 
