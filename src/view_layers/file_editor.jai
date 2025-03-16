@@ -88,6 +88,7 @@ Process_Text_Input :: (using file_editor: *FileEditor, utf32: []u32) {
     }
 }
 
+// a top and bottom net attacked to the center of the viewport that the cursor pulls on
 CursorNet :: struct {
     visible_min: float;
     visible_max: float;
@@ -136,14 +137,12 @@ View_Axis_Follow_Cursor_Smoothly :: (cursor: *Cursor, view_axis: *float, cursor_
     }
     if cursor.active_scroll_action == action {
         CORRECTION_SPEED :: 1.0;
-        // target_pos_diff := cursor_y - (vt_net.max + (vt_net.visible_max - vt_net.max) * 0.5);
         target_pos_diff := cursor_axis - net_boundary;
         correction_norm := target_pos_diff / net_size;
         if !compare_greater {
             scroll_speed = -scroll_speed;
         }
         view_axis.* += (scroll_speed + CORRECTION_SPEED * correction_norm) * Smoothed_Delta_Time();
-        // layer.view_position.y += scroll_down_speed * Smoothed_Delta_Time();
         view_axis.* = max(view_axis.*, 0);
     }
 }

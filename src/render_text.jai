@@ -261,6 +261,9 @@ Render_Line_Numbers :: (renderer: *TextRenderer, line_count: s32, rendered_lines
     line_number := 0;
 
     for r : 0..line_count-1 {
+        if line_number >= rendered_lines_at.count {
+            break;
+        }
         if rendered_lines_at[line_number] > r {
             renderer.rendered_line_count += 1;
             continue;
