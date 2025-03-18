@@ -741,6 +741,19 @@ Layer_Text_Buffer :: (layer: *ViewLayer) -> *TextBuffer {
     return null;
 }
 
+Layer_Render_Line_Y_Offset :: (layer: *ViewLayer, line: s32) -> s32 {
+    if layer == null {
+        return 0;
+    }
+    if layer.type == {
+    case .FILE_EXPLORER;
+        if line >= 2 {
+            return -Integer_Option_Value(.FONT_SIZE) >> 1;
+        }
+    }
+    return 0;
+}
+
 Find_Valid_File_Editor_Buffer :: (pivot_id: s64, forward: bool) -> s64 {
     i := 0;
     scroll_dir := ifx forward then 1 else -1;

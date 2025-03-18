@@ -177,7 +177,7 @@ Render_File_Explorer_Lines :: (using file_explorer: *FileExplorer, is_active: bo
     dir_inner_box_ul := outer_box_ul;
     dir_inner_box_lr := outer_box_lr;
     dir_inner_box_ul.x += 5;
-    dir_inner_box_ul.y += 30;
+    dir_inner_box_ul.y += Integer_Option_Value(.FONT_SIZE) * 2;
     dir_inner_box_lr.x -= 5;
     dir_inner_box_lr.y -= 400;
     view_position := View_Layer_From_Data(xx file_explorer).view_position;

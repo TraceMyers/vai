@@ -72,13 +72,14 @@ HERE
 
 #insert #run Generate_Struct_Enum_Mapping("Option", u16, "OptionMapping", "option_mappings", TempEnumMapping(string, 1, OptionSetting), true, "As_Option", false,
 #string HERE
-    .{.["line-numbers"],    "LINE_NUMBERS",                 .{type=.BOOL,      default_value._bool=true}},
-    .{.["smart-case"],      "PATTERN_SEARCH_SMART_CASE",    .{type=.BOOL,      default_value._bool=true}},
-    .{.["indent-width"],    "INDENT_WIDTH"                  .{type=.INTEGER,   default_value._integer=4}},
-    .{.["auto-indent"],     "AUTO_INDENT",                  .{type=.BOOL,      default_value._bool=true}},
-    .{.["soft-wrap"],       "SOFT_WRAP",                    .{type=.BOOL,      default_value._bool=true}},
-    .{.["soft-wrap-indent"],"SOFT_WRAP_INDENT_WIDTH"        .{type=.INTEGER,   default_value._integer=2}},
-    .{.["font-size"],       "FONT_SIZE",                    .{type=.INTEGER,   default_value._integer=14}}
+    .{.["line-numbers"],            "LINE_NUMBERS",                 .{type=.BOOL,      default_value._bool=true}},
+    .{.["relative-line-numbers"],   "RELATIVE_LINE_NUMBERS",        .{type=.BOOL,      default_value._bool=false}},
+    .{.["smart-case"],              "PATTERN_SEARCH_SMART_CASE",    .{type=.BOOL,      default_value._bool=true}},
+    .{.["indent-width"],            "INDENT_WIDTH"                  .{type=.INTEGER,   default_value._integer=4}},
+    .{.["auto-indent"],             "AUTO_INDENT",                  .{type=.BOOL,      default_value._bool=true}},
+    .{.["soft-wrap"],               "SOFT_WRAP",                    .{type=.BOOL,      default_value._bool=true}},
+    .{.["soft-wrap-indent"],        "SOFT_WRAP_INDENT_WIDTH"        .{type=.INTEGER,   default_value._integer=2}},
+    .{.["font-size"],               "FONT_SIZE",                    .{type=.INTEGER,   default_value._integer=14}}
 HERE
 );
 
