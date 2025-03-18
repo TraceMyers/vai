@@ -134,7 +134,8 @@ Render_Wrapped_Line :: (renderer: *TextRenderer, color_buffer: [..]TextColorLoca
         }
 
         if render_line.save_cursor_pos {
-            if render_line.save_cursor_pos_x <= partial_render_buf.count {
+            at_end := remaining_utf8.count == partial_render_buf.count;
+            if render_line.save_cursor_pos_x < partial_render_buf.count || at_end {
                 renderer.cursor_pos.y = render_line.start_line + renderer.rendered_line_count;
                 if line_wrap_ct > 0 {
                     renderer.cursor_pos.x = sdw(render_line.save_cursor_pos_x + indent_header.count);
