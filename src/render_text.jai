@@ -50,11 +50,11 @@ Normalized_Text_View_Window :: (view_position: Vector2, buffer: *TextBuffer) -> 
     return clamp(view_position.y / total_space, 0.0, 1.0), clamp((view_position.y + window_space) / total_space, 0.0, 1.0);
 }
 
-Initialize_Text_Renderer :: (using renderer: *TextRenderer, in_view_layer: *ViewLayer, force_gutter_char_width: s32 = -1) {
+Initialize_Text_Renderer :: (using renderer: *TextRenderer, in_view_layer: *ViewLayer, force_gutter_char_width: s32 = -1, force_ul := IntVector2.{-1,-1}, force_lr := IntVector2.{-1,-1}) {
     view_layer = in_view_layer;
 
-    ul := Upper_Left();
-    lr := Lower_Right();
+    ul := ifx force_ul.x >= 0 && force_ul.y >= 0 then force_ul else Upper_Left();
+    lr := ifx force_lr.x >= 0 && force_lr.y >= 0 then force_lr else Lower_Right();
 
     viewport_height := max(lr.y - ul.y, 0);
     if viewport_height == 0 then return;

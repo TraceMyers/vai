@@ -86,7 +86,10 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
     }
 
     Set_Shader_For_Blended_Color();
+
+    clear_file_explorer_preview := true;
     line_y : s32 = 2;
+
     for item : directory_list {
         color: fRGBA;
         alpha := ifx line_y == cursor.y then 0.8 else 0.5;
@@ -105,22 +108,43 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
             Append_Line(buf, name, false);
         }
     }
+
     for item : directory_list {
         if item.is_directory || item.is_symlink {
             continue;
         }
         succeess, left, ext := split_from_right(item.name, #char ".");
         if ext.count > 0 {
-            alpha := ifx line_y == cursor.y then 0.8 else 0.5;
+            try_load_preview: bool;
+            on_selected_line := line_y == cursor.y;
+            alpha := ifx on_selected_line then 0.8 else 0.5;
             ext = To_Lower_Temp(ext);
             if Is_Basic_Text_File_Extension(ext) {
                 Draw_Text_File_Icon(*renderer, 0, line_y, alpha);
+                try_load_preview = on_selected_line;
             } else if Is_Code_File_Extension(ext) {
                 Draw_Code_File_Icon(*renderer, 0, line_y, alpha);
+                try_load_preview = on_selected_line;
             } else if Is_Binary_File_Extension(ext) {
                 Draw_Binary_File_Icon(*renderer, 0, line_y, alpha);
             } else {
                 Draw_Unknown_File_Icon(*renderer, 0, line_y, alpha);
+            }
+
+            if on_selected_line {
+                clear_file_explorer_preview = false;
+            }
+            if file_explorer_preview_available {
+                if try_load_preview {
+                    full_path := tprint("%/%", working_path, item.name);
+                    if file_explorer_text_preview.file_path != full_path {
+                        request_data := LoadFileExplorerPreviewRequest.{copy_string(full_path)};
+                        request := AsyncTaskRequest.{type=.LOAD_FILE_EXPLORER_PREVIEW, load_file_explorer_preview=request_data};
+                        Make_Unique_Thread_Work_Request(request);
+                    }
+                } else if on_selected_line {
+                    clear_file_explorer_preview = true;
+                }
             }
         }
         line_y += 1;
@@ -129,6 +153,10 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
             name := tprint("   %", item.name);
             Append_Line(buf, name, false);
         }
+    }
+
+    if clear_file_explorer_preview {
+        Clear_Text_Buffer(*file_explorer_text_preview, true);
     }
 
     // draw text
@@ -164,34 +192,31 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
     }
 
     Set_Shader_For_Text();
+
+    if file_explorer_preview_available && file_explorer_text_preview.lines.count > 0 {
+        Set_View_Scissor(ul, lr);
+        boxes: FileExplorerBoxes = ---;
+        Calculate_File_Explorer_Boxes(*boxes);
+        Set_View_Scissor(boxes.preview_ul, boxes.preview_lr);
+        renderer = .{};
+        Initialize_Text_Renderer(*renderer, view_layer, 0);
+        Render_Text_Buffer_Lines(null, *renderer, *file_explorer_text_preview, false);
+        Flush_Draws();
+    }
 }
 
 Render_File_Explorer_Lines :: (using file_explorer: *FileExplorer, is_active: bool) {
-    outer_box_ul := Upper_Left();
-    outer_box_lr := Lower_Right();
-    outer_box_ul.x += 4;
-    outer_box_ul.y += 14;
-    outer_box_lr.x -= 4;
-    outer_box_lr.y -= 4;
-    Render_Quad_Lines(outer_box_ul, outer_box_lr, .{rgb=fRGB_WHITE, a=0.8});
-    dir_inner_box_ul := outer_box_ul;
-    dir_inner_box_lr := outer_box_lr;
-    dir_inner_box_ul.x += 5;
-    dir_inner_box_ul.y += Integer_Option_Value(.FONT_SIZE) * 2;
-    dir_inner_box_lr.x -= 5;
-    dir_inner_box_lr.y -= 400;
+    boxes: FileExplorerBoxes = ---;
+    Calculate_File_Explorer_Boxes(*boxes);
+    Render_Quad_Lines(boxes.outer_ul, boxes.outer_lr, .{rgb=fRGB_WHITE, a=0.8});
     view_position := View_Layer_From_Data(xx file_explorer).view_position;
     if view_position.y == 0.0 {
         file_explorer.directory_list_outline_alpha = min(file_explorer.directory_list_outline_alpha + Smoothed_Delta_Time() * DIRECTORY_LIST_ALPHA_FADE_SPEED, DIRECTORY_LIST_ALPHA_MAX);
     } else {
         file_explorer.directory_list_outline_alpha = max(file_explorer.directory_list_outline_alpha - Smoothed_Delta_Time() * DIRECTORY_LIST_ALPHA_FADE_SPEED, 0.0);
     }
-    Render_Quad_Lines(dir_inner_box_ul, dir_inner_box_lr, .{rgb=fRGB_WHITE, a=file_explorer.directory_list_outline_alpha});
-    preview_inner_box_ul := dir_inner_box_ul;
-    preview_inner_box_lr := dir_inner_box_lr;
-    preview_inner_box_ul.y = dir_inner_box_lr.y + 5;
-    preview_inner_box_lr.y = outer_box_lr.y - 5;
-    Render_Quad_Lines(preview_inner_box_ul, preview_inner_box_lr, .{rgb=fRGB_WHITE, a=0.3});
+    Render_Quad_Lines(boxes.directory_list_ul, boxes.directory_list_lr, .{rgb=fRGB_WHITE, a=file_explorer.directory_list_outline_alpha});
+    Render_Quad_Lines(boxes.preview_ul, boxes.preview_lr, .{rgb=fRGB_WHITE, a=0.3});
 }
 
 Process_Text_Input :: (using file_explorer: *FileExplorer, utf32: []u32) {
@@ -204,6 +229,36 @@ Process_Text_Input :: (using file_explorer: *FileExplorer, utf32: []u32) {
 }
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
+
+Calculate_File_Explorer_Boxes :: (using boxes: *FileExplorerBoxes) {
+    outer_ul = Upper_Left();
+    outer_lr = Lower_Right();
+    outer_ul.x += 4;
+    outer_ul.y += 14;
+    outer_lr.x -= 4;
+    outer_lr.y -= 4;
+
+    directory_list_ul = outer_ul;
+    directory_list_lr = outer_lr;
+    directory_list_ul.x += 5;
+    directory_list_ul.y += Integer_Option_Value(.FONT_SIZE) * 2;
+    directory_list_lr.x -= 5;
+    directory_list_lr.y -= 400;
+
+    preview_ul = directory_list_ul;
+    preview_lr = directory_list_lr;
+    preview_ul.y = directory_list_lr.y + 5;
+    preview_lr.y = outer_lr.y - 5;
+}
+
+FileExplorerBoxes :: struct {
+    outer_ul: IntVector2;
+    outer_lr: IntVector2;
+    directory_list_ul: IntVector2;
+    directory_list_lr: IntVector2;
+    preview_ul: IntVector2;
+    preview_lr: IntVector2;
+}
 
 DIRECTORY_LIST_ALPHA_MAX :: 0.3;
 DIRECTORY_LIST_ALPHA_FADE_SPEED :: 2.2;

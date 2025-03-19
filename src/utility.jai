@@ -43,7 +43,7 @@ Scoped_Construct :: ($T: Type) -> bool #expand {
 
 String_Reset :: inline (s: *string) {
     if s.data != null {
-        free(s);
+        free(s.data);
         s.data = null;
     }
     s.count = 0;

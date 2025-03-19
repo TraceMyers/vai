@@ -14,6 +14,9 @@ undo_redo_text: BinPool(16, u8);
 register_text: BinPool(TEXT_REGISTER_SMALL_CHUNK_LEN, u32);
 registers: TextRegisters;
 
+file_explorer_text_preview: TextBuffer;
+file_explorer_preview_available: bool;
+
 small_strings : BinPool(16, u8);
 
 // NOTE TO SELF: be careful not to alias data when working with bins inline then copying into the bin
@@ -38,6 +41,7 @@ Text_Buffers :: struct {
         }
         init(*registers.tack_map, 128);
         temp_utf32_buffers.allocator = temp;
+        file_explorer_preview_available = true;
         return true;
     }
 
@@ -48,6 +52,7 @@ Text_Buffers :: struct {
         Circular_Buffer_Reset(*registers.number_registers);
         Bin_Pool_Shutdown(*register_text);
         deinit(*registers.tack_map);
+        // Shutdown_Text_Buffer(*file_explorer_text_preview);
     }
 
 }
@@ -76,7 +81,7 @@ Initialize_Text_Buffer :: (buffer: *TextBuffer, path: string, prealloc_lines := 
     }
 }
 
-Shutdown_Text_Buffer :: (buffer: *TextBuffer) {
+Shutdown_Text_Buffer :: no_inline (buffer: *TextBuffer) {
     Bin_Pool_Shutdown(*buffer.line_pool);
     array_reset(*buffer.lines);
     String_Reset(*buffer.file_path);
@@ -84,7 +89,9 @@ Shutdown_Text_Buffer :: (buffer: *TextBuffer) {
 }
 
 Clear_Text_Buffer :: (using buffer: *TextBuffer, keep_allocations: bool) {
-    Commit_And_Empty_Utf32_Buffers();
+    if buffer != *file_explorer_text_preview {
+        Commit_And_Empty_Utf32_Buffers();
+    }
     if (keep_allocations) {
         array_reset_keeping_memory(*lines);
     } else {
@@ -111,10 +118,22 @@ Get_File_Buffer :: (file_path: string) -> *TextBuffer {
 }
 
 Load_File_Into_Buffer :: (path: string) -> s64 {
-    file_string, success := Read_Entire_File(path, true);
+    buf_index := Request_Item(*file_buffers);
+    buffer := Get_Item(*file_buffers, buf_index);
+
+    if Load_File_Into_Buffer(path, buffer) {
+        return buf_index;
+    }
+
+    Return_Item(*file_buffers, buf_index);
+    return -1;
+}
+
+Load_File_Into_Buffer :: (file_path: string, buffer: *TextBuffer, initialize_changes := true) -> bool {
+    file_string, success := Read_Entire_File(file_path, true);
     if !success {
-        Log_Error("unable to open [%]", path);
-        return -1;
+        Log_Error("unable to open [%]", file_path);
+        return false;
     }
 
     line_len_total: s64;
@@ -127,17 +146,27 @@ Load_File_Into_Buffer :: (path: string) -> s64 {
         avg_line_len := line_len_total / line_count;
         expected_bin_ct = xx (cast(float32)(Div_Ceil(avg_line_len, 32) * line_count) * INEFFICIENCY_FACTOR);
     }
-    buf_index := Request_Item(*file_buffers);
-    buffer := Get_Item(*file_buffers, buf_index);
-    Initialize_Text_Buffer(buffer, copy_string(path), line_count, expected_bin_ct);
+    Initialize_Text_Buffer(buffer, copy_string(file_path), line_count, expected_bin_ct, initialize_changes);
+
+    in_main_thread := GetCurrentThreadId() == main_thread_index;
 
     if line_count != 0 {
-        Append_Line_To_Buffer :: inline (line: *string, buffer: *TextBuffer) { Append_Line(buffer, line.*, false); }
-        Process_Per_Line(file_string, Append_Line_To_Buffer, buffer);
+        if in_main_thread {
+            Append_Line_To_Buffer :: inline (line: *string, buffer: *TextBuffer) { Append_Line(buffer, line.*, false, false, true); }
+            Process_Per_Line(file_string, Append_Line_To_Buffer, buffer);
+        } else {
+            Append_Line_To_Buffer :: inline (line: *string, buffer: *TextBuffer) { Append_Line(buffer, line.*, false, false, false); }
+            Process_Per_Line(file_string, Append_Line_To_Buffer, buffer);
+        }
     } else {
-        Append_Line(buffer, .{}, false);
+        if in_main_thread {
+            Append_Line(buffer, .{}, false, false, true);
+        } else {
+            Append_Line(buffer, .{}, false, false, false);
+        }
     }
-    return buf_index;
+
+    return true;
 }
 
 Save_Buffer_To_File :: (id: s64) {
@@ -177,8 +206,10 @@ Append_Line_To_Debug_Buffer :: inline (buffer: *TextBuffer, line_str: string) {
     Append_Line(buffer, line_str, false, true);
 }
 
-Append_Line :: (buffer: *TextBuffer, line_str: string, is_change := true, $FOR_DEBUG := false) {
-    Commit_And_Empty_Utf32_Buffers();
+Append_Line :: (buffer: *TextBuffer, line_str: string, is_change := true, $FOR_DEBUG := false, $EMPTY_UTF32_BUFFERS := true) {
+    #if EMPTY_UTF32_BUFFERS {
+        Commit_And_Empty_Utf32_Buffers();
+    }
     #if FOR_DEBUG {
         array_add(*buffer.lines, .{unique_id=debug_line_id_counter});
         debug_line_id_counter += 1;

@@ -28,6 +28,7 @@
 //              and navigate it like a normal file buffer
 //                 - loading of this needs to be async so it doesn't halt scrolling
 // TODO: file buffer hotkeys, like control groups in an rts
+// TODO: file buffer thread safety. disallow utf32 buffer usage outside main thread
 
 quit: bool;
 exe_path: string;
@@ -37,10 +38,12 @@ Vai_Main :: () {
         SetProcessDPIAware();
         timeBeginPeriod(1);
     }
+    main_thread_index = GetCurrentThreadId();
 
     exe_path = copy_string(path_strip_filename(get_path_of_running_executable()));
     defer free(exe_path);
 
+    if !Scoped_Construct(Thread_Worker)         then return;
     if !Scoped_Construct(Text_Buffers)          then return;
     if !Scoped_Construct(Runtime_Settings)      then return;
     if !Create_Window("Vai")                    then return;
@@ -64,7 +67,8 @@ Vai_Main :: () {
         if resized {
             Post_Resize_Window();
         }
-        
+
+        Process_Async_Results();
         Update_Window_Events();
 
         if quit then break;
