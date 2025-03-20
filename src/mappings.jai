@@ -64,6 +64,8 @@
     .{.["P"],                   "PASTE_BEFORE",                                 .{modes=.NORMAL,                 proc=Paste_Before}},
     .{.["r*"],                  "REPLACE_CHARACTER",                            .{modes=.NORMAL,                 proc=Replace_Character}},
     .{.["\t"],                  "COMMAND_AUTOCOMPLETE_SUGGESTIONS",             .{modes=.COMMAND,                proc=Create_Command_Autocomplete_Suggestions}},
+    .{.["<C-j>"],               "DECREASE_FILE_EXPLORER_PREVIEW_SIZE",          .{modes=.NORMAL,                 proc=Decrease_File_Explorer_Preview_Size}},
+    .{.["<C-k>"],               "INCREASE_FILE_EXPLORER_PREVIEW_SIZE",          .{modes=.NORMAL,                 proc=Increase_File_Explorer_Preview_Size}},
     .{.["__INTERNAL__"],        "CLAMP_CURSOR_X_TO_BOUNDS"                      .{modes=.NONE}},
     .{.["__INTERNAL__"],        "NONE",                                         .{modes=.NONE}},
     .{.["__INTERNAL__"],        "INTERNAL_MOVE_CURSOR_TO_POSITION",             .{modes=.ALL    ,                proc=Internal_Move_Cursor_To_Position}}

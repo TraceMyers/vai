@@ -33,13 +33,9 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
     ul := Upper_Left();
     lr := Lower_Right();
 
-    outer_box_ul := ul;
-    outer_box_lr := lr;
-    outer_box_ul.x += 4;
-    outer_box_ul.y += 14;
-    outer_box_lr.x -= 9;
-    outer_box_lr.y -= 404;
-    Set_View_Scissor(outer_box_ul, outer_box_lr);
+    boxes: FileExplorerBoxes = ---;
+    Calculate_File_Explorer_Boxes(*boxes, File_Explorer_Preview_Proportion(file_explorer));
+    Set_View_Scissor(boxes.directory_list_ul, boxes.directory_list_lr);
 
     renderer: TextRenderer;
     Initialize_Text_Renderer(*renderer, view_layer, 8);
@@ -160,7 +156,9 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
     }
 
     // draw text
-    Render_Text_Buffer_Lines(view_layer, *renderer, buf, false);
+    if file_explorer.preview_vertical_proportion != .FULL {
+        Render_Text_Buffer_Lines(view_layer, *renderer, buf, false);
+    }
     Flush_Draws();
 
     Cursor_Scroll(View_Layer_From_Data(xx file_explorer), *renderer, buf);
@@ -193,13 +191,17 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
 
     Set_Shader_For_Text();
 
-    if file_explorer_preview_available && file_explorer_text_preview.lines.count > 0 {
+    if file_explorer_preview_available 
+    && file_explorer_text_preview.lines.count > 0 
+    && file_explorer.preview_vertical_proportion != .NONE {
         Set_View_Scissor(ul, lr);
-        boxes: FileExplorerBoxes = ---;
-        Calculate_File_Explorer_Boxes(*boxes);
         Set_View_Scissor(boxes.preview_ul, boxes.preview_lr);
         renderer = .{};
+        save_view_position := view_layer.view_position;
+        view_layer.view_position = .{};
         Initialize_Text_Renderer(*renderer, view_layer, 0);
+        view_layer.view_position = save_view_position;
+        // renderer.cursor_pos = .{};
         Render_Text_Buffer_Lines(null, *renderer, *file_explorer_text_preview, false);
         Flush_Draws();
     }
@@ -207,7 +209,7 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
 
 Render_File_Explorer_Lines :: (using file_explorer: *FileExplorer, is_active: bool) {
     boxes: FileExplorerBoxes = ---;
-    Calculate_File_Explorer_Boxes(*boxes);
+    Calculate_File_Explorer_Boxes(*boxes, File_Explorer_Preview_Proportion(file_explorer));
     Render_Quad_Lines(boxes.outer_ul, boxes.outer_lr, .{rgb=fRGB_WHITE, a=0.8});
     view_position := View_Layer_From_Data(xx file_explorer).view_position;
     if view_position.y == 0.0 {
@@ -228,9 +230,25 @@ Process_Text_Input :: (using file_explorer: *FileExplorer, utf32: []u32) {
     }
 }
 
+File_Explorer_Preview_Proportion :: (file_explorer: *FileExplorer) -> float {
+    if file_explorer.preview_vertical_proportion == {
+    case .NONE;
+        return 0.0;
+    case .ONE_QUARTER;
+        return 0.25;
+    case .HALF;
+        return 0.5;
+    case .THREE_QUARTERS;
+        return 0.75;
+    case .FULL;
+        return 1.0;
+    }
+    return 0.0;
+}
+
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 
-Calculate_File_Explorer_Boxes :: (using boxes: *FileExplorerBoxes) {
+Calculate_File_Explorer_Boxes :: (using boxes: *FileExplorerBoxes, preview_proportion: float) {
     outer_ul = Upper_Left();
     outer_lr = Lower_Right();
     outer_ul.x += 4;
@@ -243,7 +261,7 @@ Calculate_File_Explorer_Boxes :: (using boxes: *FileExplorerBoxes) {
     directory_list_ul.x += 5;
     directory_list_ul.y += Integer_Option_Value(.FONT_SIZE) * 2;
     directory_list_lr.x -= 5;
-    directory_list_lr.y -= 400;
+    directory_list_lr.y = outer_ul.y + cast(s32)((outer_lr.y - outer_ul.y) * (1.0 - preview_proportion));
 
     preview_ul = directory_list_ul;
     preview_lr = directory_list_lr;

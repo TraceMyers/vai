@@ -1199,6 +1199,23 @@ Cursor_Scroll_To_Empty_Line :: (scroll_down: bool) {
 Cursor_Scroll_Up_To_Empty_Line :: #bake_arguments Cursor_Scroll_To_Empty_Line(scroll_down=false);
 Cursor_Scroll_Down_To_Empty_Line :: #bake_arguments Cursor_Scroll_To_Empty_Line(scroll_down=true);
 
+Change_File_Explorer_Preview_Size :: (increase: bool) {
+    Init_Cursor_Proc_Or_Return();
+
+    if active_layer.type != .FILE_EXPLORER {
+        return;
+    }
+
+    file_explorer := *active_layer.file_explorer;
+    direction := ifx increase then sdw(1) else sdw(-1);
+    prop_s32 := cast(s32)file_explorer.preview_vertical_proportion;
+    VerticalProportionType :: type_of(file_explorer.preview_vertical_proportion);
+    prop_s32 = clamp(prop_s32 + direction, 0, cast(s32)enum_highest_value(VerticalProportionType));
+    file_explorer.preview_vertical_proportion = cast(VerticalProportionType)prop_s32;
+}
+Decrease_File_Explorer_Preview_Size :: #bake_arguments Change_File_Explorer_Preview_Size(increase=false);
+Increase_File_Explorer_Preview_Size :: #bake_arguments Change_File_Explorer_Preview_Size(increase=true);
+
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 Clamp_Cursor :: (cursor: *Cursor, text_buffer: *TextBuffer) {

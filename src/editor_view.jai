@@ -828,6 +828,13 @@ FileExplorer :: CursorLayer(
         end_path_bin: BinID;
         directory: string;
         directory_list_outline_alpha: float;
+        preview_vertical_proportion: enum {
+            NONE;
+            ONE_QUARTER;
+            HALF;
+            THREE_QUARTERS;
+            FULL;
+        } = .HALF;
     }
 );
 
