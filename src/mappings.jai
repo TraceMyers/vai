@@ -79,7 +79,7 @@ HERE
     .{.["smart-case"],              "PATTERN_SEARCH_SMART_CASE",    .{type=.BOOL,      default_value._bool=true}},
     .{.["indent-width"],            "INDENT_WIDTH"                  .{type=.INTEGER,   default_value._integer=4}},
     .{.["auto-indent"],             "AUTO_INDENT",                  .{type=.BOOL,      default_value._bool=true}},
-    .{.["soft-wrap"],               "SOFT_WRAP",                    .{type=.BOOL,      default_value._bool=true}},
+    .{.["soft-wrap"],               "SOFT_WRAP",                    .{type=.BOOL,      default_value._bool=false}},
     .{.["soft-wrap-indent"],        "SOFT_WRAP_INDENT_WIDTH"        .{type=.INTEGER,   default_value._integer=2}},
     .{.["font-size"],               "FONT_SIZE",                    .{type=.INTEGER,   default_value._integer=14}}
 HERE

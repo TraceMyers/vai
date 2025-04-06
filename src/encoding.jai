@@ -19,17 +19,23 @@ Encode :: (in: string, from: TextEncoding, to: TextEncoding, append_null := fals
         }
         string_index += c.read_count;
     }
+
+    subract_null_byte_ct := 0;
     if append_null {
         if to == {
         case .UTF8; #through;
         case .ANSI;
+            subract_null_byte_ct = 1;
             print_to_builder(*builder, "\0");
         case .UTF16;
+            subract_null_byte_ct = 2;
             print_to_builder(*builder, "\0\0");
         case .UTF32;
+            subract_null_byte_ct = 4;
             print_to_builder(*builder, "\0\0\0\0");
         }
     }
+
     #if DEBUG_ENCODING {
         builder_count := get_base_buffer(*builder).count;
     }
@@ -37,6 +43,8 @@ Encode :: (in: string, from: TextEncoding, to: TextEncoding, append_null := fals
     #if DEBUG_ENCODING {
         assert(str.count == builder_count);
     }
+
+    str.count -= subract_null_byte_ct;
     return str;
 }
 

@@ -36,8 +36,12 @@ To_fRGBA :: (in: bRGB) -> fRGBA {
 
 // ctor/dtor style scope-dependent resource management. not used for individual data, but rather whole systems. (there is no data tied to the call.) to use, define an empty struct with an [Initialize :: () -> bool] and a [Shutdown :: ()]. Shutdown() should be callable even if initialization fails.
 Scoped_Construct :: ($T: Type) -> bool #expand {
+    Log("initializing %", T);
     init_success := T.Initialize();
-    `defer T.Shutdown();
+    `defer {
+        Log("shutting down %", T);
+        T.Shutdown();
+    }
     return init_success;
 }
 
@@ -47,6 +51,14 @@ String_Reset :: inline (s: *string) {
         s.data = null;
     }
     s.count = 0;
+}
+
+Array_Delete :: inline (arr: *[]$T) {
+    if arr.data != null {
+        free(arr.data);
+        arr.data = null;
+    }
+    arr.count = 0;
 }
 
 Read_Entire_File :: (path: string, $USE_TEMP_ALLOCATOR := false, $DEFER_FREE := false) -> string, bool #expand {
@@ -404,7 +416,7 @@ Is_Basic_Text_File_Extension :: (ext: string) -> bool {
         || ext == "gitignore";
 }
 
-// TODO: probably map
+// TODO: probably map or just linear lookup hash table
 Is_Code_File_Extension :: (ext: string) -> bool {
     return ext == "c"
         || ext == "cpp"
@@ -437,4 +449,63 @@ Is_Binary_File_Extension :: (ext: string) -> bool {
         || ext == "dll"
         || ext == "a"
         || ext == "o";
+}
+
+Print_Hex_Dump :: (data: []u8, width := 16) {
+    assert(width > 0);
+    builder: String_Builder;
+    builder.allocator = temp;
+    print_to_builder(*builder, "\n");
+    line_byte_ct := 0;
+    for i : 0..data.count-1 {
+        if line_byte_ct == 0 {
+            print_to_builder(*builder, "0x% | ", FormatInt.{value=i, base=16, minimum_digits=8});
+        }
+        print_to_builder(*builder, "% ", FormatInt.{value=data[i], base=16, minimum_digits=2});
+        line_byte_ct += 1;
+        if line_byte_ct == width || (line_byte_ct > 0 && i == data.count-1) {
+            str := Temp_Copy_String(string.{line_byte_ct, *data[i-line_byte_ct+1]});
+            // ansi dump
+            while line_byte_ct < width {
+                print_to_builder(*builder, "   ");
+                line_byte_ct += 1;
+            }
+            for 0..str.count-1 {
+                c := *str[it];
+                if c.* == #char "\x1b" {
+                    c.* = #char "^";
+                } else if c.* == #char "\n" {
+                    c.* = #char "`";
+                } else if c.* < 32 || c.* > 126 {
+                    c.* = #char ".";
+                }
+            }
+            print_to_builder(*builder, "| %\n", str);
+            line_byte_ct = 0;
+        }
+    }
+    print(builder_to_string(*builder));
+}
+
+Pair :: struct($T1: Type, $T2: Type) {
+    a: T1;
+    b: T2;
+}
+
+Generate_Enumerated_Array_CT :: (enum_type_name: string, enum_backing_type: string, array_name: string, proc_name: string, $PairValueType: Type, enum_array_item_pairs: ..Pair(string, PairValueType)) -> string {
+    builder: String_Builder;
+    print_to_builder(*builder, "% :: enum % {\n", enum_type_name, enum_backing_type);
+    for enum_array_item_pairs {
+        print_to_builder(*builder, "\t%;\n", it.a);
+    }
+    print_to_builder(*builder, "}\n% := %.[\n", array_name, PairValueType);
+    for enum_array_item_pairs {
+        if it_index == enum_array_item_pairs.count - 1 {
+            print_to_builder(*builder, "\t%\n];\n", it.b);
+        } else {
+            print_to_builder(*builder, "\t%,\n", it.b);
+        }
+    }
+    print_to_builder(*builder, "% :: inline (key: %) -> % { return %[key]; }", proc_name, enum_type_name, PairValueType, array_name);
+    return builder_to_string(*builder);
 }

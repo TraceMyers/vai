@@ -17,6 +17,8 @@ registers: TextRegisters;
 file_explorer_text_preview: TextBuffer;
 file_explorer_preview_available: bool;
 
+os_console_text: TextBuffer;
+
 small_strings : BinPool(16, u8);
 
 // NOTE TO SELF: be careful not to alias data when working with bins inline then copying into the bin
@@ -908,6 +910,7 @@ TextBuffer :: struct {
     saved_cursor: Cursor;
     flags: enum_flags {
         FILE_EXPLORER;
+        OS_CONSOLE;
     }
 }
 

@@ -34,6 +34,8 @@ quit: bool;
 exe_path: string;
 
 Vai_Main :: () {
+    defer Log("Exiting");
+
     #if OS == .WINDOWS {
         SetProcessDPIAware();
         timeBeginPeriod(1);
@@ -53,14 +55,13 @@ Vai_Main :: () {
     if !Scoped_Construct(Editor_Views)          then return;
     if !Scoped_Construct(Options)               then return;
     if !Scoped_Construct(Render_Text)           then return;
+    if !Scoped_Construct(OS_Console)            then return;
 
     Initialize_Time();
 
     // TODO: syntax highlighting
     text_colors[0] = bRGB_WHITE;
     text_colors[1] = bRGB_RED;
-
-    // ShowWindow(GetConsoleWindow(), SW_HIDE);
 
     while !quit {
         resized := Update_Window_Dimensions();
@@ -143,6 +144,7 @@ GetConsoleWindow :: () -> HWND #foreign kernel32;
 #load "view_layers/vim_console.jai";
 #load "view_layers/file_explorer.jai";
 #load "view_layers/debug.jai";
+#load "view_layers/os_console.jai";
 #load "editor_view.jai";
 #load "text_processing.jai";
 #load "action_execution.jai";

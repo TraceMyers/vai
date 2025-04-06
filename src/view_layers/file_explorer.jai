@@ -234,12 +234,8 @@ File_Explorer_Preview_Proportion :: (file_explorer: *FileExplorer) -> float {
     if file_explorer.preview_vertical_proportion == {
     case .NONE;
         return 0.0;
-    case .ONE_QUARTER;
-        return 0.25;
     case .HALF;
         return 0.5;
-    case .THREE_QUARTERS;
-        return 0.75;
     case .FULL;
         return 1.0;
     }
@@ -252,14 +248,14 @@ Calculate_File_Explorer_Boxes :: (using boxes: *FileExplorerBoxes, preview_propo
     outer_ul = Upper_Left();
     outer_lr = Lower_Right();
     outer_ul.x += 4;
-    outer_ul.y += 14;
+    outer_ul.y += 4;
     outer_lr.x -= 4;
     outer_lr.y -= 4;
 
     directory_list_ul = outer_ul;
     directory_list_lr = outer_lr;
     directory_list_ul.x += 5;
-    directory_list_ul.y += Integer_Option_Value(.FONT_SIZE) * 2;
+    directory_list_ul.y += 5;
     directory_list_lr.x -= 5;
     directory_list_lr.y = outer_ul.y + cast(s32)((outer_lr.y - outer_ul.y) * (1.0 - preview_proportion));
 

@@ -15,6 +15,7 @@ Thread_Worker :: struct  {
         thread_worker_should_run = false;
         thread_worker_should_work = false;
         while !thread_is_done(*thread_worker, 1) {;}
+        thread_deinit(*thread_worker);
 
         next_tasks = null;
         working_tasks = null;

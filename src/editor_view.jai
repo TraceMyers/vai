@@ -50,6 +50,7 @@ Create_Base_Views :: () {
     //     layer.top_bar = .{};
     //     Add_View(.{type=.PIXELS, top_pixels=24}, *layer, ROOT_ID);
     // }
+
     // // bottom bar / vim console
     {
         layer: ViewLayer;
@@ -57,6 +58,9 @@ Create_Base_Views :: () {
         layer.vim_console = .{};
         vim_console_id = Add_View(.{type=.PIXELS, bottom_pixels=20}, *layer, ROOT_ID);
     }
+
+    // tool window zone
+    // ------------------------------------------
     {
         layer: ViewLayer;
         layer.type = .FILE_EXPLORER;
@@ -66,6 +70,14 @@ Create_Base_Views :: () {
         layer.file_explorer.directory = copy_string(get_working_directory());
         tool_view_id = Add_View(.{type=.PROPORTION, left=0.0}, *layer, ROOT_ID);
     }
+    {
+        layer: ViewLayer;
+        layer.type = .OS_CONSOLE;
+        layer.os_console = .{};
+        Add_View_Layer(*view_pool.items[tool_view_id], *layer);
+    }
+    // ------------------------------------------
+
     // empty background to stage file editors
     {
         base_empty_view_id = Add_View(.{type=.PROPORTION, right=1.0}, null, ROOT_ID);
@@ -143,6 +155,10 @@ Get_Active_Layer_Of_Type :: (type: ViewLayerType) -> *View, *ViewLayer {
         return null, null;
     }
     return active_view, active_layer;
+}
+
+OS_Console_Layer :: () -> *ViewLayer {
+    return *view_pool.items[tool_view_id].layers[OS_CONSOLE_LAYER];
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -671,13 +687,13 @@ View_Bounds :: (layer: *ViewLayer) -> (ul: Vector2, lr: Vector2) {
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ViewLayerType :: enum_flags u16 {
-    EMPTY;
-    TOP_BAR;
+    EMPTY               :: 0x0000;
+    TOP_BAR             :: 0x0001;
     FILE_EDITOR;
     VIM_CONSOLE;
     FILE_EXPLORER;
+    OS_CONSOLE;
     DEBUG;
-    ALL :: TOP_BAR | FILE_EDITOR | VIM_CONSOLE | FILE_EXPLORER;
 }
 
 ViewLayerData :: union {
@@ -686,6 +702,7 @@ ViewLayerData :: union {
     file_editor: FileEditor = ---;
     vim_console: VimConsole = ---;
     file_explorer: FileExplorer = ---;
+    os_console: OSConsole = ---;
     debug: DebugView = ---;
 }
 
@@ -830,11 +847,22 @@ FileExplorer :: CursorLayer(
         directory_list_outline_alpha: float;
         preview_vertical_proportion: enum {
             NONE;
-            ONE_QUARTER;
             HALF;
-            THREE_QUARTERS;
             FULL;
         } = .HALF;
+    }
+);
+
+OSConsole :: CursorLayer(
+    struct {
+        input_read: *void;
+        input_write: *void;
+        output_read: *void;
+        output_write: *void;
+        pseudoconsole: *void;
+        terminal: *void;
+        terminal_id: u32;
+        init_failure: bool;
     }
 );
 
@@ -974,6 +1002,8 @@ render_full_update: bool;
 base_empty_view_id: s64;
 
 view_layer_id_counter: u32;
+
+OS_CONSOLE_LAYER :: 1;
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 

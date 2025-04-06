@@ -210,6 +210,9 @@ Open_File_In_Editor :: (file_editor: *FileEditor, filename: string, create_if_do
         }
         write_entire_file(filename, "");
         new_buffer_id = Get_File_Buffer_ID(filename);
+        if new_buffer_id == -1 {
+            return false;
+        }
     }
     file_editor.file_buffer = new_buffer_id;
     // each file buffer has its a cursor position cached by file editors when they move
