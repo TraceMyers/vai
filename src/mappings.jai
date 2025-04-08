@@ -17,6 +17,8 @@
     .{.["{"],                   "SCROLL_UP_TO_EMPTY_LINE",                      .{modes=.NORMAL,                 proc=Cursor_Scroll_Up_To_Empty_Line}},
     .{.["<C-j>"],               "SCROLL_TO_NEXT_FILE_BUFFER",                   .{modes=.NORMAL,                 proc=Scroll_File_Buffer_Action_Next}},
     .{.["<C-k>"],               "SCROLL_TO_PREVIOUS_FILE_BUFFER",               .{modes=.NORMAL,                 proc=Scroll_File_Buffer_Action_Previous}},
+    .{.["<C-l>"],               "WIDEN_VIEW",                                   .{modes=.NORMAL,                 proc=Widen_View}},
+    .{.["<C-h>"],               "NARROW_VIEW",                                  .{modes=.NORMAL,                 proc=Narrow_View}},
     .{.["}"],                   "SCROLL_DOWN_TO_EMPTY_LINE",                    .{modes=.NORMAL,                 proc=Cursor_Scroll_Down_To_Empty_Line}},
     .{.["<C-w><C-w>"],          "SCROLL_TO_NEXT_EDITOR",                        .{modes=.NORMAL | .VISUAL,       proc=Scroll_To_Next_Editor}},
     .{.[":"],                   "ENTER_COMMAND_MODE",                           .{modes=.NORMAL,                 proc=Enter_Command_Mode}},

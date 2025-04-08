@@ -242,6 +242,39 @@ Scroll_To_Next_Editor :: () {
     Replace_Active_View_ID(sort_info[next_editor].view_id);
 }
 
+Resize_View_Horizontal :: (widen: bool) {
+    Init_Cursor_Proc_Or_Return(true);
+    active_view_is_tool := Active_View_ID() == tool_view_id;
+    sibling := ifx active_view_is_tool then *view_pool.items[base_empty_view_id] else Get_View_Pair_Sibling(active_view);
+    if sibling == null {
+        return;
+    }
+
+    self_prop: *float;
+    sibling_prop: *float;
+    if active_view.viewport.left == 0.0 {
+        if active_view.viewport.right == 0.0 {
+            return;
+        }
+        self_prop = *active_view.viewport.right;
+        sibling_prop = *sibling.viewport.left;
+    } else if active_view.viewport.right == 0.0 {
+        self_prop = *active_view.viewport.left;
+        sibling_prop = *sibling.viewport.right;
+    }
+
+    dir := ifx widen then 1.0 else -1.0;
+    speed := 0.005 * dir;
+
+    self_prop.* = clamp(self_prop.* + speed, 0.01, 0.99);
+    sibling_prop.* = 1.0 - self_prop.*;
+    if active_view_is_tool {
+        settings_file_data.tool_view_screen_proportion = self_prop.*;
+    }
+}
+Widen_View :: #bake_arguments Resize_View_Horizontal(widen=true);
+Narrow_View :: #bake_arguments Resize_View_Horizontal(widen=false);
+
 Scroll_File_Buffer_Action :: (next: bool) {
     view, layer := Get_Active_Layer_Of_Type(.FILE_EDITOR);
     if layer == null {

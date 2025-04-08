@@ -603,6 +603,29 @@ Generate_View_Layer_Switch :: (with_code: string, layer_as_pointer := true) -> s
     return builder_to_string(*builder);
 }
 
+Get_View_Pair_Sibling :: (v: *View) -> *View {
+    parent := Get_Parent(v);
+    if parent == null {
+        return null;
+    }
+    if parent.children.count < 2 || parent.layers.count != 0 {
+        return null;
+    }
+    for parent.children {
+        child := *view_pool.items[it];
+        if child == v then continue;
+        if child.layers.count == 0 then continue;
+        if child.layers[0].type == .VIM_CONSOLE then continue;
+        return child;
+    }
+    return null;
+}
+
+Get_Parent :: inline (v: *View) -> *View {
+    id := Find_Parent(v);
+    return ifx id == -1 then null else *view_pool.items[id];
+}
+
 Find_Parent :: inline (v: *View) -> s64 {
     id := Element_Index(v, view_pool.items);
     return Find_Parent(id, 0);
