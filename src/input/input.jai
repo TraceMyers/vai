@@ -524,7 +524,8 @@ ViMode :: enum_flags u8{
     VISUAL;
     INSERT;
     COMMAND;
-    ALL :: NORMAL | VISUAL | INSERT | COMMAND;
+    RESIZE_VIEW;
+    ALL :: NORMAL | VISUAL | INSERT | COMMAND | RESIZE_VIEW;
 }
 
 ActionDataContainer :: struct {

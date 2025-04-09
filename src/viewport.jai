@@ -97,7 +97,7 @@ Viewport_Rect_Points :: inline (r: *ViewportRect, $T1: Type) -> $T2, T2
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-ViewportSide :: enum u8 {
+Side2D :: enum u8 {
     LEFT; TOP; RIGHT; BOTTOM;
 }
 
@@ -135,7 +135,7 @@ viewport_rects: [..]ViewportRect;
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 
-Shave_Rect_Dimension :: (rect_pivot: *s32, rect_dimension: *s32, v: *Viewport, min_side: ViewportSide) {
+Shave_Rect_Dimension :: (rect_pivot: *s32, rect_dimension: *s32, v: *Viewport, min_side: Side2D) {
     side_a : s32 = xx min_side;
     side_b := side_a + 2;
     a_shave, b_shave: s32;

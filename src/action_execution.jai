@@ -8,6 +8,11 @@ Action_Execution :: struct {
 
 Cursor_Scroll_Down :: () {
     Init_Cursor_Proc_Or_Return(true);
+
+    if vi_mode == .RESIZE_VIEW {
+        return;
+    }
+
     step_size : s32 = 1;
     if active_layer.type == {
     case .FILE_EXPLORER;
@@ -23,8 +28,12 @@ Cursor_Scroll_Down :: () {
 
 Cursor_Scroll_Up :: () {
     Init_Cursor_Proc_Or_Return(true);
-    step_size : s32 = 1;
 
+    if vi_mode == .RESIZE_VIEW {
+        return;
+    }
+
+    step_size : s32 = 1;
     if active_layer.type == {
     case .FILE_EDITOR;
         cursor.y = max(cursor.y-1, sdw(0));
@@ -44,8 +53,12 @@ Cursor_Scroll_Up :: () {
 
 Cursor_Scroll_Right :: () {
     Init_Cursor_Proc_Or_Return(true);
-    line := Line_View(text_buffer, cursor.y);
 
+    if vi_mode == .RESIZE_VIEW {
+        return;
+    }
+
+    line := Line_View(text_buffer, cursor.y);
     do_default_scroll := active_layer.type == .FILE_EDITOR || vi_mode == .INSERT;
     if do_default_scroll {
         cursor.x += 1;
@@ -73,8 +86,12 @@ Cursor_Scroll_Right :: () {
 
 Cursor_Scroll_Left :: () {
     Init_Cursor_Proc_Or_Return(true);
+
+    if vi_mode == .RESIZE_VIEW {
+        return;
+    }
+
     line := Line_View(text_buffer, cursor.y);
-    
     do_default_scroll := active_layer.type == .FILE_EDITOR || vi_mode == .INSERT;
     if do_default_scroll {
         cursor.x -= 1;
@@ -242,38 +259,44 @@ Scroll_To_Next_Editor :: () {
     Replace_Active_View_ID(sort_info[next_editor].view_id);
 }
 
-Resize_View_Horizontal :: (widen: bool) {
+Grab_View_Side :: (side: Side2D) {
     Init_Cursor_Proc_Or_Return(true);
     active_view_is_tool := Active_View_ID() == tool_view_id;
-    sibling := ifx active_view_is_tool then *view_pool.items[base_empty_view_id] else Get_View_Pair_Sibling(active_view);
-    if sibling == null {
-        return;
-    }
+    vi_mode = .RESIZE_VIEW;
+    selected_view_side = side;
 
-    self_prop: *float;
-    sibling_prop: *float;
-    if active_view.viewport.left == 0.0 {
-        if active_view.viewport.right == 0.0 {
-            return;
-        }
-        self_prop = *active_view.viewport.right;
-        sibling_prop = *sibling.viewport.left;
-    } else if active_view.viewport.right == 0.0 {
-        self_prop = *active_view.viewport.left;
-        sibling_prop = *sibling.viewport.right;
-    }
+    // sibling := ifx active_view_is_tool then *view_pool.items[base_empty_view_id] else Get_View_Pair_Sibling(active_view);
+    // if sibling == null {
+    //     return;
+    // }
 
-    dir := ifx widen then 1.0 else -1.0;
-    speed := 0.005 * dir;
+    // self_prop: *float;
+    // sibling_prop: *float;
+    // if active_view.viewport.left == 0.0 {
+    //     if active_view.viewport.right == 0.0 {
+    //         return;
+    //     }
+    //     self_prop = *active_view.viewport.right;
+    //     sibling_prop = *sibling.viewport.left;
+    // } else if active_view.viewport.right == 0.0 {
+    //     self_prop = *active_view.viewport.left;
+    //     sibling_prop = *sibling.viewport.right;
+    // }
 
-    self_prop.* = clamp(self_prop.* + speed, 0.01, 0.99);
-    sibling_prop.* = 1.0 - self_prop.*;
-    if active_view_is_tool {
-        settings_file_data.tool_view_screen_proportion = self_prop.*;
-    }
+    // // dir := ifx widen then 1.0 else -1.0;
+    // dir := 1.0;
+    // speed := 0.006 * dir;
+
+    // self_prop.* = clamp(self_prop.* + speed, 0.01, 0.99);
+    // sibling_prop.* = 1.0 - self_prop.*;
+    // if active_view_is_tool {
+    //     settings_file_data.tool_view_screen_proportion = self_prop.*;
+    // }
 }
-Widen_View :: #bake_arguments Resize_View_Horizontal(widen=true);
-Narrow_View :: #bake_arguments Resize_View_Horizontal(widen=false);
+Grab_View_Left_Side :: #bake_arguments Grab_View_Side(side=.LEFT);
+Grab_View_Right_Side :: #bake_arguments Grab_View_Side(side=.RIGHT);
+Grab_View_Bottom_Side :: #bake_arguments Grab_View_Side(side=.BOTTOM);
+Grab_View_Top_Side :: #bake_arguments Grab_View_Side(side=.TOP);
 
 Scroll_File_Buffer_Action :: (next: bool) {
     view, layer := Get_Active_Layer_Of_Type(.FILE_EDITOR);

@@ -452,23 +452,55 @@ Render_View :: (view: *View, view_id: s64, viewport_id: s64, render_pass: ViewRe
         view_layer := *view.layers[view.active_layer];
         view_active := view_id == Active_View_ID();
         if view_active {
-            bounds_ul, bounds_lr := View_Bounds(view_layer);
-            scroll_speed := settings_file_data.arrow_key_scroll_speed; 
-            if Is_Virtual_Key_Pressed(.UP) {
-                Scroll_View_Up(view_layer, bounds_ul.y, scroll_speed);
-            } 
-            if Is_Virtual_Key_Pressed(.DOWN) {
-                Scroll_View_Down(view_layer, bounds_lr.y, scroll_speed);
-            }
-            if Is_Virtual_Key_Pressed(.LEFT) {
-                Scroll_View_Left(view_layer, bounds_ul.x, scroll_speed);
-            } 
-            if Is_Virtual_Key_Pressed(.RIGHT) {
-                Scroll_View_Right(view_layer, bounds_lr.x, scroll_speed);
+            if render_pass == .BACKGROUND {
+                bounds_ul, bounds_lr := View_Bounds(view_layer);
+                scroll_speed := settings_file_data.arrow_key_scroll_speed; 
+                if Is_Virtual_Key_Pressed(.UP) {
+                    Scroll_View_Up(view_layer, bounds_ul.y, scroll_speed);
+                } 
+                if Is_Virtual_Key_Pressed(.DOWN) {
+                    Scroll_View_Down(view_layer, bounds_lr.y, scroll_speed);
+                }
+                if Is_Virtual_Key_Pressed(.LEFT) {
+                    Scroll_View_Left(view_layer, bounds_ul.x, scroll_speed);
+                } 
+                if Is_Virtual_Key_Pressed(.RIGHT) {
+                    Scroll_View_Right(view_layer, bounds_lr.x, scroll_speed);
+                }
             }
         }
         #insert #run Generate_View_Layer_Switch("Render_Layer(%, view_active, render_pass);");
+        if view_active && render_pass == .BACKGROUND && vi_mode == .RESIZE_VIEW {
+            Render_Resize_View_Interface();
+        }
     }
+}
+
+Get_Active_View_Side :: (side: Side2D, inside_buffer: s32 = 0) -> begin: IntVector2, end: IntVector2 {
+    begin, end := rendering_scissor_ul, rendering_scissor_lr;
+    if side == {
+    case .LEFT;
+        end.x = begin.x + inside_buffer;
+    case .RIGHT;
+        begin.x = end.x - inside_buffer;
+    case .TOP;
+        end.y = begin.y + inside_buffer;
+    case .BOTTOM;
+        begin.y = end.y - inside_buffer;
+    }
+    return begin, end;
+}
+
+Render_Resize_View_Interface :: () {
+    begin, end := Get_Active_View_Side(selected_view_side, 8);
+
+    whole_view_color := fRGBA.{0.7, 0.6, 0.5, 0.1};
+    Render_Quad(rendering_scissor_ul, rendering_scissor_lr, whole_view_color);
+
+    sin_xt := cast(float) sin(seconds_since_init() * 2.69);
+    alpha := Respace(sin_xt, .{-1.0, 1.0}, .{0.25, 0.6});
+    side_color := fRGBA.{0.9, 0.45, 0.6, alpha};
+    Render_Quad(begin, end, side_color);
 }
 
 // when the window is receiving no new input, we just copy the old render target to the new one. however,
@@ -1025,6 +1057,8 @@ render_full_update: bool;
 base_empty_view_id: s64;
 
 view_layer_id_counter: u32;
+
+selected_view_side: Side2D;
 
 OS_CONSOLE_LAYER :: 1;
 
