@@ -101,6 +101,19 @@ Side2D :: enum u8 {
     LEFT; TOP; RIGHT; BOTTOM;
 }
 
+Opposite :: (side: Side2D) -> Side2D {
+    if #complete side == {
+    case .LEFT; 
+        return .RIGHT;
+    case .TOP; 
+        return .BOTTOM;
+    case .RIGHT; 
+        return .LEFT;
+    case .BOTTOM;
+        return .TOP;
+    }
+}
+
 ViewportOffsetType :: enum u8 {
     PROPORTION; PIXELS;
 }

@@ -503,6 +503,66 @@ Render_Resize_View_Interface :: () {
     Render_Quad(begin, end, side_color);
 }
 
+Get_View_Edge :: (view: *View, side: Side2D) -> [2]*View {
+    side_opposite := Opposite(side);
+
+    family, success := Get_View_Family(view);
+    if success && view.viewport.offsets[side_opposite] != 0 || family.sibling.viewport.offsets[side] != 0 {
+        return .[view, family.sibling];
+    }
+
+    edge: [2]*View;
+    cur_view := view;
+    // search upward until find parent that has a right component, or if all zeroes, sibling has a left component
+    while (true) {
+        family, success := Get_View_Family(cur_view);
+        if !success then break;
+        if family.parent.viewport.offsets[side_opposite] != 0 {
+            family_of_parent, success := Get_View_Family(cur_view);                
+            edge[0] = family.parent;
+            edge[1] = family_of_parent.sibling;
+            break;
+        } else {
+            all_zero := true;
+            for 0..3 {
+                if family.parent.viewport.offsets[it] != 0 {
+                    all_zero = false;
+                    break;
+                }
+            }
+            if all_zero {
+                family_of_parent, success := Get_View_Family(cur_view);                
+                if family_of_parent.sibling.viewport.offsets[side] != 0 {
+                    edge[0] = family.parent;
+                    edge[1] = family_of_parent.sibling;
+                    break;
+                }
+            }
+        }
+        cur_view = family.parent;
+    }
+
+    return edge;
+}
+
+Rebalance_View_Edge :: (edge: *[2]*View, side: Side2D, direction: Side2D) {
+    SPEED :: 0.008;
+    side_opposite := Opposite(side);
+
+    dir := ifx direction == side_opposite then -1.0 else 1.0;
+    delta := dir * SPEED;
+
+    edge.*[0].viewport.offsets[side_opposite] = clamp(edge.*[0].viewport.offsets[side_opposite] + delta, 0, 1);
+    edge.*[1].viewport.offsets[side] = 1.0 - edge.*[0].viewport.offsets[side_opposite];
+
+    view_ids := s64.[edge.*[0] - view_pool.items.data, edge.*[1] - view_pool.items.data];    
+    if view_ids[0] == tool_view_id {
+        settings_file_data.tool_view_screen_proportion = edge.*[0].viewport.offsets[side_opposite];
+    } else if view_ids[1] == tool_view_id {
+        settings_file_data.tool_view_screen_proportion = edge.*[1].viewport.offsets[side_opposite];
+    }
+}
+
 // when the window is receiving no new input, we just copy the old render target to the new one. however,
 // for the cursor to blink we need to redraw a few things.
 Render_Partial_Update :: (view: *View, view_id: s64, viewport_id: s64, unused: *void) {
@@ -635,22 +695,28 @@ Generate_View_Layer_Switch :: (with_code: string, layer_as_pointer := true) -> s
     return builder_to_string(*builder);
 }
 
-Get_View_Pair_Sibling :: (v: *View) -> *View {
+ViewFamily :: struct {
+    self: *View;
+    sibling: *View;
+    parent: *View;
+}
+
+Get_View_Family :: (v: *View) -> family: ViewFamily, success: bool {
     parent := Get_Parent(v);
     if parent == null {
-        return null;
+        return .{}, false;
     }
     if parent.children.count < 2 || parent.layers.count != 0 {
-        return null;
+        return .{}, false;
     }
     for parent.children {
         child := *view_pool.items[it];
         if child == v then continue;
         if child.layers.count == 0 then continue;
         if child.layers[0].type == .VIM_CONSOLE then continue;
-        return child;
+        return .{v, child, parent}, true;
     }
-    return null;
+    return .{}, false;
 }
 
 Get_Parent :: inline (v: *View) -> *View {

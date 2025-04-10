@@ -10,6 +10,7 @@ Cursor_Scroll_Down :: () {
     Init_Cursor_Proc_Or_Return(true);
 
     if vi_mode == .RESIZE_VIEW {
+        Move_Edge_In_Direction(active_view, .BOTTOM);
         return;
     }
 
@@ -30,6 +31,7 @@ Cursor_Scroll_Up :: () {
     Init_Cursor_Proc_Or_Return(true);
 
     if vi_mode == .RESIZE_VIEW {
+        Move_Edge_In_Direction(active_view, .TOP);
         return;
     }
 
@@ -55,6 +57,7 @@ Cursor_Scroll_Right :: () {
     Init_Cursor_Proc_Or_Return(true);
 
     if vi_mode == .RESIZE_VIEW {
+        Move_Edge_In_Direction(active_view, .RIGHT);
         return;
     }
 
@@ -88,6 +91,7 @@ Cursor_Scroll_Left :: () {
     Init_Cursor_Proc_Or_Return(true);
 
     if vi_mode == .RESIZE_VIEW {
+        Move_Edge_In_Direction(active_view, .LEFT);
         return;
     }
 
@@ -264,6 +268,15 @@ Grab_View_Side :: (side: Side2D) {
     active_view_is_tool := Active_View_ID() == tool_view_id;
     vi_mode = .RESIZE_VIEW;
     selected_view_side = side;
+
+    // TODO:
+    // Get_Viewport_Edge :: (): given a view, and a Side2D, returns a struct with pointers to views and information about thair relationship. in other words, a struct that describes an edge. 
+    // this proc should return the views in a specific order depending on what the Side2D passed in is.
+    // LEFT: right, left
+    // RIGHT: left, right
+    // TOP: bottom, top
+    // BOTTOM: top, bottom
+    // Rebalance_Viewport_Edge :: () given a struct that describes an edge and a normalized float describing the new proportion of the first view in the edge, sets both viewports. 
 
     // sibling := ifx active_view_is_tool then *view_pool.items[base_empty_view_id] else Get_View_Pair_Sibling(active_view);
     // if sibling == null {
@@ -1289,6 +1302,19 @@ Decrease_File_Explorer_Preview_Size :: #bake_arguments Change_File_Explorer_Prev
 Increase_File_Explorer_Preview_Size :: #bake_arguments Change_File_Explorer_Preview_Size(increase=true);
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+Move_Edge_In_Direction :: (view: *View, direction: Side2D) {
+    direction_opposite := Opposite(direction);    
+    if selected_view_side != direction && selected_view_side != direction_opposite {
+        return;
+    }
+    edge := Get_View_Edge(view, selected_view_side);
+    if edge[0] == null || edge[1] == null {
+        Log_Error("unable to get edge");
+        return;
+    }
+    Rebalance_View_Edge(*edge, selected_view_side, direction);
+}
 
 Clamp_Cursor :: (cursor: *Cursor, text_buffer: *TextBuffer) {
     cursor.y = clamp(cursor.y, sdw(0), sdw(text_buffer.lines.count-1));
