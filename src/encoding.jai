@@ -3,8 +3,7 @@
 // Encode
 
 Encode :: (in: string, from: TextEncoding, to: TextEncoding, assert_no_failure := true, append_null := false, allocator := temp) -> string, bool {
-    builder: String_Builder;
-    builder.allocator = allocator;
+    text_bytes := Temp_Resize_Array(u8, in.count);
     string_index: s64;
     success := true;
     while string_index < in.count {
@@ -14,46 +13,37 @@ Encode :: (in: string, from: TextEncoding, to: TextEncoding, assert_no_failure :
             if assert_no_failure {
                 assert(false, "failed to encode from % to %", from, to);
             }
-            reset(*builder);
+            array_reset(*text_bytes);
             success = false;
             break;
         }
-        char_str := As_String(c);
-        #if DEBUG_ENCODING {
-            builder_count_before := get_base_buffer(*builder).count;
-        }
-        print_to_builder(*builder, "%", char_str);
-        #if DEBUG_ENCODING {
-            assert(builder_count_before + c.count == get_base_buffer(*builder).count);
-        }
+        Encode_Append(*text_bytes, c); 
         string_index += c.read_count;
     }
 
-    subract_null_byte_ct := 0;
+    subtract_null_byte_ct := 0;
     if append_null {
         if to == {
         case .UTF8; #through;
         case .ANSI;
-            subract_null_byte_ct = 1;
-            print_to_builder(*builder, "\0");
+            subtract_null_byte_ct = 1;
+            Encode_Repeat(*text_bytes, 0, 1);
         case .UTF16;
-            subract_null_byte_ct = 2;
-            print_to_builder(*builder, "\0\0");
+            subtract_null_byte_ct = 2;
+            Encode_Repeat(*text_bytes, 0, 2);
         case .UTF32;
-            subract_null_byte_ct = 4;
-            print_to_builder(*builder, "\0\0\0\0");
+            subtract_null_byte_ct = 4;
+            Encode_Repeat(*text_bytes, 0, 4);
         }
     }
-
-    #if DEBUG_ENCODING {
-        builder_count := get_base_buffer(*builder).count;
+    
+    str: string = ---;
+    if allocator.data == temp.data {
+        str = As_String(text_bytes);
+    } else {
+        str = copy_string(As_String(text_bytes));
     }
-    str := builder_to_string(*builder,,allocator=allocator);
-    #if DEBUG_ENCODING {
-        assert(str.count == builder_count);
-    }
-
-    str.count -= subract_null_byte_ct;
+    str.count -= subtract_null_byte_ct;
     return str, success;
 }
 
@@ -117,6 +107,27 @@ Encode :: (in: *u8, from: TextEncoding, to: TextEncoding, max_read_count := 4) -
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // helpers
+
+Encode_Append :: inline (bytes: *[..]u8, code_point: CodePoint) {
+    new_count := bytes.count + code_point.count;
+    if new_count > bytes.allocated {
+        array_reserve(bytes, max(bytes.count * 2, new_count));
+    }
+    memcpy(bytes.data + bytes.count, code_point.bytes.data, code_point.count);
+    bytes.count = new_count;
+}
+
+Encode_Repeat :: inline (bytes: *[..]u8, code_point: u8, repeat_ct: s32) {
+    if repeat_ct < 1 then return;
+    new_count := bytes.count + repeat_ct;
+    if new_count > bytes.allocated {
+        array_reserve(bytes, max(bytes.count * 2, new_count));
+    }
+    for 0..repeat_ct-1 {
+        bytes.count += 1;
+        bytes.*[bytes.count-1] = code_point;
+    }
+}
 
 As_String :: (c: CodePoint) -> string {
     return .{count=c.count, data=c.bytes.data};
@@ -451,7 +462,6 @@ Utf32_To_Ansi :: inline (b: *u8, max_read_count := 4) -> CodePoint {
     cs.encode_success = true;
     return cs;
 }
-
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // types
