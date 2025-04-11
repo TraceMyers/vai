@@ -13,6 +13,7 @@ SERIALIZE_DEBUG         :: false;
 DEBUG_BIN_POOL          :: false;
 DEBUG_UNDO_REDO         :: false;
 DEBUG_TEXT_BUFFER       :: false;
+DEBUG_VIEWS             :: true;
 
 MSAA :: 4;
 

@@ -126,15 +126,15 @@ Viewport :: struct {
     type: ViewportOffsetType;
     inverted: bool;
 
-    #place left;
-        left_pixels: s32;
-        top_pixels: s32;
-        right_pixels: s32;
-        bottom_pixels: s32;
-    #place left;
-        offsets: [4]float32;
-    #place left;
-        pixel_offsets: [4]s32;
+#place left;
+    left_pixels: s32;
+    top_pixels: s32;
+    right_pixels: s32;
+    bottom_pixels: s32;
+#place left;
+    offsets: [4]float32;
+#place left;
+    pixel_offsets: [4]s32;
 }
 
 ViewportRect :: struct {

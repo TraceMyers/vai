@@ -507,7 +507,8 @@ Get_View_Edge :: (view: *View, side: Side2D) -> [2]*View {
     side_opposite := Opposite(side);
 
     family, success := Get_View_Family(view);
-    if success && view.viewport.offsets[side_opposite] != 0 || family.sibling.viewport.offsets[side] != 0 {
+    if success && (view.viewport.offsets[side_opposite] != 0 || family.sibling.viewport.offsets[side] != 0) {
+        // Log("exiting early a: % side: %, b: %, side: %", view.viewport.offsets[side_opposite], side_opposite, family.sibling.viewport.offsets[side], side);
         return .[view, family.sibling];
     }
 
@@ -518,7 +519,7 @@ Get_View_Edge :: (view: *View, side: Side2D) -> [2]*View {
         family, success := Get_View_Family(cur_view);
         if !success then break;
         if family.parent.viewport.offsets[side_opposite] != 0 {
-            family_of_parent, success := Get_View_Family(cur_view);                
+            family_of_parent, success := Get_View_Family(family.parent);                
             edge[0] = family.parent;
             edge[1] = family_of_parent.sibling;
             break;
@@ -531,7 +532,7 @@ Get_View_Edge :: (view: *View, side: Side2D) -> [2]*View {
                 }
             }
             if all_zero {
-                family_of_parent, success := Get_View_Family(cur_view);                
+                family_of_parent, success := Get_View_Family(family.parent);                
                 if family_of_parent.sibling.viewport.offsets[side] != 0 {
                     edge[0] = family.parent;
                     edge[1] = family_of_parent.sibling;
@@ -559,7 +560,7 @@ Rebalance_View_Edge :: (edge: *[2]*View, side: Side2D, direction: Side2D) {
     if view_ids[0] == tool_view_id {
         settings_file_data.tool_view_screen_proportion = edge.*[0].viewport.offsets[side_opposite];
     } else if view_ids[1] == tool_view_id {
-        settings_file_data.tool_view_screen_proportion = edge.*[1].viewport.offsets[side_opposite];
+        settings_file_data.tool_view_screen_proportion = edge.*[1].viewport.offsets[side];
     }
 }
 
@@ -703,19 +704,27 @@ ViewFamily :: struct {
 
 Get_View_Family :: (v: *View) -> family: ViewFamily, success: bool {
     parent := Get_Parent(v);
+    parent_is_root := parent - view_pool.items.data == 0;
     if parent == null {
+        #if DEBUG_VIEWS then Log_Warning("parent is null");
         return .{}, false;
     }
     if parent.children.count < 2 || parent.layers.count != 0 {
+        #if DEBUG_VIEWS then Log_Warning("parent child count is %", parent.children.count);
         return .{}, false;
     }
     for parent.children {
         child := *view_pool.items[it];
         if child == v then continue;
-        if child.layers.count == 0 then continue;
-        if child.layers[0].type == .VIM_CONSOLE then continue;
+        if !parent_is_root {
+            if child.layers.count == 0 then continue;
+            if child.layers[0].type == .VIM_CONSOLE then continue;
+        } else {
+            if child.layers.count > 0 && child.layers[0].type == .VIM_CONSOLE then continue;
+        }
         return .{v, child, parent}, true;
     }
+    #if DEBUG_VIEWS then Log_Warning("unable to find child");
     return .{}, false;
 }
 
