@@ -28,8 +28,16 @@ Parse_And_Execute_Command :: (command_str: []u32) {
     tokens: [..][]u32;
     tokens.allocator = temp;
     Tokenize_By_Whitespace(command_str, *tokens);
-    if (tokens.count == 0) {
+    if tokens.count == 0 {
         return;
+    }
+    if tokens.count == 1 {
+        ansi_str := Encode(As_String(tokens[0]), .UTF32, .ANSI, false);
+        s32_val, success := parse_int(*ansi_str, s32);
+        if success {
+            Execute_Command_Go_To_Line(s32_val);
+            return;
+        }
     }
 
     command := Parse_Command(tokens[0]);
@@ -81,6 +89,25 @@ Parse_Command :: (str: []u32) -> Command {
 
 Execute_Command_Quit :: (args: [][]u32) {
     quit = true;
+}
+
+Execute_Command_Go_To_Line :: (line_number: s32) {
+    editor_view, editor_layer := Get_Active_Layer_Of_Type(.FILE_EDITOR);
+    if editor_layer == null {
+        return;
+    }
+    text_buffer := Layer_Text_Buffer(editor_layer);
+    if text_buffer == null {
+        return;
+    }
+    cursor := Layer_Cursor(editor_layer);
+    if cursor == null {
+        return;
+    }
+    cursor.y = clamp(line_number-1, sdw(0), sdw(text_buffer.lines.count-1));
+    line := Line_View(text_buffer, cursor.y);
+    cursor.x = Clamp_X_To_Line(cursor.target_x, line);
+    cursor.just_moved = true;
 }
 
 Execute_Command_Close :: (args: [][]u32) {
@@ -170,7 +197,7 @@ Execute_Command_Save :: (args: [][]u32) {
         Save_Buffer_To_File(file_editor_id);
     } else {
         // TODO need to copy the file buffer rather than overwriting which file it points to
-        filename := Encode(As_String(args[0]), .UTF32, .UTF8, false, context.allocator);
+        filename := Encode(As_String(args[0]), .UTF32, .UTF8, append_null=false, allocator=context.allocator);
         if filename.count != 0 {
             free(file_buffers.items[file_editor_id].file_path);
             file_buffers.items[file_editor_id].file_path = filename;
@@ -263,3 +290,4 @@ Execute_Command_Set_Options :: (args: [][]u32) {
         }
     }
 }
+

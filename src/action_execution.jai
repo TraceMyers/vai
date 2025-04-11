@@ -268,43 +268,6 @@ Grab_View_Side :: (side: Side2D) {
     active_view_is_tool := Active_View_ID() == tool_view_id;
     vi_mode = .RESIZE_VIEW;
     selected_view_side = side;
-
-    // TODO:
-    // Get_Viewport_Edge :: (): given a view, and a Side2D, returns a struct with pointers to views and information about thair relationship. in other words, a struct that describes an edge. 
-    // this proc should return the views in a specific order depending on what the Side2D passed in is.
-    // LEFT: right, left
-    // RIGHT: left, right
-    // TOP: bottom, top
-    // BOTTOM: top, bottom
-    // Rebalance_Viewport_Edge :: () given a struct that describes an edge and a normalized float describing the new proportion of the first view in the edge, sets both viewports. 
-
-    // sibling := ifx active_view_is_tool then *view_pool.items[base_empty_view_id] else Get_View_Pair_Sibling(active_view);
-    // if sibling == null {
-    //     return;
-    // }
-
-    // self_prop: *float;
-    // sibling_prop: *float;
-    // if active_view.viewport.left == 0.0 {
-    //     if active_view.viewport.right == 0.0 {
-    //         return;
-    //     }
-    //     self_prop = *active_view.viewport.right;
-    //     sibling_prop = *sibling.viewport.left;
-    // } else if active_view.viewport.right == 0.0 {
-    //     self_prop = *active_view.viewport.left;
-    //     sibling_prop = *sibling.viewport.right;
-    // }
-
-    // // dir := ifx widen then 1.0 else -1.0;
-    // dir := 1.0;
-    // speed := 0.006 * dir;
-
-    // self_prop.* = clamp(self_prop.* + speed, 0.01, 0.99);
-    // sibling_prop.* = 1.0 - self_prop.*;
-    // if active_view_is_tool {
-    //     settings_file_data.tool_view_screen_proportion = self_prop.*;
-    // }
 }
 Grab_View_Left_Side :: #bake_arguments Grab_View_Side(side=.LEFT);
 Grab_View_Right_Side :: #bake_arguments Grab_View_Side(side=.RIGHT);

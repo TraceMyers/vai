@@ -355,7 +355,7 @@ Initialize_Console :: (using os_console: *OSConsole) -> bool {
     }
 
     if success {
-        child_app_name := Encode("cmd.exe", .UTF8, .UTF16, true);
+        child_app_name := Encode("cmd.exe", .UTF8, .UTF16, append_null=true);
         process_info: PROCESS_INFORMATION;
         if !CreateProcessW(null, xx child_app_name.data, null, null, .FALSE, EXTENDED_STARTUPINFO_PRESENT, null, null, xx *startup_info, *process_info) {
             success = false;
