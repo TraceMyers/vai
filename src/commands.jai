@@ -108,6 +108,7 @@ Execute_Command_Go_To_Line :: (line_number: s32) {
     line := Line_View(text_buffer, cursor.y);
     cursor.x = Clamp_X_To_Line(cursor.target_x, line);
     cursor.just_moved = true;
+    Center_View_On_Cursor(editor_layer, xx (text_buffer.lines.count-1));
 }
 
 Execute_Command_Close :: (args: [][]u32) {
