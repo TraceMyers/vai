@@ -35,7 +35,8 @@ Create_Base_Views :: () {
     top_bar_background_color = transparent_blue.rgb;
     file_editor_background_color = .{.02, .18, .24};
     file_explorer_background_color = .{.01, .15, .22};
-    file_editor_outline_color = .{1,1,1,0.15};
+    file_editor_outline_color = .{1,1,1,0.3};
+    file_editor_line_numbers_sep_color = .{1,1,1,0.15};
 
     // root
     ROOT_ID :: 0;
@@ -508,14 +509,15 @@ Get_View_Edge :: (view: *View, side: Side2D) -> [2]*View {
 
     family, success := Get_View_Family(view);
     if success && (view.viewport.offsets[side_opposite] != 0 || family.sibling.viewport.offsets[side] != 0) {
-        // Log("exiting early a: % side: %, b: %, side: %", view.viewport.offsets[side_opposite], side_opposite, family.sibling.viewport.offsets[side], side);
         return .[view, family.sibling];
     }
 
     edge: [2]*View;
     cur_view := view;
-    // search upward until find parent that has a right component, or if all zeroes, sibling has a left component
-    while (true) {
+    // search upward until find parent that has a opposite-side component, or if all zeroes, sibling has a correct-side component. this represents having found the pair of views that determines the placement of an edge.
+    ITER_LIMIT :: 1000;
+    iter_ct := 0;
+    while (iter_ct < ITER_LIMIT) {
         family, success := Get_View_Family(cur_view);
         if !success then break;
         if family.parent.viewport.offsets[side_opposite] != 0 {
@@ -541,6 +543,7 @@ Get_View_Edge :: (view: *View, side: Side2D) -> [2]*View {
             }
         }
         cur_view = family.parent;
+        iter_ct += 1;
     }
 
     return edge;
@@ -553,7 +556,7 @@ Rebalance_View_Edge :: (edge: *[2]*View, side: Side2D, direction: Side2D) {
     dir := ifx direction == side_opposite then -1.0 else 1.0;
     delta := dir * SPEED;
 
-    edge.*[0].viewport.offsets[side_opposite] = clamp(edge.*[0].viewport.offsets[side_opposite] + delta, 0, 1);
+    edge.*[0].viewport.offsets[side_opposite] = clamp(edge.*[0].viewport.offsets[side_opposite] + delta, 0.01, .99);
     edge.*[1].viewport.offsets[side] = 1.0 - edge.*[0].viewport.offsets[side_opposite];
 
     view_ids := s64.[edge.*[0] - view_pool.items.data, edge.*[1] - view_pool.items.data];    

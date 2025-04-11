@@ -46,6 +46,7 @@ settings_file_data: SettingsFileData;
 
 file_editor_background_color: fRGB;
 file_explorer_background_color: fRGB;
+file_editor_line_numbers_sep_color: fRGBA;
 file_editor_outline_color: fRGBA;
 top_bar_background_color: fRGB;
 vim_console_background_color: fRGBA;

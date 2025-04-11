@@ -30,7 +30,7 @@ Render_File_Editor_Background :: (using file_editor: *FileEditor, is_active: boo
 Render_File_Editor_Lines :: (using file_editor: *FileEditor, is_active: bool) {
     Render_Quad_Lines(Upper_Left(), Lower_Right(), file_editor_outline_color);
     if Bool_Option_Value(.LINE_NUMBERS) {
-        Render_Gutter_Separator_Line(file_editor_outline_color);
+        Render_Gutter_Separator_Line(file_editor_line_numbers_sep_color);
     }
 }
 

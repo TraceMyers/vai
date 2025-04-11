@@ -33,7 +33,7 @@ Render_Text_End_Frame :: () {
 
 Screen_Gutter_Width :: () -> s32 {
     screen_char_width := xx prepare_text(font, "m", 0);
-    return xx (screen_char_width * gutter_char_width);
+    return xx ((screen_char_width + 2) * gutter_char_width + 2);
 }
 
 Normalized_Text_View_Window :: (view_position: Vector2, buffer: *TextBuffer) -> start: float32, end: float32 {
@@ -66,12 +66,12 @@ Initialize_Text_Renderer :: (using renderer: *TextRenderer, in_view_layer: *View
     if force_gutter_char_width >= 0 {
         screen_gutter_width = force_gutter_char_width;
     } else {
-        screen_gutter_width = screen_char_width * gutter_char_width;
+        screen_gutter_width = Screen_Gutter_Width();
     }
 
     gutter_right_pad : s32 = xx (cast(float32)screen_char_width * 0.45);
     align_info_gutter.alignment = .RIGHT;
-    align_info_gutter.screen_x = ul.x + screen_gutter_width - gutter_right_pad;
+    align_info_gutter.screen_x = ul.x + screen_gutter_width - (gutter_right_pad + (screen_char_width >> 1));
     
     align_info_main.alignment = .LEFT;
     align_info_main.screen_x = ul.x + screen_gutter_width + gutter_right_pad;
