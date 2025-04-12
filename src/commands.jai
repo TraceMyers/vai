@@ -144,7 +144,11 @@ Execute_Command_Close :: (args: [][]u32) {
     if close_object == {
     case .NONE;
     case .VIEW;
-        Close_View(Active_View_ID());
+        if Active_View_ID() == tool_view_id {
+            Execute_Command_Toggle_Tool_View(.[]);
+        } else {
+            Close_View(Active_View_ID());
+        }
     case .BUFFER;
         _, layer := Get_Active_Layer_Of_Type(.FILE_EDITOR);
         if layer != null {

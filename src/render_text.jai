@@ -21,6 +21,10 @@ Render_Text :: struct {
 
 }
 
+Width :: (font: *Dynamic_Font) -> s32 {
+    return xx prepare_text(font, "m", 0);
+}
+
 Reinitialize_Font :: () {
     Render_Text.Shutdown();
     Render_Text.Initialize();
@@ -32,7 +36,7 @@ Render_Text_End_Frame :: () {
 }
 
 Screen_Gutter_Width :: () -> s32 {
-    screen_char_width := xx prepare_text(font, "m", 0);
+    screen_char_width := Width(font);
     return xx ((screen_char_width + 2) * gutter_char_width + 2);
 }
 
@@ -62,7 +66,7 @@ Initialize_Text_Renderer :: (using renderer: *TextRenderer, in_view_layer: *View
     screen_line_height += xx (cast(float32)screen_line_height * line_spacing_factor);
     line_count = xx max((cast(float)viewport_height / cast(float)screen_line_height + 1.0), 0.0);
     if line_count == 0 then return;
-    screen_char_width = xx prepare_text(font, "m", 0);
+    screen_char_width = Width(font);
     if force_gutter_char_width >= 0 {
         screen_gutter_width = force_gutter_char_width;
     } else {

@@ -82,6 +82,9 @@ Create_Base_Views :: () {
     // empty background to stage file editors
     {
         base_empty_view_id = Add_View(.{type=.PROPORTION, right=1.0}, null, ROOT_ID);
+        // base_empty := Split_View(*view_pool.items[tool_view_id], .HORIZONTAL, false, 1.0);
+        // .{type=.PROPORTION, right=1.0}, null, ROOT_ID
+        // base_empty_view_id = base_empty - view_pool.items.data;
     }
     // default file editor
     intro_file_name := Prepare_Intro_File();
@@ -219,9 +222,10 @@ Add_View_Layer :: (v: *View, layer: *ViewLayer) {
     view_layer_id_counter += 1;
 }
 
-Split_View :: (v: *View, direction: SplitDirection, set_as_active := true) -> *View {
+Split_View :: (v: *View, direction: SplitDirection, set_as_active := true, new_proportion := 0.5) -> *View {
     parent_id := Find_Parent(v);
     assert(parent_id != -1);
+    assert(new_proportion >= 0 && new_proportion <= 1);
     parent := Get_Item(*view_pool, parent_id);
     // can't split a thing that doesn't present visually
     assert(v.active_layer < v.layers.count);
@@ -245,12 +249,13 @@ Split_View :: (v: *View, direction: SplitDirection, set_as_active := true) -> *V
     }
     new_view := Get_Item(*view_pool, new_view_id);
 
+    complement_proportion := 1.0 - new_proportion;
     if direction == .VERTICAL {
-        v.viewport.top = 0.5;
-        new_view.viewport.bottom = 0.5;
+        v.viewport.top = complement_proportion;
+        new_view.viewport.bottom = new_proportion;
     } else {
-        v.viewport.left = 0.5;
-        new_view.viewport.right = 0.5;
+        v.viewport.left = complement_proportion;
+        new_view.viewport.right = new_proportion;
     }
     return new_view;
 }
@@ -320,13 +325,29 @@ Find_Valid_Child_View_To_Make_Active :: (parent: *View) -> s64 {
     return -1;
 }
 
+Count_Layers_Of_Type :: (v: *View, type: ViewLayerType, recursive: bool) -> s64 {
+    count := 0;
+    for v.layers {
+        if it.type == type then count += 1;
+    }
+    if recursive then for v.children {
+        count += Count_Layers_Of_Type(*view_pool.items[it], type, true);
+    }
+    return count;
+}
+
 // TODO: using dependent id to clean up active view is messy
 Close_View :: (id: s64, dependent_id := -1) {
+    assert(id != tool_view_id);
     parent_id := Find_Parent(id);
     parent := Get_Item(*view_pool, parent_id);
     assert(parent.children.count > 0);
 
-    if parent.children.count == 1 && parent_id == base_empty_view_id {
+    total_file_editor_count := Count_Layers_Of_Type(*view_pool.items[base_empty_view_id], .FILE_EDITOR, true);
+    view_file_editor_count := Count_Layers_Of_Type(*view_pool.items[id], .FILE_EDITOR, true);
+    new_file_editor_count := total_file_editor_count - view_file_editor_count;
+
+    if new_file_editor_count <= 0 {
         quit = true;
     } else {
         Clear_View(id);
@@ -348,16 +369,28 @@ Close_View :: (id: s64, dependent_id := -1) {
         if parent.children.count == 0 {
             Close_View(parent_id, id);
         } else {
-            // assuming one child remaining
-            child := Get_Item(*view_pool, parent.children[0]);
-            child.viewport.left = 0.0;
-            child.viewport.right = 0.0;
-            child.viewport.top = 0.0;
-            child.viewport.bottom = 0.0;
-            child.viewport.inverted = true;
+            assert(parent.children.count == 1);
 
+            child := Get_Item(*view_pool, parent.children[0]);
             valid_active_id := Find_Valid_Child_View_To_Make_Active(parent);
             assert(valid_active_id != -1);
+
+            parent_of_parent := Get_Parent(parent);
+            replaced_parent_with_child := false;
+            if parent_of_parent != null {
+                for *parent_of_parent.children {
+                    if it.* == parent_id {
+                        child.viewport = parent.viewport;
+                        it.* = parent.children[0];
+                        parent.children.count = 0;
+                        Clear_View(parent_id);
+                        replaced_parent_with_child = true;
+                        break;
+                    }
+                }
+            } 
+            assert(replaced_parent_with_child); 
+
             for *editor_view_stack {
                 if it.* == id || it.* == dependent_id {
                     it.* = valid_active_id;
@@ -434,9 +467,14 @@ Render_Views :: (full_update: bool) {
 }
 
 Render_View :: (view: *View, view_id: s64, viewport_id: s64, render_pass: ViewRenderPass) {
+    rect := viewport_rects[viewport_id];
+    rendering_scissor_ul, rendering_scissor_lr = Viewport_Rect_Points(*rect, s32);
+    if render_pass == .BACKGROUND {
+        view.pixel_dimensions.x = rendering_scissor_lr.x - rendering_scissor_ul.x;
+        view.pixel_dimensions.y = rendering_scissor_lr.y - rendering_scissor_ul.y;
+    }
+
     if view.layers.data != null {
-        rect := viewport_rects[viewport_id];
-        rendering_scissor_ul, rendering_scissor_lr = Viewport_Rect_Points(*rect, s32);
         
         Flush_Draws();
 
@@ -446,9 +484,8 @@ Render_View :: (view: *View, view_id: s64, viewport_id: s64, render_pass: ViewRe
         case .FOREGROUND;
             // during these render passes, views must make sure their draws are dispatched while this scissor is set
             Set_Scissor(rendering_scissor_ul, rendering_scissor_lr);
-        case;
-            // the rest of the passes use the entire window as their scissor and their draws are dispatched at the end of the pass
         }
+        // the rest of the passes use the entire window as their scissor and their draws are dispatched at the end of the pass
 
         view_layer := *view.layers[view.active_layer];
         view_active := view_id == Active_View_ID();
@@ -504,15 +541,31 @@ Render_Resize_View_Interface :: () {
     Render_Quad(begin, end, side_color);
 }
 
-Get_View_Edge :: (view: *View, side: Side2D) -> [2]*View {
-    side_opposite := Opposite(side);
+Get_View_Edge :: (view: *View, side: Side2D) -> [2]*View, Side2D {
+    success: bool;
+    family: ViewFamily;
+    view_id := view - view_pool.items.data;
+    base_empty := *view_pool.items[base_empty_view_id];
 
-    family, success := Get_View_Family(view);
-    if success && (view.viewport.offsets[side_opposite] != 0 || family.sibling.viewport.offsets[side] != 0) {
-        return .[view, family.sibling];
+    if base_empty.children.count == 1 && base_empty.children[0] == view_id {
+        family.self = View_From_ID(tool_view_id);
+        family.sibling = base_empty;
+        side = Opposite(side);
+        success = view != null && family.sibling != null;
+    } else {
+        family, success = Get_View_Family(view);
     }
 
+    side_opposite := Opposite(side);
+
     edge: [2]*View;
+    if !success {
+        return edge, side;
+    }
+    if (family.self.viewport.offsets[side_opposite] != 0 || family.sibling.viewport.offsets[side] != 0) {
+        return .[family.self, family.sibling], side;
+    }
+
     cur_view := view;
     // search upward until find parent that has a opposite-side component, or if all zeroes, sibling has a correct-side component. this represents having found the pair of views that determines the placement of an edge.
     ITER_LIMIT :: 1000;
@@ -525,39 +578,48 @@ Get_View_Edge :: (view: *View, side: Side2D) -> [2]*View {
             edge[0] = family.parent;
             edge[1] = family_of_parent.sibling;
             break;
-        } else {
-            all_zero := true;
-            for 0..3 {
-                if family.parent.viewport.offsets[it] != 0 {
-                    all_zero = false;
-                    break;
-                }
-            }
-            if all_zero {
-                family_of_parent, success := Get_View_Family(family.parent);                
-                if family_of_parent.sibling.viewport.offsets[side] != 0 {
-                    edge[0] = family.parent;
-                    edge[1] = family_of_parent.sibling;
-                    break;
-                }
-            }
         }
         cur_view = family.parent;
         iter_ct += 1;
     }
 
-    return edge;
+    return edge, side;
 }
 
-Rebalance_View_Edge :: (edge: *[2]*View, side: Side2D, direction: Side2D) {
-    SPEED :: 0.008;
+Move_View_Edge :: (edge: *[2]*View, side: Side2D, direction: Side2D) {
     side_opposite := Opposite(side);
 
+    view_total_side_length: s32;
+    if side == .LEFT || side == .RIGHT {
+        view_total_side_length = edge.*[0].pixel_dimensions.x + edge.*[1].pixel_dimensions.x;
+    } else {
+        view_total_side_length = edge.*[0].pixel_dimensions.y + edge.*[1].pixel_dimensions.y;
+    }
+
+    font_width := Width(font);
+    pixel_move_speed := font_width;
+    norm_speed := cast(float)pixel_move_speed / view_total_side_length;
+
     dir := ifx direction == side_opposite then -1.0 else 1.0;
-    delta := dir * SPEED;
+    delta := dir * norm_speed;
 
     edge.*[0].viewport.offsets[side_opposite] = clamp(edge.*[0].viewport.offsets[side_opposite] + delta, 0.01, .99);
     edge.*[1].viewport.offsets[side] = 1.0 - edge.*[0].viewport.offsets[side_opposite];
+
+    view_ids := s64.[edge.*[0] - view_pool.items.data, edge.*[1] - view_pool.items.data];    
+    if view_ids[0] == tool_view_id {
+        settings_file_data.tool_view_screen_proportion = edge.*[0].viewport.offsets[side_opposite];
+    } else if view_ids[1] == tool_view_id {
+        settings_file_data.tool_view_screen_proportion = edge.*[1].viewport.offsets[side];
+    }
+}
+
+Balance_View_Edge :: (edge: *[2]*View, side: Side2D, proportion: float) {
+    assert(proportion >= 0 && proportion <= 1);
+    side_opposite := Opposite(side);
+
+    edge.*[0].viewport.offsets[side_opposite] = proportion;
+    edge.*[1].viewport.offsets[side] = 1 - proportion;
 
     view_ids := s64.[edge.*[0] - view_pool.items.data, edge.*[1] - view_pool.items.data];    
     if view_ids[0] == tool_view_id {
@@ -647,7 +709,7 @@ Walk_View_Tree :: (from_view_id: s64, Visit_Proc: (v: *View, view_id: s64, viewp
     vp_id: s64;
     do_push_viewport := !view_is_root && push_viewports;
     if do_push_viewport {
-        vp_id = Viewport_Push(view.viewport, view.layers.data != null);
+        vp_id = Viewport_Push(view.viewport, true);
     }
     defer { if do_push_viewport then Viewport_Pop(); }
 
@@ -712,7 +774,7 @@ Get_View_Family :: (v: *View) -> family: ViewFamily, success: bool {
         #if DEBUG_VIEWS then Log_Warning("parent is null");
         return .{}, false;
     }
-    if parent.children.count < 2 || parent.layers.count != 0 {
+    if parent.children.count < 1 || parent.layers.count != 0 {
         #if DEBUG_VIEWS then Log_Warning("parent child count is %", parent.children.count);
         return .{}, false;
     }
@@ -720,8 +782,11 @@ Get_View_Family :: (v: *View) -> family: ViewFamily, success: bool {
         child := *view_pool.items[it];
         if child == v then continue;
         if !parent_is_root {
-            if child.layers.count == 0 then continue;
-            if child.layers[0].type == .VIM_CONSOLE then continue;
+            if child.layers.count == 0 {
+                if child.children.count < 1 {
+                    continue;
+                }
+            } else if child.layers[0].type == .VIM_CONSOLE then continue;
         } else {
             if child.layers.count > 0 && child.layers[0].type == .VIM_CONSOLE then continue;
         }
@@ -1012,7 +1077,7 @@ View :: struct {
     layers: []ViewLayer;
     children_buffer: [VIEW_CHILDREN_MAX]s16;
     children: []s16;
-    height_in_rows: s32 = 1;
+    pixel_dimensions: IntVector2;
     active_layer: s8 = -1;
 }
 

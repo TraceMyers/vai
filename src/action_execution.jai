@@ -9,11 +9,6 @@ Action_Execution :: struct {
 Cursor_Scroll_Down :: () {
     Init_Cursor_Proc_Or_Return(true);
 
-    if vi_mode == .RESIZE_VIEW {
-        Move_Edge_In_Direction(active_view, .BOTTOM);
-        return;
-    }
-
     step_size : s32 = 1;
     if active_layer.type == {
     case .FILE_EXPLORER;
@@ -29,11 +24,6 @@ Cursor_Scroll_Down :: () {
 
 Cursor_Scroll_Up :: () {
     Init_Cursor_Proc_Or_Return(true);
-
-    if vi_mode == .RESIZE_VIEW {
-        Move_Edge_In_Direction(active_view, .TOP);
-        return;
-    }
 
     step_size : s32 = 1;
     if active_layer.type == {
@@ -55,11 +45,6 @@ Cursor_Scroll_Up :: () {
 
 Cursor_Scroll_Right :: () {
     Init_Cursor_Proc_Or_Return(true);
-
-    if vi_mode == .RESIZE_VIEW {
-        Move_Edge_In_Direction(active_view, .RIGHT);
-        return;
-    }
 
     line := Line_View(text_buffer, cursor.y);
     do_default_scroll := active_layer.type == .FILE_EDITOR || vi_mode == .INSERT;
@@ -89,11 +74,6 @@ Cursor_Scroll_Right :: () {
 
 Cursor_Scroll_Left :: () {
     Init_Cursor_Proc_Or_Return(true);
-
-    if vi_mode == .RESIZE_VIEW {
-        Move_Edge_In_Direction(active_view, .LEFT);
-        return;
-    }
 
     line := Line_View(text_buffer, cursor.y);
     do_default_scroll := active_layer.type == .FILE_EDITOR || vi_mode == .INSERT;
@@ -1266,17 +1246,33 @@ Increase_File_Explorer_Preview_Size :: #bake_arguments Change_File_Explorer_Prev
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-Move_Edge_In_Direction :: (view: *View, direction: Side2D) {
+Move_Edge_In_Direction :: (direction: Side2D) {
+    Init_Cursor_Proc_Or_Return(true);
     direction_opposite := Opposite(direction);    
     if selected_view_side != direction && selected_view_side != direction_opposite {
         return;
     }
-    edge := Get_View_Edge(view, selected_view_side);
+    edge, use_side := Get_View_Edge(active_view, selected_view_side);
     if edge[0] == null || edge[1] == null {
-        Log_Error("unable to get edge");
+        Log_Warning("unable to get edge");
         return;
     }
-    Rebalance_View_Edge(*edge, selected_view_side, direction);
+    Move_View_Edge(*edge, use_side, direction);
+}
+Move_View_Edge_Down :: #bake_arguments Move_Edge_In_Direction(direction=.BOTTOM);
+Move_View_Edge_Up :: #bake_arguments Move_Edge_In_Direction(direction=.TOP);
+Move_View_Edge_Left :: #bake_arguments Move_Edge_In_Direction(direction=.LEFT);
+Move_View_Edge_Right :: #bake_arguments Move_Edge_In_Direction(direction=.RIGHT);
+
+Set_View_Proportions_Equal :: () {
+    Init_Cursor_Proc_Or_Return(true);
+    edge, use_side := Get_View_Edge(active_view, selected_view_side);
+    if edge[0] == null || edge[1] == null {
+        Log_Warning("unable to get edge");
+        return;
+    }   
+    Balance_View_Edge(*edge, use_side, 0.5);
+    Enter_Normal_Mode();
 }
 
 Clamp_Cursor :: (cursor: *Cursor, text_buffer: *TextBuffer) {

@@ -30,7 +30,7 @@ Viewport_Push :: (v: Viewport, do_cache := false) -> s64 {
     // TODO: better validation
     if v.type == .PROPORTION {
         for o : v.offsets {
-            assert(o >= 0.0);
+            assert(o >= 0);
         }
     } else if v.type == .PIXELS {
         for o : v.offsets {
@@ -45,7 +45,6 @@ Viewport_Push :: (v: Viewport, do_cache := false) -> s64 {
                 num_nonzero += 1;
             }
         }
-        // assert(num_nonzero == 1);
     }
 
     array_add(*viewport_stack, v);
