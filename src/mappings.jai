@@ -88,24 +88,24 @@ HERE
     .{.["smart-case"],              "PATTERN_SEARCH_SMART_CASE",    .{type=.BOOL,      default_value._bool=true}},
     .{.["indent-width"],            "INDENT_WIDTH"                  .{type=.INTEGER,   default_value._integer=4}},
     .{.["auto-indent"],             "AUTO_INDENT",                  .{type=.BOOL,      default_value._bool=true}},
-    .{.["soft-wrap"],               "SOFT_WRAP",                    .{type=.BOOL,      default_value._bool=false}},
+    .{.["soft-wrap"],               "SOFT_WRAP",                    .{type=.BOOL,      default_value._bool=true}},
     .{.["soft-wrap-indent"],        "SOFT_WRAP_INDENT_WIDTH"        .{type=.INTEGER,   default_value._integer=2}},
     .{.["font-size"],               "FONT_SIZE",                    .{type=.INTEGER,   default_value._integer=14}}
 HERE
 );
 
-#insert #run Generate_Struct_Enum_Mapping("Command", u32, "CommandBinding", "COMPTIME_COMMAND_BINDINGS", TempEnumMapping(string, 1, CommandDataContainer), true, "As_Command", true,
+#insert #run Generate_Struct_Enum_Mapping("Command", u32, "CommandBinding", "COMPTIME_COMMAND_BINDINGS", TempEnumMapping(string, 2, CommandDataContainer), true, "As_Command", true,
 #string HERE
-    .{.["none"],                "NONE",                     .{}},
-    .{.["close"],               "CLOSE_OBJECT",             .{proc=Execute_Command_Close}},
-    .{.["quit"],                "QUIT",                     .{proc=Execute_Command_Quit}},
-    .{.["open"],                "OPEN_FILE",                .{proc=Execute_Command_Open}},
-    .{.["buffer-next"],         "NEXT_BUFFER",              .{proc=Execute_Command_Scroll_Buffer_Next}},
-    .{.["buffer-previous"],     "PREVIOUS_BUFFER",          .{proc=Execute_Command_Scroll_Buffer_Previous}},
-    .{.["split-vertical"],      "VERTICAL_SPLIT",           .{proc=Execute_Command_Split_Vertical}},
-    .{.["split-horizontal"],    "HORIZONTAL_SPLIT",         .{proc=Execute_Command_Split_Horizontal}},
-    .{.["set"],                 "INTERACT_WITH_OPTION",     .{proc=Execute_Command_Set_Options}},
-    .{.["save"],                "SAVE_TO_FILE",             .{proc=Execute_Command_Save}},
-    .{.["tools"],               "TOGGLE_TOOL_VIEW"          .{proc=Execute_Command_Toggle_Tool_View}}
+    .{.["none", ""],                        "NONE",                     .{}},
+    .{.["close", ""],                       "CLOSE_OBJECT",             .{proc=Execute_Command_Close}},
+    .{.["quit", ""],                        "QUIT",                     .{proc=Execute_Command_Quit}},
+    .{.["open", ""],                        "OPEN_FILE",                .{proc=Execute_Command_Open}},
+    .{.["buffer-next", "bnext"],            "NEXT_BUFFER",              .{proc=Execute_Command_Scroll_Buffer_Next}},
+    .{.["buffer-previous", "bprev"],        "PREVIOUS_BUFFER",          .{proc=Execute_Command_Scroll_Buffer_Previous}},
+    .{.["vertical-split", "vsplit"],        "VERTICAL_SPLIT",           .{proc=Execute_Command_Split_Vertical}},
+    .{.["horizontal-split", "hsplit"],      "HORIZONTAL_SPLIT",         .{proc=Execute_Command_Split_Horizontal}},
+    .{.["set", ""],                         "INTERACT_WITH_OPTION",     .{proc=Execute_Command_Set_Options}},
+    .{.["save", ""],                        "SAVE_TO_FILE",             .{proc=Execute_Command_Save}},
+    .{.["tools", ""],                       "TOGGLE_TOOL_VIEW"          .{proc=Execute_Command_Toggle_Tool_View}}
 HERE
 );

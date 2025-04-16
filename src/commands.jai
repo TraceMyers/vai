@@ -60,23 +60,28 @@ Parse_Command :: (str: []u32) -> Command {
     best_match_ct := 0;
     num_matches := 0;
     for binding : COMPTIME_COMMAND_BINDINGS {
-        match_ct := 0;
-        for i : 0..binding.input.count-1 {
-            if i >= str.count {
-                break;
-            } else if str[i] == binding.input[i]  {
-                match_ct += 1;
-            } else {
-                break;
+        for 0..binding.input.count-1 {
+            match_ct := 0;
+            binding_input := binding.input[it];
+            if binding_input.count == 0 then continue;
+            for i: 0..binding_input.count-1 {
+                if i >= str.count {
+                    break;
+                } else if str[i] == binding_input[i]  {
+                    match_ct += 1;
+                } else {
+                    break;
+                }
             }
-        }
-        if match_ct > 0 {
-            if match_ct == best_match_ct {
-                num_matches += 1;
-            } else if match_ct > best_match_ct {
-                best_match = As_Command(it_index);
-                best_match_ct = match_ct;
-                num_matches = 1;
+            if match_ct > 0 {
+                if match_ct == best_match_ct {
+                    num_matches += 1;
+                } else if match_ct > best_match_ct {
+                    best_match = As_Command(it_index);
+                    best_match_ct = match_ct;
+                    num_matches = 1;
+                }
+                break;
             }
         }
     }

@@ -6,7 +6,7 @@
 // [heavy optimization=false] or [not + debug info=true]
 debug_build := true; 
 // packaging stuff into release folder
-make_release := false; 
+make_release := false;
 // auto-places profiler hooks throughout program; profiling data is printed after a run
 do_profiling := false; 
 

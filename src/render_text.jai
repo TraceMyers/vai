@@ -100,17 +100,29 @@ Initialize_Text_Renderer :: (using renderer: *TextRenderer, in_view_layer: *View
     text_view_clip = IntVector2.{xx view_layer.view_position.x, xx view_layer.view_position.y};
 }
 
-Render_Wrapped_Line :: (renderer: *TextRenderer, color_buffer: [..]TextColorLocation, utf8_buffer: []u8, marked_utf32: []u32, render_line: *RenderLineData) {
-    remaining_utf8 := utf8_buffer;
+Render_Wrapped_Line :: (renderer: *TextRenderer, color_buffer: *[..]TextColorLocation, utf8_buffer: *[..]u8, marked_utf32: []u32, render_line: *RenderLineData) {
+    remaining_utf32 := marked_utf32;
 
     assert(render_line.total_reindent_on_wrap <= LOTTA_SPACES.count);
     indent_header := string.{render_line.total_reindent_on_wrap, LOTTA_SPACES.data};
 
+    wrapped_text_selection_begins_at := S64_MAX;
+    wrapped_text_selection_ends_at := S64_MAX;
+    if !render_line.set_wrapped_text_selection_begin {
+        if render_line.wrapped_text_selection_begin.y == render_line.line_index {
+            wrapped_text_selection_begins_at = render_line.wrapped_text_selection_begin.x;
+        }
+    }
+    if !render_line.set_wrapped_text_selection_end {
+        if render_line.wrapped_text_selection_end.y == render_line.line_index {
+            wrapped_text_selection_ends_at = render_line.wrapped_text_selection_end.x;
+        }
+    }
+
     line_wrap_ct := 0;
-    while remaining_utf8.count > 0 {
-        partial_render_buf := remaining_utf8;
-        render_remain_ct := remaining_utf8.count;
-        wrap_render_buf := remaining_utf8;
+    while remaining_utf32.count > 0 {
+        partial_render_buf := remaining_utf32;
+        render_remain_ct := remaining_utf32.count;
         use_indent_str: string;
 
         if line_wrap_ct > 0 {
@@ -123,11 +135,11 @@ Render_Wrapped_Line :: (renderer: *TextRenderer, color_buffer: [..]TextColorLoca
             partial_render_buf.count = max(max_render_with_indent_ct-1, sdw(1));
             // wrap on word. search back for space
             if partial_render_buf.count > 2 then for #v2 < 1..partial_render_buf.count-1 {
-                if partial_render_buf[it] == #char " " {
+                if Is_Whitespace(partial_render_buf[it]) {
                     // make sure we're not digging into the indent
                     maybe_split_on_space_index := it;
                     for #v2 < 0..maybe_split_on_space_index-1 {
-                        if partial_render_buf[it] != #char " " {
+                        if !Is_Whitespace(partial_render_buf[it]) {
                             partial_render_buf.count = it + 2;
                             break;
                         }
@@ -138,7 +150,7 @@ Render_Wrapped_Line :: (renderer: *TextRenderer, color_buffer: [..]TextColorLoca
         }
 
         if render_line.save_cursor_pos {
-            at_end := remaining_utf8.count == partial_render_buf.count;
+            at_end := remaining_utf32.count == partial_render_buf.count;
             if render_line.save_cursor_pos_x < partial_render_buf.count || at_end {
                 renderer.cursor_pos.y = render_line.start_line + renderer.rendered_line_count;
                 if line_wrap_ct > 0 {
@@ -152,15 +164,69 @@ Render_Wrapped_Line :: (renderer: *TextRenderer, color_buffer: [..]TextColorLoca
             }
         }
 
-        if use_indent_str.count > 0 {
-            indented := tprint("%0%", indent_header, As_String(partial_render_buf));
-            Render_Text_Line(renderer, *renderer.align_info_main, As_Array(indented, u8), color_buffer, render_line.y_offset);
-        } else {
-            Render_Text_Line(renderer, *renderer.align_info_main, partial_render_buf, color_buffer, render_line.y_offset);
+        selection_begins_in_text, selection_ends_in_text: bool;
+        selection_begins_at_end, selection_ends_at_end: bool;
+
+        selection_begins_in_text = wrapped_text_selection_begins_at < partial_render_buf.count;
+        selection_ends_in_text = wrapped_text_selection_ends_at < partial_render_buf.count;
+        if remaining_utf32.count == partial_render_buf.count {
+            selection_begins_at_end = wrapped_text_selection_begins_at == partial_render_buf.count;
+            selection_ends_at_end = wrapped_text_selection_ends_at == partial_render_buf.count;
         }
 
-        remaining_utf8.count -= partial_render_buf.count;
-        remaining_utf8.data += partial_render_buf.count;
+        if selection_begins_in_text || selection_begins_at_end {
+            if use_indent_str.count > 0 {
+                render_line.wrapped_text_selection_begin.x = xx (wrapped_text_selection_begins_at + use_indent_str.count);
+            } else {
+                render_line.wrapped_text_selection_begin.x = xx wrapped_text_selection_begins_at;
+            }
+            render_line.wrapped_text_selection_begin.y = xx renderer.rendered_line_count;
+            render_line.set_wrapped_text_selection_begin = true;
+        }
+        if selection_ends_in_text || selection_ends_at_end {
+            if use_indent_str.count > 0 {
+                render_line.wrapped_text_selection_end.x = xx (wrapped_text_selection_ends_at + use_indent_str.count);
+            } else {
+                render_line.wrapped_text_selection_end.x = xx wrapped_text_selection_ends_at;
+            }
+            render_line.wrapped_text_selection_end.y = xx renderer.rendered_line_count;
+            render_line.set_wrapped_text_selection_end = true;
+        }
+
+        Get_Unmarked_Utf8(partial_render_buf, utf8_buffer, color_buffer);
+        if use_indent_str.count > 0 {
+            indented := tprint("%0%", indent_header, As_String(utf8_buffer.*));
+            Render_Text_Line(renderer, *renderer.align_info_main, As_Array(indented, u8), color_buffer.*, render_line.y_offset);
+            if renderer.view_layer.type == .FILE_EDITOR {
+                if selection_ends_in_text || selection_ends_at_end {
+                    array_add(*renderer.view_layer.file_editor.rendered_counts_per_line, xx wrapped_text_selection_ends_at);
+                } else {
+                    array_add(*renderer.view_layer.file_editor.rendered_counts_per_line, xx (marked_utf32.count + indent_header.count));
+                }
+            }
+        } else {
+            Render_Text_Line(renderer, *renderer.align_info_main, utf8_buffer.*, color_buffer.*, render_line.y_offset);
+            if renderer.view_layer.type == .FILE_EDITOR {
+                if selection_ends_in_text || selection_ends_at_end {
+                    array_add(*renderer.view_layer.file_editor.rendered_counts_per_line, xx wrapped_text_selection_ends_at);
+                } else {
+                    array_add(*renderer.view_layer.file_editor.rendered_counts_per_line, xx marked_utf32.count);
+                }
+            }
+        }
+
+        remaining_utf32.count -= partial_render_buf.count;
+        remaining_utf32.data += partial_render_buf.count;
+        if render_line.set_wrapped_text_selection_begin {
+            wrapped_text_selection_begins_at = S64_MAX;
+        } else {
+            wrapped_text_selection_begins_at -= partial_render_buf.count;
+        }
+        if render_line.set_wrapped_text_selection_end {
+            wrapped_text_selection_ends_at = S64_MAX;
+        } else {
+            wrapped_text_selection_ends_at -= partial_render_buf.count;
+        }
         line_wrap_ct += 1;
     }
 }
@@ -184,6 +250,13 @@ Render_Text_Buffer_Lines :: (view_layer: *ViewLayer, renderer: *TextRenderer, bu
         color_buffer: [..]TextColorLocation;
         color_buffer.allocator = temp;
 
+        if view_layer && view_layer.type == .FILE_EDITOR {
+            using view_layer.file_editor;
+            text_selection_begin, text_selection_end = Cursor_Selection(layer_cursor);
+            array_reset(*rendered_counts_per_line);
+            rendered_counts_per_line.allocator = temp;
+        }
+        
         render_line: RenderLineData;
         {
             using render_line;
@@ -193,7 +266,11 @@ Render_Text_Buffer_Lines :: (view_layer: *ViewLayer, renderer: *TextRenderer, bu
             wrap_indent = Integer_Option_Value(.SOFT_WRAP_INDENT_WIDTH);
             view_width = max(rendering_scissor_lr.x - renderer.align_info_main.screen_x, sdw(1));
             wrap_max_render_character_count = view_width / renderer.screen_char_width;
-            do_line_wrap = view_layer && view_layer.type == .FILE_EDITOR && Bool_Option_Value(.SOFT_WRAP);
+            if view_layer {
+                do_line_wrap = view_layer.type == .FILE_EDITOR && Bool_Option_Value(.SOFT_WRAP);
+                wrapped_text_selection_begin = view_layer.file_editor.text_selection_begin;
+                wrapped_text_selection_end = view_layer.file_editor.text_selection_end;
+            } 
         }
 
         if render_line.layer_cursor {
@@ -228,21 +305,43 @@ Render_Text_Buffer_Lines :: (view_layer: *ViewLayer, renderer: *TextRenderer, bu
             }
 
             if (render_line.no_hz_clip || glyphs_in_view_horizontally) && marked_utf32.count != 0 {
-                Get_Unmarked_Utf8(marked_utf32, *utf8_buffer, *color_buffer);
-                // TODO: this is def just chopping up utf8 into incomprehensible bits...
-                // TODO: cursor x,y can be an output of this proc
                 if render_line.do_line_wrap {
-                    Render_Wrapped_Line(renderer, color_buffer, utf8_buffer, marked_utf32, *render_line);
+                    Render_Wrapped_Line(renderer, *color_buffer, *utf8_buffer, marked_utf32, *render_line);
                 } else {
+                    Get_Unmarked_Utf8(marked_utf32, *utf8_buffer, *color_buffer);
                     Render_Text_Line(renderer, *renderer.align_info_main, utf8_buffer, color_buffer, render_line.y_offset);
+                    if view_layer && view_layer.type == .FILE_EDITOR {
+                        using view_layer.file_editor;
+                        array_add(*rendered_counts_per_line, xx marked_utf32.count);
+                    }
                 }
             } else {
                 if render_line.save_cursor_pos {
                     renderer.cursor_pos.x = 0;
                     renderer.cursor_pos.y = render_line.start_line + renderer.rendered_line_count;
                 }
-                renderer.rendered_line_count += 1;
+                if view_layer && view_layer.type == .FILE_EDITOR {
+                    using view_layer.file_editor;
+                    array_add(*rendered_counts_per_line, 1);
+                    if render_line.do_line_wrap {
+                        if view_layer.file_editor.text_selection_begin.y == render_line.line_index {
+                            render_line.wrapped_text_selection_begin.x = 0;
+                            render_line.wrapped_text_selection_begin.y = renderer.rendered_line_count;
+                        }
+                        if view_layer.file_editor.text_selection_end.y == render_line.line_index {
+                            render_line.wrapped_text_selection_end.x = 0;
+                            render_line.wrapped_text_selection_end.y = renderer.rendered_line_count;
+                        }
+                    }
+                    renderer.rendered_line_count += 1;
+                }
             }
+        }
+
+        if view_layer {
+            using view_layer.file_editor;
+            text_selection_begin = render_line.wrapped_text_selection_begin;
+            text_selection_end = render_line.wrapped_text_selection_end;
         }
     }
 
@@ -385,16 +484,17 @@ Render_Cursor_Line_Block :: (renderer: *TextRenderer, cursor: *Cursor, alpha := 
     Flush_Draws();
 }
 
-Render_Text_Selection_Blocks :: (renderer: *TextRenderer, text_buffer: *TextBuffer, cursor: *Cursor, y_filter := -1) {
-    // if vi_mode != .VISUAL then return;
-
+Render_Text_Selection_Blocks :: (renderer: *TextRenderer, text_buffer: *TextBuffer, cursor: *Cursor) {
     Set_Shader_For_Blended_Color();
-    start, end := Cursor_Selection(cursor);
+    start, end: IntVector2;
+    if renderer.view_layer.type == .FILE_EDITOR {
+        using renderer.view_layer;
+        start, end = file_editor.text_selection_begin, file_editor.text_selection_end;
+    } else {
+        start, end = Cursor_Selection(cursor);
+    }
 
     for start.y..end.y {
-        if y_filter != -1 && it != y_filter {
-            continue;
-        }
         highlight_begin_x: s32;
         highlight_end_x: s32;
         if it == start.y {
@@ -405,7 +505,11 @@ Render_Text_Selection_Blocks :: (renderer: *TextRenderer, text_buffer: *TextBuff
         if it == end.y {
             highlight_end_x = end.x;
         } else {
-            highlight_end_x = xx Line_Count(text_buffer, it);
+            if renderer.view_layer.type == .FILE_EDITOR {
+                highlight_end_x = renderer.view_layer.file_editor.rendered_counts_per_line[it];
+            } else {
+                highlight_end_x = xx Line_Count(text_buffer, it);
+            }
         }
 
         ul_x, ul_y := Text_To_Render_Space(renderer, highlight_begin_x, it);
@@ -463,6 +567,7 @@ TextRenderer :: struct {
     // set inside Render_Text_Buffer_Lines()
     cursor_pos: IntVector2;
 }
+
 RenderLineData :: struct {
     // all lines
     layer_cursor: *Cursor;
@@ -479,6 +584,10 @@ RenderLineData :: struct {
     save_cursor_pos_x: s32;
     total_reindent_on_wrap: s32;
     y_offset: s32;
+    wrapped_text_selection_begin: IntVector2;
+    wrapped_text_selection_end: IntVector2;
+    set_wrapped_text_selection_begin: bool;
+    set_wrapped_text_selection_end: bool;
 }
 
 

@@ -14,16 +14,15 @@ Render_Layer :: (using file_editor: *FileEditor, is_active: bool, render_pass: V
 }
 
 Render_File_Editor_Background :: (using file_editor: *FileEditor, is_active: bool) {
-    Render_Quad(Upper_Left(), Lower_Right(), .{rgb=file_editor_background_color, a=1.0});
-
-    if vi_mode == .VISUAL && is_active {
+    Render_Quad(rendering_scissor_ul, rendering_scissor_lr, .{rgb=file_editor_background_color, a=1.0});
+    
+    if Bool_Option_Value(.LINE_NUMBERS) {
         renderer: TextRenderer;
         view_layer := View_Layer_From_Data(xx file_editor);
-        Initialize_Text_Renderer(*renderer, view_layer);
-        text_buffer := *file_buffers.items[file_editor.file_buffer];
-    
-        Render_Text_Selection_Blocks(*renderer, text_buffer, *cursor);
-        Set_Shader_For_Color();
+        Initialize_Text_Renderer(*renderer, view_layer, -1);
+        gutter_lower_right := rendering_scissor_lr;
+        gutter_lower_right.x = rendering_scissor_ul.x + renderer.screen_gutter_width;
+        Render_Quad(rendering_scissor_ul, gutter_lower_right, .{rgb=file_editor_background_color * 0.75, a=1.0});
     }
 }
 
@@ -76,6 +75,12 @@ Render_File_Editor_Foreground :: (using file_editor: *FileEditor, is_active: boo
     view_layer := View_Layer_From_Data(xx file_editor);
     text_buffer := *file_buffers.items[file_editor.file_buffer];
     Render_Scroll_Bar(view_layer, text_buffer);
+
+    if vi_mode == .VISUAL {
+        renderer: TextRenderer;
+        Initialize_Text_Renderer(*renderer, view_layer);
+        Render_Text_Selection_Blocks(*renderer, text_buffer, *cursor);
+    }
 }
 
 Process_Text_Input :: (using file_editor: *FileEditor, utf32: []u32) {

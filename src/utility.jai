@@ -23,6 +23,10 @@ fRGBA :: struct {
         rgb: fRGB = ---;
 }
 
+operator * :: (rgb: fRGB, x: float) -> fRGB {
+    return .{rgb.r * x, rgb.g * x, rgb.b * x};
+}
+
 fRGBA_WHITE :: fRGBA.{1,1,1,1};
 fRGB_WHITE :: fRGB.{1,1,1};
 

@@ -479,6 +479,7 @@ Render_View :: (view: *View, view_id: s64, viewport_id: s64, render_pass: ViewRe
         Flush_Draws();
 
         if render_pass == {
+        // case .BACKGROUND;   #through;
         case .IMAGES;       #through;
         case .TEXT;         #through;
         case .FOREGROUND;
@@ -668,7 +669,8 @@ Render_Partial_Update :: (view: *View, view_id: s64, viewport_id: s64, unused: *
     Set_Shader_For_Color();
     Render_Quad(full_line_ul, full_line_lr, fRGBA.{rgb=file_editor_background_color, a=1});
 
-    Render_Text_Selection_Blocks(*renderer, text_buffer, cursor, cursor.y);
+    // TODO: fix
+    // Render_Text_Selection_Blocks(*renderer, text_buffer, cursor, cursor.y);
 
     // redraw the line of text the cursor is on
     visual_line_index := cursor.y - renderer.text_view_clip.y;
@@ -1018,6 +1020,9 @@ FileEditor :: CursorLayer(
         // only used for mouse wheel scrolling or anything bound to use mouse wheel-like scrolling
         view_velocity: Vector2;
         view_max: Vector2;
+        text_selection_begin := IntVector2.{-1,-1};
+        text_selection_end := IntVector2.{-1,-1};
+        rendered_counts_per_line: [..]s32;
     }
 );
 

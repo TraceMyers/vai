@@ -24,7 +24,7 @@ Render_Layer :: (using file_explorer: *FileExplorer, is_active: bool, render_pas
 }
 
 Render_File_Explorer_Background :: (using file_explorer: *FileExplorer, is_active: bool) {
-    Render_Quad(Upper_Left(), Lower_Right(), .{rgb=file_explorer_background_color, a=1.0});
+    Render_Quad(rendering_scissor_ul, rendering_scissor_lr, .{rgb=file_explorer_background_color, a=1.0});
 }
 
 Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: bool) {
