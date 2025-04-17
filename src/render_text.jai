@@ -503,7 +503,6 @@ Render_Text_Selection_Blocks :: (renderer: *TextRenderer, text_buffer: *TextBuff
     if renderer.view_layer.type == .FILE_EDITOR {
         using renderer.view_layer;
         start, end = file_editor.text_selection_begin, file_editor.text_selection_end;
-        Log("begin: % end: %", file_editor.text_selection_begin, file_editor.text_selection_end);
     } else {
         start, end = Cursor_Selection(cursor);
     }

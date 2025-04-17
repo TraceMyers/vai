@@ -22,7 +22,14 @@ Render_File_Editor_Background :: (using file_editor: *FileEditor, is_active: boo
         Initialize_Text_Renderer(*renderer, view_layer, -1);
         gutter_lower_right := rendering_scissor_lr;
         gutter_lower_right.x = rendering_scissor_ul.x + renderer.screen_gutter_width;
-        Render_Quad(rendering_scissor_ul, gutter_lower_right, .{rgb=file_editor_background_color * 0.75, a=1.0});
+        
+        max_channel_index := Channel_Max(file_editor_background_color);
+        max_channel := file_editor_background_color.channels[max_channel_index];
+        gutter_color := file_editor_background_color * 0.72;
+        gutter_color.channels[max_channel_index] = max_channel * 0.2 + gutter_color.channels[max_channel_index] * 0.8;
+
+
+        Render_Quad(rendering_scissor_ul, gutter_lower_right, .{rgb=gutter_color, a=1.0});
     }
 }
 
@@ -66,7 +73,9 @@ Render_File_Editor_Text :: (using file_editor: *FileEditor, is_active: bool) {
         Render_Text_Cursor(*renderer, *file_editor.cursor);
     }
 
-    Render_Cursor_Line_Block(*renderer, *file_editor.cursor);
+    if vi_mode != .VISUAL {
+        Render_Cursor_Line_Block(*renderer, *file_editor.cursor);
+    }
     Set_Shader_For_Text();
 }
 

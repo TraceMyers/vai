@@ -13,6 +13,8 @@ bRGBA :: struct {
 
 fRGB :: struct {
     r, g, b: float32;
+#place r;
+    channels: [3]float32;
 }
 
 fRGBA :: struct {
@@ -26,6 +28,19 @@ fRGBA :: struct {
 operator * :: (rgb: fRGB, x: float) -> fRGB {
     return .{rgb.r * x, rgb.g * x, rgb.b * x};
 }
+
+Channel_Max :: (rgb: fRGB) -> s32 {
+    if rgb.r > rgb.g {
+        return ifx rgb.r > rgb.b then sdw(0) else sdw(2);
+    } else {
+        return ifx rgb.g > rgb.b then sdw(1) else sdw(2);
+    }
+}
+
+Channel_Average :: (rgb: fRGB) -> float {
+    return (rgb.r + rgb.g + rgb.b) * (1.0 / 3.0);
+}
+
 
 fRGBA_WHITE :: fRGBA.{1,1,1,1};
 fRGB_WHITE :: fRGB.{1,1,1};
