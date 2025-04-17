@@ -14,6 +14,7 @@ DEBUG_BIN_POOL          :: false;
 DEBUG_UNDO_REDO         :: false;
 DEBUG_TEXT_BUFFER       :: false;
 DEBUG_VIEWS             :: true;
+ALLOW_DEBUG_VIEW        :: true;
 
 MSAA :: 4;
 

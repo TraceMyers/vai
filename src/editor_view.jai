@@ -39,7 +39,6 @@ Create_Base_Views :: () {
     file_editor_line_numbers_sep_color = .{1,1,1,0.15};
 
     // root
-    ROOT_ID :: 0;
     {
         id := Add_View(.{}, null);
         assert(id == ROOT_ID);
@@ -442,6 +441,7 @@ Close_Text_Buffer :: (id: s64) {
 Render_Views :: (full_update: bool) {
     Begin_Draw_Frame(full_update);
     defer End_Draw_Frame();
+    debug_view_open = Count_Layers_Of_Type(*view_pool.items[ROOT_ID], .DEBUG, true) > 0;
     if Is_Empty(*view_pool) then return;
     
     if full_update {
@@ -475,7 +475,7 @@ Render_View :: (view: *View, view_id: s64, viewport_id: s64, render_pass: ViewRe
     }
 
     if view.layers.data != null {
-        
+
         Flush_Draws();
 
         if render_pass == {
@@ -489,6 +489,9 @@ Render_View :: (view: *View, view_id: s64, viewport_id: s64, render_pass: ViewRe
         // the rest of the passes use the entire window as their scissor and their draws are dispatched at the end of the pass
 
         view_layer := *view.layers[view.active_layer];
+        if view_layer.type == .DEBUG {
+            a := 0;
+        }
         view_active := view_id == Active_View_ID();
         if view_active {
             if render_pass == .BACKGROUND {
@@ -741,10 +744,17 @@ Generate_View_Layer_Switch :: (with_code: string, layer_as_pointer := true) -> s
     print_to_builder(*builder, "if view_layer.type == {\n");
 
     names := enum_names(ViewLayerType);
+    values := enum_values_as_enum(ViewLayerType);
+
     for names {
-        if it_index == 0 || it_index == names.count - 1{ // EMPTY layer or ALL
-            // do nothing
+        if values[it_index] == .EMPTY {
+            continue;
         } else {
+            #if !ALLOW_DEBUG_VIEW {
+                if values[it_index] == .DEBUG {
+                    continue;
+                }
+            }
             format_string := tprint("case .%; %\n", it, with_code);
             context_alloc := context.allocator;
             context.allocator = temp;
@@ -937,22 +947,17 @@ Layer_Text_Buffer :: (layer: *ViewLayer) -> *TextBuffer {
     if layer.type == {
     case .FILE_EDITOR;
         buffer_index := layer.file_editor.file_buffer;
-        if buffer_index == -1 {
-            return null;
-        } else {
+        if buffer_index != -1 {
             return *file_buffers.items[buffer_index];
         }
     case .FILE_EXPLORER;
         buffer_index := layer.file_explorer.text_buffer;
-        if buffer_index == -1 {
-            return null;
-        } else {
+        if buffer_index != -1 {
             return *file_buffers.items[buffer_index];
         }
     case .DEBUG;
-        if Active_View_Layer().type == .FILE_EDITOR {
-            buffer := *file_buffers.items[Active_View_Layer().file_editor.file_buffer];
-            return Temp_Text_Buffer(*layer.debug);
+        if layer.debug.type == .GENERAL_DEBUG || Active_View_Layer().type == .FILE_EDITOR {
+            return Debug_View_Text_Buffer(*layer.debug);
         }
     }
     return null;
@@ -1022,7 +1027,7 @@ FileEditor :: CursorLayer(
         view_max: Vector2;
         text_selection_begin := IntVector2.{-1,-1};
         text_selection_end := IntVector2.{-1,-1};
-        rendered_counts_per_line: [..]s32;
+        rendered_text_data: [..]RenderedTextData;
     }
 );
 
@@ -1073,6 +1078,7 @@ DebugViewType :: enum u8 {
     UNDO_REDO;
     BIN_POOL;
     TEXT_BUFFER;
+    GENERAL_DEBUG;
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1208,7 +1214,15 @@ view_layer_id_counter: u32;
 
 selected_view_side: Side2D;
 
+ROOT_ID :: 0;
 OS_CONSOLE_LAYER :: 1;
+
+RenderedTextData :: struct {
+    text_row: s32;
+    glyph_count: s16;
+    wrap_indent_length: s8;
+    wrapped: bool;
+}
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 

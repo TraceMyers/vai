@@ -166,12 +166,18 @@ Execute_Command_Open :: (args: [][]u32) {
     if args.count == 0 {
         return;
     }
-    _, bg_layer := Get_Active_Layer_Of_Type(.FILE_EDITOR);
+    bg_view, bg_layer := Get_Active_Layer_Of_Type(.FILE_EDITOR);
     if bg_layer == null {
         return;
     }
     filename := Encode(As_String(args[0]), .UTF32, .UTF8);
     if filename.count == 0 {
+        return;
+    }
+    if filename == "dbg" || filename == "debug" {
+        split := Split_View(bg_view, .HORIZONTAL, false);
+        split.layers[0].type = .DEBUG;
+        split.layers[0].debug = .{type=.GENERAL_DEBUG};
         return;
     }
     Open_File_In_Editor(*bg_layer.file_editor, filename, true);

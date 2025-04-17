@@ -14,10 +14,12 @@ Render_Debug_View_Text :: (using tb_view: *DebugView, is_active: bool, render_pa
     Initialize_Text_Renderer(*renderer, view_layer);
 
     text_buffer := Layer_Text_Buffer(view_layer);
-    Render_Text_Buffer_Lines(view_layer, *renderer, text_buffer, true);
+    if text_buffer != null {
+        Render_Text_Buffer_Lines(view_layer, *renderer, text_buffer, true);
+    }
 }
 
-Temp_Text_Buffer :: (using tb_view: *DebugView) -> *TextBuffer {
+Debug_View_Text_Buffer :: (using tb_view: *DebugView) -> *TextBuffer {
     buf: *TextBuffer = xx talloc(size_of(TextBuffer));
     buf.* = .{};
     Assign_Bin_Pool_Allocator(*buf.line_pool, temp);
@@ -31,9 +33,22 @@ Temp_Text_Buffer :: (using tb_view: *DebugView) -> *TextBuffer {
         Create_Debug_View_Bin_Pool(buf);
     case .TEXT_BUFFER;
         Create_Debug_View_Text_Buffer(buf);
+    case .GENERAL_DEBUG;
+        Create_General_Debug_View(buf);
     }
 
+    Debug_View_Frame_Cleanup();
+
     return buf;
+}
+
+Debug_View_Frame_Cleanup :: () {
+    if general_debug_view_text.count > 0 {
+        for *general_debug_view_text {
+            String_Reset(it);
+        }
+        array_reset(*general_debug_view_text);
+    }
 }
 
 Create_Debug_View_Text_Buffer :: (out_buffer: *TextBuffer) {
@@ -217,3 +232,22 @@ Create_Debug_View_Bin_Pool :: (out_buffer: *TextBuffer) {
     Append_Line_To_Debug_Buffer(buf, tprint("large mark:      %", large_mark));
     Append_Line_To_Debug_Buffer(buf, tprint("very large mark: %", very_large_mark));
 }
+
+Create_General_Debug_View :: (out_buffer: *TextBuffer) {
+    for general_debug_view_text {
+        Append_Line_To_Debug_Buffer(out_buffer, it);
+    }
+}
+
+Add_Debug_Text :: (text_code: $Code) #expand {
+    // todo: mutex if adding from another thread
+    #if ALLOW_DEBUG_VIEW {
+        if debug_view_open {
+            str := #insert text_code;
+            array_add(*general_debug_view_text, str);
+        }
+    }
+}
+
+general_debug_view_text: [..]string;
+debug_view_open: bool;

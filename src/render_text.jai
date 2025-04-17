@@ -192,6 +192,11 @@ Render_Wrapped_Line :: (renderer: *TextRenderer, color_buffer: *[..]TextColorLoc
             render_line.wrapped_text_selection_end.y = xx renderer.rendered_line_count;
             render_line.set_wrapped_text_selection_end = true;
         }
+    // text_row: s32;
+    // glyph_count: s16;
+    // wrap_indent_length: s8;
+    // wrapped: bool;
+        rendered_line := RenderedTextData.{render_line.line_index, 0, xx use_indent_str.count, line_wrap_ct > 0};
 
         Get_Unmarked_Utf8(partial_render_buf, utf8_buffer, color_buffer);
         if use_indent_str.count > 0 {
@@ -199,18 +204,22 @@ Render_Wrapped_Line :: (renderer: *TextRenderer, color_buffer: *[..]TextColorLoc
             Render_Text_Line(renderer, *renderer.align_info_main, As_Array(indented, u8), color_buffer.*, render_line.y_offset);
             if renderer.view_layer.type == .FILE_EDITOR {
                 if selection_ends_in_text || selection_ends_at_end {
-                    array_add(*renderer.view_layer.file_editor.rendered_counts_per_line, xx wrapped_text_selection_ends_at);
+                    rendered_line.glyph_count = xx wrapped_text_selection_ends_at;
+                    array_add(*renderer.view_layer.file_editor.rendered_text_data, rendered_line);
                 } else {
-                    array_add(*renderer.view_layer.file_editor.rendered_counts_per_line, xx (marked_utf32.count + indent_header.count));
+                    rendered_line.glyph_count = xx (partial_render_buf.count + indent_header.count);
+                    array_add(*renderer.view_layer.file_editor.rendered_text_data, rendered_line);
                 }
             }
         } else {
             Render_Text_Line(renderer, *renderer.align_info_main, utf8_buffer.*, color_buffer.*, render_line.y_offset);
             if renderer.view_layer.type == .FILE_EDITOR {
                 if selection_ends_in_text || selection_ends_at_end {
-                    array_add(*renderer.view_layer.file_editor.rendered_counts_per_line, xx wrapped_text_selection_ends_at);
+                    rendered_line.glyph_count = xx wrapped_text_selection_ends_at;
+                    array_add(*renderer.view_layer.file_editor.rendered_text_data, rendered_line);
                 } else {
-                    array_add(*renderer.view_layer.file_editor.rendered_counts_per_line, xx marked_utf32.count);
+                    rendered_line.glyph_count = xx partial_render_buf.count;
+                    array_add(*renderer.view_layer.file_editor.rendered_text_data, rendered_line);
                 }
             }
         }
@@ -253,8 +262,8 @@ Render_Text_Buffer_Lines :: (view_layer: *ViewLayer, renderer: *TextRenderer, bu
         if view_layer && view_layer.type == .FILE_EDITOR {
             using view_layer.file_editor;
             text_selection_begin, text_selection_end = Cursor_Selection(layer_cursor);
-            array_reset(*rendered_counts_per_line);
-            rendered_counts_per_line.allocator = temp;
+            array_reset(*rendered_text_data);
+            rendered_text_data.allocator = temp;
         }
         
         render_line: RenderLineData;
@@ -312,7 +321,8 @@ Render_Text_Buffer_Lines :: (view_layer: *ViewLayer, renderer: *TextRenderer, bu
                     Render_Text_Line(renderer, *renderer.align_info_main, utf8_buffer, color_buffer, render_line.y_offset);
                     if view_layer && view_layer.type == .FILE_EDITOR {
                         using view_layer.file_editor;
-                        array_add(*rendered_counts_per_line, xx marked_utf32.count);
+                        rendered_line := RenderedTextData.{render_line.line_index, xx marked_utf32.count, 0, false};
+                        array_add(*rendered_text_data, rendered_line);
                     }
                 }
             } else {
@@ -322,15 +332,18 @@ Render_Text_Buffer_Lines :: (view_layer: *ViewLayer, renderer: *TextRenderer, bu
                 }
                 if view_layer && view_layer.type == .FILE_EDITOR {
                     using view_layer.file_editor;
-                    array_add(*rendered_counts_per_line, 1);
+                    rendered_line := RenderedTextData.{render_line.line_index, 1, 0, false};
+                    array_add(*rendered_text_data, rendered_line);
                     if render_line.do_line_wrap {
                         if view_layer.file_editor.text_selection_begin.y == render_line.line_index {
                             render_line.wrapped_text_selection_begin.x = 0;
                             render_line.wrapped_text_selection_begin.y = renderer.rendered_line_count;
+                            render_line.set_wrapped_text_selection_begin = true;
                         }
                         if view_layer.file_editor.text_selection_end.y == render_line.line_index {
                             render_line.wrapped_text_selection_end.x = 0;
                             render_line.wrapped_text_selection_end.y = renderer.rendered_line_count;
+                            render_line.set_wrapped_text_selection_end = true;
                         }
                     }
                     renderer.rendered_line_count += 1;
@@ -490,6 +503,7 @@ Render_Text_Selection_Blocks :: (renderer: *TextRenderer, text_buffer: *TextBuff
     if renderer.view_layer.type == .FILE_EDITOR {
         using renderer.view_layer;
         start, end = file_editor.text_selection_begin, file_editor.text_selection_end;
+        Log("begin: % end: %", file_editor.text_selection_begin, file_editor.text_selection_end);
     } else {
         start, end = Cursor_Selection(cursor);
     }
@@ -506,7 +520,11 @@ Render_Text_Selection_Blocks :: (renderer: *TextRenderer, text_buffer: *TextBuff
             highlight_end_x = end.x;
         } else {
             if renderer.view_layer.type == .FILE_EDITOR {
-                highlight_end_x = renderer.view_layer.file_editor.rendered_counts_per_line[it];
+                using renderer.view_layer;
+                highlight_end_x = file_editor.rendered_text_data[it].glyph_count;
+                if file_editor.rendered_text_data[it].wrapped {
+                    highlight_begin_x += file_editor.rendered_text_data[it].wrap_indent_length;
+                }
             } else {
                 highlight_end_x = xx Line_Count(text_buffer, it);
             }
