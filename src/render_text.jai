@@ -100,7 +100,7 @@ Initialize_Text_Renderer :: (using renderer: *TextRenderer, in_view_layer: *View
     text_view_clip = IntVector2.{xx view_layer.view_position.x, xx view_layer.view_position.y};
 }
 
-Render_Wrapped_Line :: (renderer: *TextRenderer, color_buffer: *[..]TextColorLocation, utf8_buffer: *[..]u8, marked_utf32: []u32, render_line: *RenderLineData) {
+Render_Wrapped_Line :: (renderer: *TextRenderer, color_buffer: *[..]TextColorLocation, utf8_buffer: *[..]u8, marked_utf32: []u32, render_line: *RenderLineData, just_count_lines := false) -> s32 {
     remaining_utf32 := marked_utf32;
 
     assert(render_line.total_reindent_on_wrap <= LOTTA_SPACES.count);
@@ -119,13 +119,13 @@ Render_Wrapped_Line :: (renderer: *TextRenderer, color_buffer: *[..]TextColorLoc
         }
     }
 
-    line_wrap_ct := 0;
+    wrapped_line_ct : s32 = 0;
     while remaining_utf32.count > 0 {
         partial_render_buf := remaining_utf32;
         render_remain_ct := remaining_utf32.count;
         use_indent_str: string;
 
-        if line_wrap_ct > 0 {
+        if wrapped_line_ct > 0 {
             render_remain_ct += indent_header.count;
             use_indent_str = indent_header;
         }
@@ -149,77 +149,76 @@ Render_Wrapped_Line :: (renderer: *TextRenderer, color_buffer: *[..]TextColorLoc
             }
         }
 
-        if render_line.save_cursor_pos {
-            at_end := remaining_utf32.count == partial_render_buf.count;
-            if render_line.save_cursor_pos_x < partial_render_buf.count || at_end {
-                renderer.cursor_pos.y = render_line.start_line + renderer.rendered_line_count;
-                if line_wrap_ct > 0 {
-                    renderer.cursor_pos.x = sdw(render_line.save_cursor_pos_x + indent_header.count);
+        if !just_count_lines {
+            if render_line.save_cursor_pos {
+                at_end := remaining_utf32.count == partial_render_buf.count;
+                if render_line.save_cursor_pos_x < partial_render_buf.count || at_end {
+                    renderer.cursor_pos.y = render_line.start_line + renderer.rendered_line_count;
+                    if wrapped_line_ct > 0 {
+                        renderer.cursor_pos.x = sdw(render_line.save_cursor_pos_x + indent_header.count);
+                    } else {
+                        renderer.cursor_pos.x = sdw(render_line.save_cursor_pos_x);
+                    }
+                    render_line.save_cursor_pos = false;
                 } else {
-                    renderer.cursor_pos.x = sdw(render_line.save_cursor_pos_x);
-                }
-                render_line.save_cursor_pos = false;
-            } else {
-                render_line.save_cursor_pos_x -= sdw(partial_render_buf.count);
-            }
-        }
-
-        selection_begins_in_text, selection_ends_in_text: bool;
-        selection_begins_at_end, selection_ends_at_end: bool;
-
-        selection_begins_in_text = wrapped_text_selection_begins_at < partial_render_buf.count;
-        selection_ends_in_text = wrapped_text_selection_ends_at < partial_render_buf.count;
-        if remaining_utf32.count == partial_render_buf.count {
-            selection_begins_at_end = wrapped_text_selection_begins_at == partial_render_buf.count;
-            selection_ends_at_end = wrapped_text_selection_ends_at == partial_render_buf.count;
-        }
-
-        if selection_begins_in_text || selection_begins_at_end {
-            if use_indent_str.count > 0 {
-                render_line.wrapped_text_selection_begin.x = xx (wrapped_text_selection_begins_at + use_indent_str.count);
-            } else {
-                render_line.wrapped_text_selection_begin.x = xx wrapped_text_selection_begins_at;
-            }
-            render_line.wrapped_text_selection_begin.y = xx renderer.rendered_line_count;
-            render_line.set_wrapped_text_selection_begin = true;
-        }
-        if selection_ends_in_text || selection_ends_at_end {
-            if use_indent_str.count > 0 {
-                render_line.wrapped_text_selection_end.x = xx (wrapped_text_selection_ends_at + use_indent_str.count);
-            } else {
-                render_line.wrapped_text_selection_end.x = xx wrapped_text_selection_ends_at;
-            }
-            render_line.wrapped_text_selection_end.y = xx renderer.rendered_line_count;
-            render_line.set_wrapped_text_selection_end = true;
-        }
-    // text_row: s32;
-    // glyph_count: s16;
-    // wrap_indent_length: s8;
-    // wrapped: bool;
-        rendered_line := RenderedTextData.{render_line.line_index, 0, xx use_indent_str.count, line_wrap_ct > 0};
-
-        Get_Unmarked_Utf8(partial_render_buf, utf8_buffer, color_buffer);
-        if use_indent_str.count > 0 {
-            indented := tprint("%0%", indent_header, As_String(utf8_buffer.*));
-            Render_Text_Line(renderer, *renderer.align_info_main, As_Array(indented, u8), color_buffer.*, render_line.y_offset);
-            if renderer.view_layer.type == .FILE_EDITOR {
-                if selection_ends_in_text || selection_ends_at_end {
-                    rendered_line.glyph_count = xx wrapped_text_selection_ends_at;
-                    array_add(*renderer.view_layer.file_editor.rendered_text_data, rendered_line);
-                } else {
-                    rendered_line.glyph_count = xx (partial_render_buf.count + indent_header.count);
-                    array_add(*renderer.view_layer.file_editor.rendered_text_data, rendered_line);
+                    render_line.save_cursor_pos_x -= sdw(partial_render_buf.count);
                 }
             }
-        } else {
-            Render_Text_Line(renderer, *renderer.align_info_main, utf8_buffer.*, color_buffer.*, render_line.y_offset);
-            if renderer.view_layer.type == .FILE_EDITOR {
-                if selection_ends_in_text || selection_ends_at_end {
-                    rendered_line.glyph_count = xx wrapped_text_selection_ends_at;
-                    array_add(*renderer.view_layer.file_editor.rendered_text_data, rendered_line);
+
+            selection_begins_in_text, selection_ends_in_text: bool;
+            selection_begins_at_end, selection_ends_at_end: bool;
+
+            selection_begins_in_text = wrapped_text_selection_begins_at < partial_render_buf.count;
+            selection_ends_in_text = wrapped_text_selection_ends_at < partial_render_buf.count;
+            if remaining_utf32.count == partial_render_buf.count {
+                selection_begins_at_end = wrapped_text_selection_begins_at == partial_render_buf.count;
+                selection_ends_at_end = wrapped_text_selection_ends_at == partial_render_buf.count;
+            }
+
+            if selection_begins_in_text || selection_begins_at_end {
+                if use_indent_str.count > 0 {
+                    render_line.wrapped_text_selection_begin.x = xx (wrapped_text_selection_begins_at + use_indent_str.count);
                 } else {
-                    rendered_line.glyph_count = xx partial_render_buf.count;
-                    array_add(*renderer.view_layer.file_editor.rendered_text_data, rendered_line);
+                    render_line.wrapped_text_selection_begin.x = xx wrapped_text_selection_begins_at;
+                }
+                render_line.wrapped_text_selection_begin.y = xx (render_line.start_line + renderer.rendered_line_count);
+                render_line.set_wrapped_text_selection_begin = true;
+            }
+            if selection_ends_in_text || selection_ends_at_end {
+                if use_indent_str.count > 0 {
+                    render_line.wrapped_text_selection_end.x = xx (wrapped_text_selection_ends_at + use_indent_str.count);
+                } else {
+                    render_line.wrapped_text_selection_end.x = xx wrapped_text_selection_ends_at;
+                }
+                render_line.wrapped_text_selection_end.y = xx (render_line.start_line + renderer.rendered_line_count);
+                render_line.set_wrapped_text_selection_end = true;
+            }
+
+            rendered_line := RenderedTextData.{render_line.line_index, 0, xx use_indent_str.count, wrapped_line_ct > 0};
+
+            Get_Unmarked_Utf8(partial_render_buf, utf8_buffer, color_buffer);
+            if use_indent_str.count > 0 {
+                indented := tprint("%0%", indent_header, As_String(utf8_buffer.*));
+                Render_Text_Line(renderer, *renderer.align_info_main, As_Array(indented, u8), color_buffer.*, render_line.y_offset);
+                if renderer.view_layer.type == .FILE_EDITOR {
+                    if selection_ends_in_text || selection_ends_at_end {
+                        rendered_line.glyph_count = xx wrapped_text_selection_ends_at;
+                        array_add(*renderer.view_layer.file_editor.rendered_text_data, rendered_line);
+                    } else {
+                        rendered_line.glyph_count = xx (partial_render_buf.count + indent_header.count);
+                        array_add(*renderer.view_layer.file_editor.rendered_text_data, rendered_line);
+                    }
+                }
+            } else {
+                Render_Text_Line(renderer, *renderer.align_info_main, utf8_buffer.*, color_buffer.*, render_line.y_offset);
+                if renderer.view_layer.type == .FILE_EDITOR {
+                    if selection_ends_in_text || selection_ends_at_end {
+                        rendered_line.glyph_count = xx wrapped_text_selection_ends_at;
+                        array_add(*renderer.view_layer.file_editor.rendered_text_data, rendered_line);
+                    } else {
+                        rendered_line.glyph_count = xx partial_render_buf.count;
+                        array_add(*renderer.view_layer.file_editor.rendered_text_data, rendered_line);
+                    }
                 }
             }
         }
@@ -236,8 +235,27 @@ Render_Wrapped_Line :: (renderer: *TextRenderer, color_buffer: *[..]TextColorLoc
         } else {
             wrapped_text_selection_ends_at -= partial_render_buf.count;
         }
-        line_wrap_ct += 1;
+        wrapped_line_ct += 1;
     }
+    return wrapped_line_ct;
+}
+
+Initialize_Render_Line_Data :: (using render_line: *RenderLineData, renderer: *TextRenderer) {
+    layer_cursor = Layer_Cursor(renderer.view_layer);
+    start_line = renderer.text_view_clip.y;
+    indent_width = Integer_Option_Value(.INDENT_WIDTH);
+    wrap_indent = Integer_Option_Value(.SOFT_WRAP_INDENT_WIDTH);
+    view_width = max(rendering_scissor_lr.x - renderer.align_info_main.screen_x, sdw(1));
+    wrap_max_render_character_count = view_width / renderer.screen_char_width;
+    if renderer.view_layer {
+        do_line_wrap = Do_Line_Wrap(renderer.view_layer);
+        wrapped_text_selection_begin = renderer.view_layer.file_editor.text_selection_begin;
+        wrapped_text_selection_end = renderer.view_layer.file_editor.text_selection_end;
+    } 
+}
+
+Do_Line_Wrap :: (layer: *ViewLayer) -> bool {
+    return layer.type == .FILE_EDITOR && Bool_Option_Value(.SOFT_WRAP);
 }
 
 // TODO: soft wrap made a mess out of this
@@ -267,24 +285,21 @@ Render_Text_Buffer_Lines :: (view_layer: *ViewLayer, renderer: *TextRenderer, bu
         }
         
         render_line: RenderLineData;
-        {
-            using render_line;
-            layer_cursor = Layer_Cursor(renderer.view_layer);
-            start_line = renderer.text_view_clip.y;
-            indent_width = Integer_Option_Value(.INDENT_WIDTH);
-            wrap_indent = Integer_Option_Value(.SOFT_WRAP_INDENT_WIDTH);
-            view_width = max(rendering_scissor_lr.x - renderer.align_info_main.screen_x, sdw(1));
-            wrap_max_render_character_count = view_width / renderer.screen_char_width;
-            if view_layer {
-                do_line_wrap = view_layer.type == .FILE_EDITOR && Bool_Option_Value(.SOFT_WRAP);
-                wrapped_text_selection_begin = view_layer.file_editor.text_selection_begin;
-                wrapped_text_selection_end = view_layer.file_editor.text_selection_end;
-            } 
-        }
+        Initialize_Render_Line_Data(*render_line, renderer);
 
         if render_line.layer_cursor {
             renderer.cursor_pos = .{render_line.layer_cursor.x, render_line.layer_cursor.y};
         }
+
+        // if render_line.do_line_wrap && render_line.start_line > 0 {
+        //     marked_utf32 := Line_View(buffer, render_line.start_line - 1);
+        //     prev_line_wrap_ct := Render_Wrapped_Line(renderer, null, null, marked_utf32, *render_line, true);
+        //     if prev_line_wrap_ct > 1 {
+
+        //     }
+        // }
+
+
 
         renderer.rendered_line_count = 0;
         for 0..renderer.line_count-1 {
@@ -337,12 +352,12 @@ Render_Text_Buffer_Lines :: (view_layer: *ViewLayer, renderer: *TextRenderer, bu
                     if render_line.do_line_wrap {
                         if view_layer.file_editor.text_selection_begin.y == render_line.line_index {
                             render_line.wrapped_text_selection_begin.x = 0;
-                            render_line.wrapped_text_selection_begin.y = renderer.rendered_line_count;
+                            render_line.wrapped_text_selection_begin.y = (render_line.start_line + renderer.rendered_line_count);
                             render_line.set_wrapped_text_selection_begin = true;
                         }
                         if view_layer.file_editor.text_selection_end.y == render_line.line_index {
                             render_line.wrapped_text_selection_end.x = 0;
-                            render_line.wrapped_text_selection_end.y = renderer.rendered_line_count;
+                            render_line.wrapped_text_selection_end.y = (render_line.start_line + renderer.rendered_line_count);
                             render_line.set_wrapped_text_selection_end = true;
                         }
                     }
@@ -507,6 +522,21 @@ Render_Text_Selection_Blocks :: (renderer: *TextRenderer, text_buffer: *TextBuff
         start, end = Cursor_Selection(cursor);
     }
 
+    offset := renderer.screen_line_height / 4;
+
+    Add_Debug_Text(sprint("start: %, end: %", start, end));
+    start_ul_x, start_ul_y := Text_To_Render_Space(renderer, start.x, start.y);
+    _, start_ul_y_plus1 := Text_To_Render_Space(renderer, start.x, start.y+1);
+    end_ul_x, end_ul_y := Text_To_Render_Space(renderer, end.x, end.y);
+    Add_Debug_Text(sprint("font height: %", Integer_Option_Value(.FONT_SIZE)));
+    Add_Debug_Text(sprint("vp:    rx: %, ry: %", Upper_Left().x, Upper_Left().y));
+    Add_Debug_Text(sprint("start: rx: %, ry: %, ry/f: %", start_ul_x, start_ul_y, start_ul_y / (Integer_Option_Value(.FONT_SIZE) + offset)));
+    Add_Debug_Text(sprint("+1:    rx: %, ry: %, ry/f: %", start_ul_x, start_ul_y_plus1, start_ul_y_plus1 / (Integer_Option_Value(.FONT_SIZE) + offset)));
+    Add_Debug_Text(sprint("end:   rx: %, ry: %, ry/f: %", end_ul_x, end_ul_y, end_ul_y / (Integer_Option_Value(.FONT_SIZE) + offset)));
+    Add_Debug_Text(sprint("ys: %, datas: %", (end.y-start.y+1), renderer.view_layer.file_editor.rendered_text_data.count));
+    Add_Debug_Text(sprint("---"));
+
+    i := 0;
     for start.y..end.y {
         highlight_begin_x: s32;
         highlight_end_x: s32;
@@ -520,9 +550,9 @@ Render_Text_Selection_Blocks :: (renderer: *TextRenderer, text_buffer: *TextBuff
         } else {
             if renderer.view_layer.type == .FILE_EDITOR {
                 using renderer.view_layer;
-                highlight_end_x = file_editor.rendered_text_data[it].glyph_count;
-                if file_editor.rendered_text_data[it].wrapped {
-                    highlight_begin_x += file_editor.rendered_text_data[it].wrap_indent_length;
+                highlight_end_x = file_editor.rendered_text_data[i].glyph_count;
+                if file_editor.rendered_text_data[i].wrapped {
+                    highlight_begin_x += file_editor.rendered_text_data[i].wrap_indent_length;
                 }
             } else {
                 highlight_end_x = xx Line_Count(text_buffer, it);
@@ -532,7 +562,10 @@ Render_Text_Selection_Blocks :: (renderer: *TextRenderer, text_buffer: *TextBuff
         ul_x, ul_y := Text_To_Render_Space(renderer, highlight_begin_x, it);
         lr_x, _ := Text_To_Render_Space(renderer, highlight_end_x, it);
         lr_y := ul_y + renderer.screen_line_height;
+        Add_Debug_Text(sprint("%: x: %, uly: %, lry: %, render: %", it+1, ul_x, ul_y, lr_y, lr_y > 0));
+        if lr_y <= 5 then continue;
         Render_Quad(.{ul_x, ul_y}, .{lr_x, lr_y}, color=.{rgb=fRGB_WHITE, a=0.2});
+        i += 1;
     }
 }
 

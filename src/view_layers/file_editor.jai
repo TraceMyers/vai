@@ -163,8 +163,26 @@ View_Axis_Follow_Cursor_Smoothly :: (cursor: *Cursor, view_axis: *float, cursor_
 
 Cursor_Scroll :: (layer: *ViewLayer, renderer: *TextRenderer, text_buffer: *TextBuffer) {
     layer_cursor := Layer_Cursor(layer);
+    file_editor := layer.file_editor;
 
     IDEAL_NET_SIZE : float : 8.0;
+
+    render_line: RenderLineData;
+    Initialize_Render_Line_Data(*render_line, renderer);
+    test_min_y :=  0.0;
+    wrap_overflow_y := 0.0;
+    if render_line.do_line_wrap && render_line.start_line > 0 {
+        prev_line := render_line.start_line - 1;
+        prev_line_text := Line_View(text_buffer, prev_line);
+        prev_line_wrap_ct := Render_Wrapped_Line(renderer, null, null, prev_line_text, *render_line, true);
+        if prev_line_wrap_ct > 1 {
+            test_min_y = cast(float32)Floor(layer.view_position.y, s32);
+            if layer.view_position.y - test_min_y > 0.9999 {
+                test_min_y += 1;
+            }
+            wrap_overflow_y = xx (prev_line_wrap_ct - 1);
+        }
+    }
 
     if layer_cursor.just_moved {
         text_buffer.saved_cursor = layer_cursor.*;
@@ -213,6 +231,16 @@ Cursor_Scroll :: (layer: *ViewLayer, renderer: *TextRenderer, text_buffer: *Text
         layer.view_position.x = 0;
     } else {
         layer.view_position.x = max(layer.view_position.x, 0);
+    }
+
+    if layer.view_position.y < test_min_y {
+        file_editor.scroll_up_subposition += test_min_y - layer.view_position.y;
+        if file_editor.scroll_up_subposition >= wrap_overflow_y {
+            layer.view_position.y -= file_editor.scroll_up_subposition - wrap_overflow_y;
+            file_editor.scroll_up_subposition = 0;
+        } else {
+            layer.view_position.y = test_min_y;
+        }
     }
 }
 

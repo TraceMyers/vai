@@ -871,8 +871,40 @@ Scroll_View_Down :: (layer: *ViewLayer, y_max: float32, speed: float32) {
 }
 
 Scroll_View_Up :: (layer: *ViewLayer, y_min: float32, speed: float32) {
+    test_min_y := -FLOAT32_MAX; 
+    wrap_overflow_y := 0.0;
+    if Do_Line_Wrap(layer) {
+        renderer: TextRenderer;
+        Initialize_Text_Renderer(*renderer, layer);
+        render_line: RenderLineData;
+        Initialize_Render_Line_Data(*render_line, *renderer);
+        if render_line.start_line > 0 {
+            prev_line := render_line.start_line - 1;
+            prev_line_text := Line_View(Layer_Text_Buffer(layer), prev_line);
+            prev_line_wrap_ct := Render_Wrapped_Line(*renderer, null, null, prev_line_text, *render_line, true);
+            if prev_line_wrap_ct > 1 {
+                test_min_y = cast(float32)Floor(layer.view_position.y, s32);
+                if layer.view_position.y - test_min_y > 0.9999 {
+                    test_min_y += 1;
+                }
+                wrap_overflow_y = xx (prev_line_wrap_ct - 1);
+            }
+        }
+    }
+
     layer.view_position.y -= speed * xx delta_time;
     layer.view_position.y = max(layer.view_position.y, y_min);
+
+    if layer.view_position.y < test_min_y {
+        file_editor := *layer.file_editor;
+        file_editor.scroll_up_subposition += test_min_y - layer.view_position.y;
+        if file_editor.scroll_up_subposition >= wrap_overflow_y {
+            layer.view_position.y -= file_editor.scroll_up_subposition - wrap_overflow_y;
+            file_editor.scroll_up_subposition = 0;
+        } else {
+            layer.view_position.y = test_min_y;
+        }
+    }
 }
 
 Scroll_View_Right :: (layer: *ViewLayer, x_max: float32, speed: float32) {
@@ -1027,6 +1059,7 @@ FileEditor :: CursorLayer(
         // only used for mouse wheel scrolling or anything bound to use mouse wheel-like scrolling
         view_velocity: Vector2;
         view_max: Vector2;
+        scroll_up_subposition: float32;
         text_selection_begin := IntVector2.{-1,-1};
         text_selection_end := IntVector2.{-1,-1};
         rendered_text_data: [..]RenderedTextData;

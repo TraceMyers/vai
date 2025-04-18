@@ -171,7 +171,7 @@ FloorFunction :: enum {
 }
 
 Floor :: inline (a: $FloatType, $ToType := s32, $FUNC := FloorFunction.TOWARD_ZERO) -> ToType {
-    casted := xx a;
+    casted := cast(ToType) a;
     #if FUNC == .TOWARD_ZERO {
         return casted;
     } else {
