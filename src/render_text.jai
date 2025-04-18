@@ -346,12 +346,12 @@ Render_Text_Buffer_Lines :: (view_layer: *ViewLayer, renderer: *TextRenderer, bu
                             render_line.set_wrapped_text_selection_end = true;
                         }
                     }
-                    renderer.rendered_line_count += 1;
                 }
+                renderer.rendered_line_count += 1;
             }
         }
 
-        if view_layer {
+        if view_layer && view_layer.type == .FILE_EDITOR {
             using view_layer.file_editor;
             text_selection_begin = render_line.wrapped_text_selection_begin;
             text_selection_end = render_line.wrapped_text_selection_end;
