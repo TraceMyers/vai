@@ -1148,6 +1148,9 @@ Paste :: (after: bool) {
         Serialize_Or_Deserialize(*action_repeat_data, *start_with_newline);
     }
 
+    auto_changes_disabled = true;
+    defer auto_changes_disabled = false;
+
     paste_x := cursor.x;
     prev_count, line_added_count: s64;
     for register_lines {

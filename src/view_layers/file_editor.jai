@@ -73,7 +73,7 @@ Render_File_Editor_Text :: (using file_editor: *FileEditor, is_active: bool) {
         Render_Text_Cursor(*renderer, *file_editor.cursor);
     }
 
-    if vi_mode != .VISUAL {
+    if vi_mode != .VISUAL || !is_active {
         Render_Cursor_Line_Block(*renderer, *file_editor.cursor);
     }
     Set_Shader_For_Text();

@@ -21,6 +21,8 @@ os_console_text: TextBuffer;
 
 small_strings : BinPool(16, u8);
 
+auto_changes_disabled: bool;
+
 // NOTE TO SELF: be careful not to alias data when working with bins inline then copying into the bin
 // NOTE TO SELF: tab-expanded column is the only real column outside this file, but tab-expanded spaces are invalid to edit
 
@@ -235,7 +237,7 @@ Insert_Line :: (buffer: *TextBuffer, i: s64, is_change := true, $FOR_DEBUG := fa
     }
 
     added_indent := false;
-    if is_change {
+    if is_change && !auto_changes_disabled {
         do_auto_indent := Bool_Option_Value(.AUTO_INDENT);
         if do_auto_indent {
             indent_level := Get_Indent_Level_From_Context(buffer, i);
