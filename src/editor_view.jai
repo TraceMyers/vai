@@ -956,7 +956,9 @@ Layer_Text_Buffer :: (layer: *ViewLayer) -> *TextBuffer {
             return *file_buffers.items[buffer_index];
         }
     case .DEBUG;
-        if layer.debug.type == .GENERAL_DEBUG || Active_View_Layer().type == .FILE_EDITOR {
+        if layer.debug.type == .GENERAL_DEBUG 
+        || Active_View_Layer().type == .FILE_EDITOR 
+        || Active_View_Layer().type == .FILE_EXPLORER {
             return Debug_View_Text_Buffer(*layer.debug);
         }
     }

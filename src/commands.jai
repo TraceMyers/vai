@@ -177,7 +177,7 @@ Execute_Command_Open :: (args: [][]u32) {
     if filename == "dbg" || filename == "debug" {
         split := Split_View(bg_view, .HORIZONTAL, false);
         split.layers[0].type = .DEBUG;
-        split.layers[0].debug = .{type=.GENERAL_DEBUG};
+        split.layers[0].debug = .{type=.TEXT_BUFFER};
         return;
     }
     Open_File_In_Editor(*bg_layer.file_editor, filename, true);
