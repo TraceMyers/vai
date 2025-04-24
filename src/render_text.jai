@@ -98,6 +98,7 @@ Initialize_Text_Renderer :: (using renderer: *TextRenderer, in_view_layer: *View
 
     // which row/col of text to begin rendering = just floor the view pos
     text_view_clip = IntVector2.{xx view_layer.view_position.x, xx view_layer.view_position.y};
+    initialized = true;
 }
 
 Render_Wrapped_Line :: (renderer: *TextRenderer, color_buffer: *[..]TextColorLocation, utf8_buffer: *[..]u8, marked_utf32: []u32, render_line: *RenderLineData, just_count_lines := false) -> s32 {
@@ -252,6 +253,7 @@ Initialize_Render_Line_Data :: (using render_line: *RenderLineData, renderer: *T
         wrapped_text_selection_begin = renderer.view_layer.file_editor.text_selection_begin;
         wrapped_text_selection_end = renderer.view_layer.file_editor.text_selection_end;
     } 
+    initialized = true;
 }
 
 Do_Line_Wrap :: (layer: *ViewLayer) -> bool {
@@ -291,15 +293,17 @@ Render_Text_Buffer_Lines :: (view_layer: *ViewLayer, renderer: *TextRenderer, bu
             renderer.cursor_pos = .{render_line.layer_cursor.x, render_line.layer_cursor.y};
         }
 
-        // if render_line.do_line_wrap && render_line.start_line > 0 {
-        //     marked_utf32 := Line_View(buffer, render_line.start_line - 1);
-        //     prev_line_wrap_ct := Render_Wrapped_Line(renderer, null, null, marked_utf32, *render_line, true);
-        //     if prev_line_wrap_ct > 1 {
-
-        //     }
-        // }
-
-
+        if render_line.do_line_wrap && render_line.start_line > 0 {
+            marked_utf32 := Line_View(buffer, render_line.start_line - 1);
+            prev_line_wrap_ct := Render_Wrapped_Line(renderer, null, null, marked_utf32, *render_line, true);
+            if prev_line_wrap_ct > 1 {
+                file_editor := *view_layer.file_editor;
+                inv_ct := cast(float)prev_line_wrap_ct - file_editor.view_y_subposition;
+                renderer.screen_render_begin.y -= cast(s32)(inv_ct * cast(float)renderer.screen_line_height);
+                renderer.text_view_clip.y -= 1;
+                render_line.start_line -= 1;
+            }
+        }
 
         renderer.rendered_line_count = 0;
         for 0..renderer.line_count-1 {
@@ -550,9 +554,10 @@ Render_Text_Selection_Blocks :: (renderer: *TextRenderer, text_buffer: *TextBuff
         } else {
             if renderer.view_layer.type == .FILE_EDITOR {
                 using renderer.view_layer;
-                highlight_end_x = file_editor.rendered_text_data[i].glyph_count;
-                if file_editor.rendered_text_data[i].wrapped {
-                    highlight_begin_x += file_editor.rendered_text_data[i].wrap_indent_length;
+                idx := start.y + i;
+                highlight_end_x = file_editor.rendered_text_data[idx].glyph_count;
+                if file_editor.rendered_text_data[idx].wrapped {
+                    highlight_begin_x += file_editor.rendered_text_data[idx].wrap_indent_length;
                 }
             } else {
                 highlight_end_x = xx Line_Count(text_buffer, it);
@@ -562,7 +567,7 @@ Render_Text_Selection_Blocks :: (renderer: *TextRenderer, text_buffer: *TextBuff
         ul_x, ul_y := Text_To_Render_Space(renderer, highlight_begin_x, it);
         lr_x, _ := Text_To_Render_Space(renderer, highlight_end_x, it);
         lr_y := ul_y + renderer.screen_line_height;
-        Add_Debug_Text(sprint("%: x: %, uly: %, lry: %, render: %", it+1, ul_x, ul_y, lr_y, lr_y > 0));
+        // Add_Debug_Text(sprint("%: x: %, uly: %, lry: %, render: %", , ul_x, ul_y, lr_y, lr_y > 0));
         if lr_y <= 5 then continue;
         Render_Quad(.{ul_x, ul_y}, .{lr_x, lr_y}, color=.{rgb=fRGB_WHITE, a=0.2});
         i += 1;
@@ -616,6 +621,7 @@ TextRenderer :: struct {
     selection: TextSelection;
     // set inside Render_Text_Buffer_Lines()
     cursor_pos: IntVector2;
+    initialized: bool;
 }
 
 RenderLineData :: struct {
@@ -638,6 +644,7 @@ RenderLineData :: struct {
     wrapped_text_selection_end: IntVector2;
     set_wrapped_text_selection_begin: bool;
     set_wrapped_text_selection_end: bool;
+    initialized: bool;
 }
 
 

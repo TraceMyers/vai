@@ -161,7 +161,7 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
     }
     Flush_Draws();
 
-    Cursor_Scroll(View_Layer_From_Data(xx file_explorer), *renderer, buf);
+    View_Scroll(View_Layer_From_Data(xx file_explorer), *renderer, buf);
 
     if file_explorer.cursor.y == 0 {
         if vi_mode == .NORMAL {
