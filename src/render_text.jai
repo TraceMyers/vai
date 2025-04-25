@@ -90,6 +90,7 @@ Initialize_Text_Renderer :: (using renderer: *TextRenderer, in_view_layer: *View
 
     // base render y origin = one line below the top of the viewport (origin of glyph = bottom left of its rect)
     screen_render_begin.y = ul.y + screen_line_height;
+
     // adjust it upward depending on how much of the line is clipped
     row_render_floor := cast(float32)(cast(s32)view_layer.view_position.y);
     row_render_mod_flt := view_layer.view_position.y - row_render_floor;
@@ -99,6 +100,18 @@ Initialize_Text_Renderer :: (using renderer: *TextRenderer, in_view_layer: *View
     // which row/col of text to begin rendering = just floor the view pos
     text_view_clip = IntVector2.{xx view_layer.view_position.x, xx view_layer.view_position.y};
     initialized = true;
+
+    if in_view_layer.type == .FILE_EDITOR && Bool_Option_Value(.SOFT_WRAP) && in_view_layer.file_editor.file_buffer >= 0 {
+        render_line: RenderLineData;
+        Initialize_Render_Line_Data(*render_line, renderer);
+        first_rendered_line_text := Line_View(Layer_Text_Buffer(in_view_layer), render_line.start_line);
+        first_rendered_line_row_ct := cast(float)Render_Wrapped_Line(renderer, null, null, first_rendered_line_text, *render_line, true);
+        if first_rendered_line_row_ct > 1 {
+            row_render_mod_flt = (view_layer.view_position.y - row_render_floor) * cast(float)first_rendered_line_row_ct;
+            row_render_mod = cast(s32)(row_render_mod_flt * xx screen_line_height);
+            screen_render_begin.y = ul.y + screen_line_height - row_render_mod;
+        }
+    }
 }
 
 Render_Wrapped_Line :: (renderer: *TextRenderer, color_buffer: *[..]TextColorLocation, utf8_buffer: *[..]u8, marked_utf32: []u32, render_line: *RenderLineData, just_count_lines := false) -> s32 {
@@ -291,18 +304,6 @@ Render_Text_Buffer_Lines :: (view_layer: *ViewLayer, renderer: *TextRenderer, bu
 
         if render_line.layer_cursor {
             renderer.cursor_pos = .{render_line.layer_cursor.x, render_line.layer_cursor.y};
-        }
-
-        if render_line.do_line_wrap && render_line.start_line > 0 {
-            marked_utf32 := Line_View(buffer, render_line.start_line - 1);
-            prev_line_wrap_ct := Render_Wrapped_Line(renderer, null, null, marked_utf32, *render_line, true);
-            if prev_line_wrap_ct > 1 {
-                file_editor := *view_layer.file_editor;
-                inv_ct := cast(float)prev_line_wrap_ct - file_editor.view_y_subposition;
-                renderer.screen_render_begin.y -= cast(s32)(inv_ct * cast(float)renderer.screen_line_height);
-                renderer.text_view_clip.y -= 1;
-                render_line.start_line -= 1;
-            }
         }
 
         renderer.rendered_line_count = 0;

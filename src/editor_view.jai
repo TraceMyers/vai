@@ -856,102 +856,75 @@ View_Layer_From_Data :: (data: *ViewLayerData) -> *ViewLayer {
     return xx byte_ptr;
 }
 
-Init_File_Editor_View_Move_Wrapped :: () #expand {
-    assert(`layer.type == .FILE_EDITOR);
-    `local_renderer: TextRenderer;
-    `local_render_line: RenderLineData;
-    if `renderer == null {
-        `renderer = *local_renderer;
-    }
-    if !`renderer.initialized {
-        Initialize_Text_Renderer(`renderer, `layer);
-    }
-    if `render_line == null {
-        `render_line = *local_render_line;
-    }
-    if !`render_line.initialized {
-        Initialize_Render_Line_Data(`render_line, `renderer);
-    }
-}
-
-File_Editor_View_Move_Wrapped_Part_1 :: (layer: *ViewLayer) -> float32, float32 {
-    if layer.type != .FILE_EDITOR {
-        return 0, 0;
-    }
-    floored_view_y := 0.0;
-    prev_line_wrap_ct := 0.0;
-    if Do_Line_Wrap(layer) {
+Move_View_Y :: (layer: *ViewLayer, row_delta: float32, y_lim: float32, $_DIR: enum {UP; DOWN;}) {
+    if Bool_Option_Value(.SOFT_WRAP) && layer.type == .FILE_EDITOR {
         renderer: TextRenderer;
         Initialize_Text_Renderer(*renderer, layer);
         render_line: RenderLineData;
         Initialize_Render_Line_Data(*render_line, *renderer);
-        if render_line.start_line > 0 {
-            prev_line := render_line.start_line - 1;
-            prev_line_text := Line_View(Layer_Text_Buffer(layer), prev_line);
-            prev_line_row_ct := Render_Wrapped_Line(*renderer, null, null, prev_line_text, *render_line, true);
-            if prev_line_row_ct > 1 {
-                floored_view_y = cast(float32)Floor(layer.view_position.y, s32);
-                prev_line_wrap_ct = xx (prev_line_row_ct - 1);
-            }
-        }
-    }
-    return floored_view_y, prev_line_wrap_ct;
-}
+        line := render_line.start_line;
 
-File_Editor_View_Move_Wrapped :: (layer: *ViewLayer, new_y: float32, renderer: *TextRenderer = null, render_line: *RenderLineData = null) {
-    floored_view_y, prev_line_wrap_ct := File_Editor_View_Move_Wrapped_Part_1(layer);
+        row_delta_remain := row_delta;
+        init_base_y_whole := cast(float)Floor(layer.view_position.y);
 
-    scroll_up := new_y < layer.view_position.y;
-    old_y_s32 := cast(s32)layer.view_position.y;
-    new_y_s32 := cast(s32)new_y;
-    layer.view_position.y = new_y;
+        ITER_MAX :: 99;
+        for 0..ITER_MAX {
+            line_text := Line_View(Layer_Text_Buffer(layer), line);
+            line_row_ct_s32 := Render_Wrapped_Line(*renderer, null, null, line_text, *render_line, true);
+            line_row_ct_s32 = max(line_row_ct_s32, sdw(1));
+            line_row_ct := cast(float)line_row_ct_s32;
+            linear_delta := row_delta_remain / cast(float)line_row_ct;
 
-    if layer.type != .FILE_EDITOR {
-        return;
-    }
-
-    file_editor := *layer.file_editor;
-    if abs(old_y_s32 - new_y_s32) == 1 && !scroll_up {
-        floored_view_y, prev_line_wrap_ct := File_Editor_View_Move_Wrapped_Part_1(layer);
-        continuous_diff := layer.view_position.y - floored_view_y;
-        Log("prev line wrap ct: %, continuous diff: %, subpos: %", prev_line_wrap_ct, continuous_diff, layer.file_editor.view_y_subposition);
-        layer.file_editor.view_y_subposition = abs(prev_line_wrap_ct - continuous_diff);
-        if file_editor.view_y_subposition <= 0 {
-            Log("d");
-            layer.view_position.y += -file_editor.view_y_subposition;
-            file_editor.view_y_subposition = 0;
-        }
-    } else {
-        Log("b");
-        if scroll_up {
-            if floored_view_y != 0 && layer.view_position.y < floored_view_y {
-                file_editor.view_y_subposition += floored_view_y - layer.view_position.y;
-                if file_editor.view_y_subposition >= prev_line_wrap_ct {
-                    Log("b");
-                    layer.view_position.y -= file_editor.view_y_subposition - prev_line_wrap_ct;
-                    file_editor.view_y_subposition = 0;
-                } else {
-                    Log("c");
-                    layer.view_position.y = floored_view_y;
+            #if _DIR == .UP {
+                base_y_whole := init_base_y_whole - cast(float)it;
+                new_y := layer.view_position.y - linear_delta;
+                remain := base_y_whole - new_y;
+                if remain < 0 {
+                    layer.view_position.y = new_y;
+                    break;
+                }
+                layer.view_position.y = base_y_whole;
+                row_delta_remain = remain * cast(float)line_row_ct;
+                line -= 1;
+                if line < 0 {
+                    break;
                 }
             } else {
-                file_editor.view_y_subposition = 0;
-            }
-        } else  {
-            if floored_view_y != 0 && layer.view_position.y >= floored_view_y && file_editor.view_y_subposition > 0 {
-                file_editor.view_y_subposition += floored_view_y - layer.view_position.y;
-                if file_editor.view_y_subposition <= 0 {
-                    Log("d");
-                    layer.view_position.y += -file_editor.view_y_subposition;
-                    file_editor.view_y_subposition = 0;
-                } else {
-                    Log("e");
-                    layer.view_position.y = floored_view_y;
+                base_y_whole := cast(float)Floor(layer.view_position.y);
+                next_y_whole := base_y_whole + 1.0;
+                new_y := layer.view_position.y + linear_delta;
+                remain := new_y - next_y_whole;
+                if remain < 0 {
+                    layer.view_position.y = new_y;
+                    break;
+                }
+                layer.view_position.y = next_y_whole;
+                row_delta_remain = remain * cast(float)line_row_ct;
+                line += 1;
+                if line >= Layer_Text_Buffer(layer).lines.count {
+                    break;
                 }
             }
         }
+        // nearest_whole_y := cast(float)Round_Away_From_Zero(layer.view_position.y);
+        // whole_y_diff := abs(nearest_whole_y - layer.view_position.y);
+        // if whole_y_diff < row_delta * (1.0 / 10.0) && whole_y_diff > 0.0001 {
+        //     layer.view_position.y = nearest_whole_y;
+        // }
+    } else {
+        #if _DIR == .UP {
+            layer.view_position.y -= row_delta;
+        } else {
+            layer.view_position.y += row_delta;
+        }
+    }
+    #if _DIR == .UP {
+        layer.view_position.y = max(layer.view_position.y, y_lim);
+    } else {
+        layer.view_position.y = min(layer.view_position.y, y_lim);
     }
 }
+
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // a view may adjust its own scissor, but if this is called during a render pass that uses the entire window as the scissor, it's the responsibility of that view to set it back.
@@ -962,19 +935,13 @@ Set_View_Scissor :: (ul: IntVector2, lr: IntVector2) {
 }
 
 Scroll_View_Down :: (layer: *ViewLayer, y_max: float32, speed: float32) {
-    new_y := layer.view_position.y;
-    new_y += speed * xx delta_time;
-    new_y = min(new_y, y_max);
-
-    File_Editor_View_Move_Wrapped(layer, new_y);
+    row_delta := speed * xx delta_time;
+    Move_View_Y(layer, row_delta, y_max, .DOWN);
 }
 
 Scroll_View_Up :: (layer: *ViewLayer, y_min: float32, speed: float32) {
-    new_y := layer.view_position.y;
-    new_y -= speed * xx delta_time;
-    new_y = max(new_y, y_min);
-
-    File_Editor_View_Move_Wrapped(layer, new_y);
+    row_delta := speed * xx delta_time;
+    Move_View_Y(layer, row_delta, y_min, .UP);
 }
 
 Scroll_View_Right :: (layer: *ViewLayer, x_max: float32, speed: float32) {
@@ -1129,7 +1096,6 @@ FileEditor :: CursorLayer(
         // only used for mouse wheel scrolling or anything bound to use mouse wheel-like scrolling
         view_velocity: Vector2;
         view_max: Vector2;
-        view_y_subposition: float32;
         text_selection_begin := IntVector2.{-1,-1};
         text_selection_end := IntVector2.{-1,-1};
         rendered_text_data: [..]RenderedTextData;

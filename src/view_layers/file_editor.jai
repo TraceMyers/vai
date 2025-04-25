@@ -79,6 +79,10 @@ Render_File_Editor_Text :: (using file_editor: *FileEditor, is_active: bool) {
         Render_Cursor_Line_Block(*renderer, *file_editor.cursor);
     }
     Set_Shader_For_Text();
+
+    if is_active {
+        Add_Debug_Text(sprint("view y: %", view_layer.view_position.y));
+    }
 }
 
 Render_File_Editor_Foreground :: (using file_editor: *FileEditor, is_active: bool) {
@@ -220,8 +224,17 @@ View_Scroll :: (layer: *ViewLayer, renderer: *TextRenderer, text_buffer: *TextBu
         layer.view_position.x = max(layer.view_position.x, 0);
     }
 
-    if layer.view_position.y != new_y {
-        File_Editor_View_Move_Wrapped(layer, new_y);
+    y_delta := new_y - layer.view_position.y;
+    y_delta_abs := abs(y_delta);
+    if y_delta_abs > 0 {
+        if y_delta > 0 {
+            text_buffer := Layer_Text_Buffer(layer);
+            if text_buffer {
+                Move_View_Y(layer, y_delta_abs, xx (text_buffer.lines.count-1), .DOWN);
+            }
+        } else {
+            Move_View_Y(layer, y_delta_abs, 0, .UP);
+        }
     }
 }
 
