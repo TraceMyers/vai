@@ -114,11 +114,15 @@ Initialize_Text_Renderer :: (using renderer: *TextRenderer, in_view_layer: *View
     }
 }
 
-Render_Wrapped_Line :: (renderer: *TextRenderer, color_buffer: *[..]TextColorLocation, utf8_buffer: *[..]u8, marked_utf32: []u32, render_line: *RenderLineData, just_count_lines := false) -> s32 {
+Render_Wrapped_Line :: (renderer: *TextRenderer, color_buffer: *[..]TextColorLocation, utf8_buffer: *[..]u8, marked_utf32: []u32, render_line: *RenderLineData, just_count_lines := false, out_row_lengths: *[..]s32 = null) -> s32 {
     remaining_utf32 := marked_utf32;
 
     assert(render_line.total_reindent_on_wrap <= LOTTA_SPACES.count);
     indent_header := string.{render_line.total_reindent_on_wrap, LOTTA_SPACES.data};
+
+    if out_row_lengths {
+        array_reset_keeping_memory(out_row_lengths);
+    }
 
     wrapped_text_selection_begins_at := S64_MAX;
     wrapped_text_selection_ends_at := S64_MAX;
@@ -161,6 +165,10 @@ Render_Wrapped_Line :: (renderer: *TextRenderer, color_buffer: *[..]TextColorLoc
                     break;
                 }
             }
+        }
+
+        if out_row_lengths {
+            array_add(out_row_lengths, sdw(partial_render_buf.count));
         }
 
         if !just_count_lines {
