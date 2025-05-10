@@ -50,3 +50,7 @@ file_editor_line_numbers_sep_color: fRGBA;
 file_editor_outline_color: fRGBA;
 top_bar_background_color: fRGB;
 vim_console_background_color: fRGBA;
+
+debug_switch_1: bool;
+debug_switch_2: bool;
+debug_switch_3: bool;

@@ -1,9 +1,16 @@
 
 Action_Execution :: struct {
-
     Initialize :: () {}
-
     Shutdown :: () {}
+}
+
+Get_Soft_Wrap_Row_Lengths :: (layer: *ViewLayer, line: s64, out_lengths: *[..]s32) {
+    renderer: TextRenderer;
+    Initialize_Text_Renderer(*renderer, layer);
+    render_line: RenderLineData;
+    Initialize_Render_Line_Data(*render_line, *renderer);
+    line_text := Line_View(Layer_Text_Buffer(layer), line);
+    Render_Wrapped_Line(*renderer, null, null, line_text, *render_line, true, out_lengths);
 }
 
 Cursor_Scroll_Down :: () {
@@ -14,32 +21,27 @@ Cursor_Scroll_Down :: () {
     case .FILE_EDITOR;
         do_simple_scroll := true;
         if Bool_Option_Value(.SOFT_WRAP) {
-            // TODO: serialize for repeats
-            renderer: TextRenderer;
-            Initialize_Text_Renderer(*renderer, active_layer);
-            render_line: RenderLineData;
-            Initialize_Render_Line_Data(*render_line, *renderer);
-            line := cursor.y;
-            line_text := Line_View(text_buffer, line);
-            row_lengths: [..]s32;
-            row_lengths.allocator = temp;
-            Render_Wrapped_Line(*renderer, null, null, line_text, *render_line, true, *row_lengths);
+            row_lengths := Temp_Resize_Array(s32);
+            Get_Soft_Wrap_Row_Lengths(active_layer, cursor.y, *row_lengths);
             if row_lengths.count > 1 {
-                in_row_x := cursor.x;
+                row_length_sum : s32 = 0;
                 for 0..row_lengths.count-1 {
-                    row_length := row_lengths[it];
-                    if in_row_x < row_length {
+                    row_length_sum += row_lengths[it];
+                    x_in_row := row_lengths[it] - (row_length_sum - cursor.x);
+                    if cursor.x < row_length_sum {
                         if it < row_lengths.count-1 {
                             do_simple_scroll = false;
-                            remain_in_row := row_lengths[it] - in_row_x;
-                            cursor.x += remain_in_row + in_row_x;
+                            prev_cursor_x := cursor.x;
+                            if x_in_row >= row_lengths[it+1] {
+                                cursor.x = row_length_sum + row_lengths[it+1];
+                            } else {
+                                cursor.x += row_lengths[it];
+                            }
                         } else {
-                            cursor.x = in_row_x;
+                            cursor.x = x_in_row;
                             cursor.target_x = cursor.x;
                         }
                         break; 
-                    } else {
-                        in_row_x -= row_lengths[it];
                     }
                 }
             }
@@ -64,6 +66,10 @@ Cursor_Scroll_Down :: () {
     Add_Cursor_Move_Artifact(cursor, .SCROLL_DOWN);
 }
 
+// 0 1 2 3
+//     4 5
+//     6 7
+
 Cursor_Scroll_Up :: () {
     Init_Cursor_Proc_Or_Return(true);
 
@@ -72,16 +78,8 @@ Cursor_Scroll_Up :: () {
     case .FILE_EDITOR;
         do_simple_scroll := true;
         if Bool_Option_Value(.SOFT_WRAP) {
-            // TODO: serialize for repeats
-            renderer: TextRenderer;
-            Initialize_Text_Renderer(*renderer, active_layer);
-            render_line: RenderLineData;
-            Initialize_Render_Line_Data(*render_line, *renderer);
-            line := cursor.y;
-            line_text := Line_View(text_buffer, line);
-            row_lengths: [..]s32;
-            row_lengths.allocator = temp;
-            Render_Wrapped_Line(*renderer, null, null, line_text, *render_line, true, *row_lengths);
+            row_lengths := Temp_Resize_Array(s32); 
+            Get_Soft_Wrap_Row_Lengths(active_layer, cursor.y, *row_lengths);
             if row_lengths.count > 0 {
                 in_row_x := cursor.x;
                 for 0..row_lengths.count-1 {
@@ -93,9 +91,9 @@ Cursor_Scroll_Up :: () {
                             cursor.x -= prev_row_right_side_ct + in_row_x;
                         } else {
                             cursor.x = in_row_x;
-                            if line > 0 {
-                                prev_line_text := Line_View(text_buffer, line-1);
-                                Render_Wrapped_Line(*renderer, null, null, prev_line_text, *render_line, true, *row_lengths);
+                            if cursor.y > 0 {
+                                prev_line_text := Line_View(text_buffer, cursor.y-1);
+                                Get_Soft_Wrap_Row_Lengths(active_layer, cursor.y-1, *row_lengths);
                                 x_sum : s32 = 0;
                                 if row_lengths.count > 1 {
                                     for 0..row_lengths.count-2 {
@@ -267,27 +265,10 @@ Scroll_To_Next_Editor :: () {
     Init_Cursor_Proc_Or_Return(true);
 
     if active_layer.type == .FILE_EXPLORER {
-        // tool_view := *view_pool.items[tool_view_id];
-        // base_empty_view := *view_pool.items[base_empty_view_id];
-        // screen_proportion := *settings_file_data.tool_view_screen_proportion;
-        // screen_proportion.* = clamp(screen_proportion.*, 0.05, 1.0);
-        // if tool_view_is_active {
-            tool_view_is_active = false;
-            // tool_view.viewport.left = 0.0;
-            // base_empty_view.viewport.right = 1.0;
-            Pop_Active_View_ID();
-        // } else {
-        //     tool_view_is_active = true;
-        //     tool_view.viewport.left = screen_proportion.*;
-        //     base_empty_view.viewport.right = 1.0 - screen_proportion.*;
-        //     tool_view.layers[tool_view.active_layer].need_reinit = true;
-        //     Push_Active_View_ID(tool_view_id);
-        // }
-        // unused: [][]u32;
-        // Execute_Command_Toggle_Tool_View(unused);
+        tool_view_is_active = false;
+        Pop_Active_View_ID();
         return;
     }
-
 
     //  --- proc specific stuff ---
     EditorSortInfo :: struct {

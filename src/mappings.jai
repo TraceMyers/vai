@@ -90,7 +90,7 @@ HERE
     .{.["auto-indent"],             "AUTO_INDENT",                  .{type=.BOOL,      default_value._bool=true}},
     .{.["soft-wrap"],               "SOFT_WRAP",                    .{type=.BOOL,      default_value._bool=true}},
     .{.["soft-wrap-indent"],        "SOFT_WRAP_INDENT_WIDTH"        .{type=.INTEGER,   default_value._integer=2}},
-    .{.["font-size"],               "FONT_SIZE",                    .{type=.INTEGER,   default_value._integer=14}}
+    .{.["font-size"],               "FONT_SIZE",                    .{type=.INTEGER,   default_value._integer=14}},
 HERE
 );
 

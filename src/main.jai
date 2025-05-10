@@ -2,7 +2,6 @@
 // TODO: apparently, memory leak when pasting ~10 lines of text ~1k times. OR, absurd numbers
 // of temp allocations are being made but not reset because we're still on the same frame.
 // either way. it freezes up.
-// TODO: font scaling in a not ugly way - how to use scale + loaded font sizes effectively
 // NOTE: put off options implementations for a while, because there are a lot of non-vim and vim options that could be brought together in a nice way, but it's probably hard to see until having gone without it for a bit.
 // TODO: cursor.just_moved isn't handled right
 // TODO: backslash escaping (... rethink?)
@@ -29,6 +28,9 @@
 //                 - loading of this needs to be async so it doesn't halt scrolling
 // TODO: file buffer hotkeys, like control groups in an rts
 // TODO: file buffer thread safety. disallow utf32 buffer usage outside main thread
+// TODO: undo/redo is broken
+// TODO: view scrolling is broken
+// TODO: cursor target x broken (only soft wrap?)
 
 quit: bool;
 exe_path: string;
