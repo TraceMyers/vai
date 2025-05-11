@@ -4,15 +4,6 @@ Action_Execution :: struct {
     Shutdown :: () {}
 }
 
-Get_Soft_Wrap_Row_Lengths :: (layer: *ViewLayer, line: s64, out_lengths: *[..]s32) {
-    renderer: TextRenderer;
-    Initialize_Text_Renderer(*renderer, layer);
-    render_line: RenderLineData;
-    Initialize_Render_Line_Data(*render_line, *renderer);
-    line_text := Line_View(Layer_Text_Buffer(layer), line);
-    Render_Wrapped_Line(*renderer, null, null, line_text, *render_line, true, out_lengths);
-}
-
 Cursor_Scroll_Down :: () {
     Init_Cursor_Proc_Or_Return(true);
 
@@ -20,31 +11,8 @@ Cursor_Scroll_Down :: () {
     if active_layer.type == {
     case .FILE_EDITOR;
         do_simple_scroll := true;
-        if Bool_Option_Value(.SOFT_WRAP) {
-            row_lengths := Temp_Resize_Array(s32);
-            Get_Soft_Wrap_Row_Lengths(active_layer, cursor.y, *row_lengths);
-            if row_lengths.count > 1 {
-                row_length_sum : s32 = 0;
-                for 0..row_lengths.count-1 {
-                    row_length_sum += row_lengths[it];
-                    x_in_row := row_lengths[it] - (row_length_sum - cursor.x);
-                    if cursor.x < row_length_sum {
-                        if it < row_lengths.count-1 {
-                            do_simple_scroll = false;
-                            prev_cursor_x := cursor.x;
-                            if x_in_row >= row_lengths[it+1] {
-                                cursor.x = row_length_sum + row_lengths[it+1];
-                            } else {
-                                cursor.x += row_lengths[it];
-                            }
-                        } else {
-                            cursor.x = x_in_row;
-                            cursor.target_x = cursor.x;
-                        }
-                        break; 
-                    }
-                }
-            }
+        if executing_action == .SCROLL_DOWN && Bool_Option_Value(.SOFT_WRAP) {
+            do_simple_scroll = Soft_Wrap_Scroll_Down(active_layer, cursor);
         }
         if do_simple_scroll {
             cursor.y = min(cursor.y + 1, sdw(max(text_buffer.lines.count-1, 0)));
@@ -66,10 +34,6 @@ Cursor_Scroll_Down :: () {
     Add_Cursor_Move_Artifact(cursor, .SCROLL_DOWN);
 }
 
-// 0 1 2 3
-//     4 5
-//     6 7
-
 Cursor_Scroll_Up :: () {
     Init_Cursor_Proc_Or_Return(true);
 
@@ -77,39 +41,8 @@ Cursor_Scroll_Up :: () {
     if active_layer.type == {
     case .FILE_EDITOR;
         do_simple_scroll := true;
-        if Bool_Option_Value(.SOFT_WRAP) {
-            row_lengths := Temp_Resize_Array(s32); 
-            Get_Soft_Wrap_Row_Lengths(active_layer, cursor.y, *row_lengths);
-            if row_lengths.count > 0 {
-                in_row_x := cursor.x;
-                for 0..row_lengths.count-1 {
-                    row_length := row_lengths[it];
-                    if in_row_x < row_length {
-                        if it > 0 {
-                            do_simple_scroll = false;
-                            prev_row_right_side_ct := row_lengths[it-1] - in_row_x;
-                            cursor.x -= prev_row_right_side_ct + in_row_x;
-                        } else {
-                            cursor.x = in_row_x;
-                            if cursor.y > 0 {
-                                prev_line_text := Line_View(text_buffer, cursor.y-1);
-                                Get_Soft_Wrap_Row_Lengths(active_layer, cursor.y-1, *row_lengths);
-                                x_sum : s32 = 0;
-                                if row_lengths.count > 1 {
-                                    for 0..row_lengths.count-2 {
-                                        x_sum += row_lengths[it];
-                                    }
-                                    cursor.x += x_sum;
-                                }
-                            }
-                            cursor.target_x = cursor.x;
-                        }
-                        break; 
-                    } else {
-                        in_row_x -= row_lengths[it];
-                    }
-                }
-            }
+        if Bool_Option_Value(.SOFT_WRAP) && executing_action == .SCROLL_UP {
+            do_simple_scroll = Soft_Wrap_Scroll_Up(active_layer, cursor);
         }
         if do_simple_scroll {
             cursor.y = max(cursor.y-1, sdw(0));
@@ -1497,6 +1430,80 @@ File_Explorer_Clamp_Y_To_Directory_List :: (cursor: *Cursor, set_to_min := false
     } else {
         cursor.y = min(cursor.y, sdw(directory_list.count + 1));
     }
+}
+
+Get_Soft_Wrap_Row_Lengths :: (layer: *ViewLayer, line: s64, out_lengths: *[..]s32) {
+    renderer: TextRenderer;
+    Initialize_Text_Renderer(*renderer, layer);
+    render_line: RenderLineData;
+    Initialize_Render_Line_Data(*render_line, *renderer);
+    line_text := Line_View(Layer_Text_Buffer(layer), line);
+    Render_Wrapped_Line(*renderer, null, null, line_text, *render_line, true, out_lengths);
+}
+
+Soft_Wrap_Scroll_Down :: (active_layer: *ViewLayer, cursor: *Cursor) -> do_simple_scroll: bool {
+    do_simple_scroll := true;
+    row_lengths := Temp_Resize_Array(s32);
+    Get_Soft_Wrap_Row_Lengths(active_layer, cursor.y, *row_lengths);
+    if row_lengths.count > 1 {
+        row_length_sum : s32 = 0;
+        for 0..row_lengths.count-1 {
+            row_length_sum += row_lengths[it];
+            x_in_row := row_lengths[it] - (row_length_sum - cursor.x);
+            if cursor.x < row_length_sum {
+                if it < row_lengths.count-1 {
+                    do_simple_scroll = false;
+                    prev_cursor_x := cursor.x;
+                    if x_in_row >= row_lengths[it+1] {
+                        cursor.x = row_length_sum + row_lengths[it+1];
+                    } else {
+                        cursor.x += row_lengths[it];
+                    }
+                } else {
+                    cursor.x = x_in_row;
+                    cursor.target_x = cursor.x;
+                }
+                break; 
+            }
+        }
+    }
+    return do_simple_scroll;
+}
+
+Soft_Wrap_Scroll_Up :: (active_layer: *ViewLayer, cursor: *Cursor) -> do_simple_scroll: bool {
+    do_simple_scroll := true;
+    row_lengths := Temp_Resize_Array(s32); 
+    Get_Soft_Wrap_Row_Lengths(active_layer, cursor.y, *row_lengths);
+    if row_lengths.count > 0 {
+        in_row_x := cursor.x;
+        for 0..row_lengths.count-1 {
+            row_length := row_lengths[it];
+            if in_row_x < row_length {
+                if it > 0 {
+                    do_simple_scroll = false;
+                    prev_row_right_side_ct := row_lengths[it-1] - in_row_x;
+                    cursor.x -= prev_row_right_side_ct + in_row_x;
+                } else {
+                    cursor.x = in_row_x;
+                    if cursor.y > 0 {
+                        Get_Soft_Wrap_Row_Lengths(active_layer, cursor.y-1, *row_lengths);
+                        x_sum : s32 = 0;
+                        if row_lengths.count > 1 {
+                            for 0..row_lengths.count-2 {
+                                x_sum += row_lengths[it];
+                            }
+                            cursor.x += x_sum;
+                        }
+                    }
+                    cursor.target_x = cursor.x;
+                }
+                break; 
+            } else {
+                in_row_x -= row_lengths[it];
+            }
+        }
+    }
+    return do_simple_scroll;
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -245,12 +245,14 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
                 action_repeat_data.mode_switch = .SERIALIZE;
                 action_input_string = it.input;
 
+                executing_action = it.action;
                 for 0..repeat_ct-1 {
                     action_repeat_data.deserialize_offset = 0;
                     action_iteration = xx it;
                     action_executor_proc();
                     action_repeat_data.mode_switch = .DESERIALIZE;
                 }
+                executing_action = .NONE;
 
                 action_input_string = u32.[];
 
@@ -606,6 +608,7 @@ action_iteration: s32;
 repeating_action: bool;
 
 action_input_string: []u32;
+executing_action := Action.NONE;
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 
