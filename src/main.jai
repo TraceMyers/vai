@@ -28,9 +28,10 @@
 //                 - loading of this needs to be async so it doesn't halt scrolling
 // TODO: file buffer hotkeys, like control groups in an rts
 // TODO: file buffer thread safety. disallow utf32 buffer usage outside main thread
-// TODO: undo/redo is broken
 // TODO: view scrolling is broken
 // TODO: cursor target x broken (only soft wrap?)
+// TODO: automated tester + write some tests
+//      - should be its own program, have ability to set static and runtime params, build/run, and give inputs just like a user
 
 quit: bool;
 exe_path: string;

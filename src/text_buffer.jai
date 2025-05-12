@@ -237,9 +237,9 @@ Insert_Line :: (buffer: *TextBuffer, i: s64, is_change := true, $FOR_DEBUG := fa
     }
 
     added_indent := false;
-    if is_change && !auto_changes_disabled {
+    if is_change {
         do_auto_indent := Bool_Option_Value(.AUTO_INDENT);
-        if do_auto_indent {
+        if !auto_changes_disabled && do_auto_indent {
             indent_level := Get_Indent_Level_From_Context(buffer, i);
             if indent_level > 0 {
                 for 0..indent_level-1 {
