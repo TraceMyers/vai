@@ -45,3 +45,9 @@ target_link_libraries(vai_scene_preview_smoke_test PRIVATE tinyusdz_static)
 set_target_properties(vai_scene_preview_smoke_test PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output
 )
+
+add_executable(vai_image_preview_gl_smoke_test vai_image_preview_gl_smoke_test.cpp)
+target_link_libraries(vai_image_preview_gl_smoke_test PRIVATE opengl32 gdi32 user32)
+set_target_properties(vai_image_preview_gl_smoke_test PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output
+)

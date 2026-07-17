@@ -195,8 +195,17 @@ Render_Scene_Triangle_List :: (vertices: *void, vertex_count: s64, vertex_stride
 }
 
 Set_Parameter_On_All_Shaders :: ($PARAM_NAME: string, m: Matrix4) {
+    // Uniform locations belong to the program that created them.  The old
+    // implementation issued every update against whichever program happened
+    // to be bound, which only worked when drivers coincidentally assigned the
+    // same location to every shader's mvp uniform.
+    active_shader := current_shader;
     for unique_shaders {
+        glUseProgram(it.id);
         Set_Shader_Parameter(it, PARAM_NAME, m);
+    }
+    if active_shader != null {
+        glUseProgram(active_shader.id);
     }
 }
 
