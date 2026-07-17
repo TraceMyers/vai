@@ -1068,7 +1068,10 @@ Layer_Render_Line_Y_Offset :: (layer: *ViewLayer, line: s32) -> s32 {
             return -Integer_Option_Value(.FONT_SIZE) >> 1;
         }
     case .PROJECT_EXPLORER;
-        if line >= 2 {
+        // Project config views have a status row between their heading and
+        // files, so use the normal line rhythm there. The project root keeps
+        // the file-explorer-style compact listing.
+        if layer.project_explorer.directory.count == 0 && line >= 2 {
             return -Integer_Option_Value(.FONT_SIZE) >> 1;
         }
     }

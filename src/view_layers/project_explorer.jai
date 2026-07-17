@@ -101,9 +101,11 @@ Render_Project_Explorer_Text :: (project_explorer: *ProjectExplorer, is_active: 
         label := ifx project_explorer.directory == project_state.config_directory
             then "[current project]"
             else "[open project]";
-        // Text_To_Render_Space returns a glyph baseline, one rendered row
-        // below the cursor-block origin for this blank backing line.
-        _, label_y := Text_To_Render_Space(*renderer, 0, 2);
+        // Match the regular text renderer's second row, including scrolling,
+        // instead of placing this custom label on a compressed file row.
+        _, label_y := Text_To_Render_Space(*renderer, 0, 1);
+        label_y += renderer.screen_line_height * 3 / 4;
+        label_y -= Layer_Render_Line_Y_Offset(view_layer, 1);
         Render_Text_String_At(label, renderer.align_info_main.screen_x, label_y, color=.{rgb=fRGB_WHITE, a=0.45});
     }
 
