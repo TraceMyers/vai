@@ -46,6 +46,8 @@ Graphics_Backend :: struct {
         overall_success &= success;
         text_shader, success = Create_Shader(TEXT_VERTEX_SHADER, TEXT_FRAGMENT_SHADER);
         overall_success &= success;
+        image_shader, success = Create_Shader(TEXT_VERTEX_SHADER, IMAGE_FRAGMENT_SHADER);
+        overall_success &= success;
 
         if !overall_success {
             Log_Error("failed compiling shaders or creating shader objects");
@@ -54,6 +56,7 @@ Graphics_Backend :: struct {
 
         basic_color_shader.uniform_mvp_loc = glGetUniformLocation(basic_color_shader.id, temp_c_string("mvp"));
         text_shader.uniform_mvp_loc = glGetUniformLocation(text_shader.id, temp_c_string("mvp"));
+        image_shader.uniform_mvp_loc = glGetUniformLocation(image_shader.id, temp_c_string("mvp"));
         // turn off default attribute locations for shaders that don't have those attributes
         basic_color_shader.uv_loc = -1;
 
@@ -66,10 +69,12 @@ Graphics_Backend :: struct {
         alpha_blend_color_shader.blend_style = .ALPHA_BLEND;
         invert_color_shader.blend_style = .INVERT_COLOR_BEHIND;
         text_shader.blend_style = .ALPHA_BLEND;
+        image_shader.blend_style = .ALPHA_BLEND;
         line_shader.blend_style = .ALPHA_BLEND;
         line_shader.draw_style = .LINES;
 
         text_shader.texture_sampler_loc = glGetUniformLocation(text_shader.id, "text_sampler");
+        image_shader.texture_sampler_loc = glGetUniformLocation(image_shader.id, "image_sampler");
 
         vertices.data = vertex_buffer.data;
 
@@ -153,6 +158,14 @@ Set_Shader_For_Lines :: inline ()           { Use_Shader(*line_shader);         
 Set_Shader_For_Blended_Color :: inline ()   { Use_Shader(*alpha_blend_color_shader); }
 Set_Shader_For_Color_Inversion :: inline () { Use_Shader(*invert_color_shader);      }
 Set_Shader_For_Text :: inline ()            { Use_Shader(*text_shader);              }
+Set_Shader_For_Image :: inline ()           { Use_Shader(*image_shader);             }
+
+Set_Image_Shader_Texture :: (texture: u32) {
+    Set_Shader_For_Image();
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glUniform1i(image_shader.texture_sampler_loc, 0);
+}
 
 Set_Parameter_On_All_Shaders :: ($PARAM_NAME: string, m: Matrix4) {
     for unique_shaders {
@@ -445,6 +458,23 @@ HERE
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+IMAGE_FRAGMENT_SHADER :: #string HERE
+#version 330 core
+
+out vec4 color;
+
+in vec2 tex_coords;
+in vec4 f_color;
+
+uniform sampler2D image_sampler;
+
+void main() {
+    color = texture(image_sampler, tex_coords) * f_color;
+}
+HERE
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 gl_context: HGLRC;
 device_context: HDC;
 chosen_msaa: s32;
@@ -454,8 +484,9 @@ basic_color_shader: Shader;
 alpha_blend_color_shader: Shader;
 invert_color_shader: Shader;
 text_shader: Shader;
+image_shader: Shader;
 line_shader: Shader;
-unique_shaders := *Shader.[*basic_color_shader, *text_shader];
+unique_shaders := *Shader.[*basic_color_shader, *text_shader, *image_shader];
 
 va: u32; // vertex array
 vb: u32; // vertex buffer

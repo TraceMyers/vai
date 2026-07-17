@@ -112,6 +112,7 @@ Vai_Main :: () {
 #import "Bit_Operations";
 #import "Hash_Table";
 #import "File_Utilities";
+#import "stb_image";
 #if OS == .WINDOWS {
     #import "Windows";
     #import "Windows_Resources";
@@ -152,6 +153,7 @@ GetConsoleWindow :: () -> HWND #foreign kernel32;
 #load "view_layers/file_editor.jai";
 #load "view_layers/top_bar.jai";
 #load "view_layers/vim_console.jai";
+#load "explorer_preview.jai";
 #load "view_layers/file_explorer.jai";
 #load "view_layers/project_explorer.jai";
 #load "view_layers/debug.jai";

@@ -87,6 +87,8 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
     Set_Shader_For_Blended_Color();
 
     clear_file_explorer_preview := true;
+    selected_preview_kind := FileExplorerPreviewKind.NONE;
+    selected_preview_path := "";
     line_y : s32 = 2;
 
     for item : directory_list {
@@ -114,36 +116,24 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
         }
         succeess, left, ext := split_from_right(item.name, #char ".");
         if ext.count > 0 {
-            try_load_preview: bool;
+            ext = To_Lower_Temp(ext);
+            preview_kind := File_Explorer_Preview_Kind_For_Extension(ext);
             on_selected_line := line_y == cursor.y;
             alpha := ifx on_selected_line then 0.8 else 0.5;
-            ext = To_Lower_Temp(ext);
             if Is_Basic_Text_File_Extension(ext) {
                 Draw_Text_File_Icon(*renderer, 0, line_y, alpha);
-                try_load_preview = on_selected_line;
             } else if Is_Code_File_Extension(ext) {
                 Draw_Code_File_Icon(*renderer, 0, line_y, alpha);
-                try_load_preview = on_selected_line;
             } else if Is_Binary_File_Extension(ext) {
                 Draw_Binary_File_Icon(*renderer, 0, line_y, alpha);
             } else {
                 Draw_Unknown_File_Icon(*renderer, 0, line_y, alpha);
             }
 
-            if on_selected_line {
+            if on_selected_line && preview_kind != .NONE {
                 clear_file_explorer_preview = false;
-            }
-            if file_explorer_preview_available {
-                if try_load_preview {
-                    full_path := tprint("%/%", working_path, item.name);
-                    if file_explorer_text_preview.file_path != full_path {
-                        request_data := LoadFileExplorerPreviewRequest.{copy_string(full_path)};
-                        request := AsyncTaskRequest.{type=.LOAD_FILE_EXPLORER_PREVIEW, load_file_explorer_preview=request_data};
-                        Make_Unique_Thread_Work_Request(request);
-                    }
-                } else if on_selected_line {
-                    clear_file_explorer_preview = true;
-                }
+                selected_preview_kind = preview_kind;
+                selected_preview_path = tprint("%/%", working_path, item.name);
             }
         }
         line_y += 1;
@@ -156,6 +146,19 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
 
     if clear_file_explorer_preview {
         Clear_Text_Buffer(*file_explorer_text_preview, true);
+        File_Explorer_Image_Preview_Clear();
+    } else if selected_preview_kind == .TEXT {
+        if file_explorer_preview_available && file_explorer_text_preview.file_path != selected_preview_path {
+            request_data := LoadFileExplorerPreviewRequest.{copy_string(selected_preview_path)};
+            request := AsyncTaskRequest.{type=.LOAD_FILE_EXPLORER_PREVIEW, load_file_explorer_preview=request_data};
+            Make_Unique_Thread_Work_Request(request);
+        }
+    } else if selected_preview_kind == .IMAGE {
+        if file_explorer_image_preview_available && !File_Explorer_Image_Preview_Is_For_File(selected_preview_path) {
+            request_data := LoadFileExplorerImagePreviewRequest.{copy_string(selected_preview_path)};
+            request := AsyncTaskRequest.{type=.LOAD_FILE_EXPLORER_IMAGE_PREVIEW, load_file_explorer_image_preview=request_data};
+            Make_Unique_Thread_Work_Request(request);
+        }
     }
 
     // draw text
@@ -195,8 +198,10 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
 
     Set_Shader_For_Text();
 
-    if file_explorer_preview_available 
+    if selected_preview_kind == .TEXT
+    && file_explorer_preview_available
     && file_explorer_text_preview.lines.count > 0 
+    && file_explorer_text_preview.file_path == selected_preview_path
     && file_explorer.preview_vertical_proportion != .NONE {
         Set_View_Scissor(ul, lr);
         Set_View_Scissor(boxes.preview_ul, boxes.preview_lr);
@@ -208,6 +213,12 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
         // renderer.cursor_pos = .{};
         Render_Text_Buffer_Lines(null, *renderer, *file_explorer_text_preview, false);
         Flush_Draws();
+    } else if selected_preview_kind == .IMAGE
+    && File_Explorer_Image_Preview_Is_For_File(selected_preview_path)
+    && file_explorer.preview_vertical_proportion != .NONE {
+        Set_View_Scissor(ul, lr);
+        Set_View_Scissor(boxes.preview_ul, boxes.preview_lr);
+        Render_File_Explorer_Image_Preview(boxes.preview_ul, boxes.preview_lr);
     }
 }
 
