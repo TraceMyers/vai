@@ -47,7 +47,6 @@ Render_Project_Explorer_Text :: (project_explorer: *ProjectExplorer, is_active: 
         } else {
             Append_Line(text_buffer, "Projects", false);
         }
-        Append_Line(text_buffer, "", false);
         if is_project_config {
             // The action row is drawn separately so it can remain visually
             // distinct from editable project configuration files.
@@ -65,7 +64,7 @@ Render_Project_Explorer_Text :: (project_explorer: *ProjectExplorer, is_active: 
         }
         project_explorer.cursor.x = 0;
         project_explorer.cursor.target_x = 0;
-        project_explorer.cursor.y = ifx is_project_config then sdw(2) else sdw(0);
+        project_explorer.cursor.y = sdw(1);
         view_layer.view_position = .{};
     }
 
@@ -74,9 +73,9 @@ Render_Project_Explorer_Text :: (project_explorer: *ProjectExplorer, is_active: 
     Project_Explorer_Clamp_Cursor(*project_explorer.cursor, text_buffer);
 
     Set_Shader_For_Blended_Color();
-    line_y : s32 = 2;
+    line_y : s32 = 1;
     if is_project_config {
-        line_y = 3;
+        line_y = 2;
     }
     for directory_list {
         if is_project_config {
@@ -102,12 +101,12 @@ Render_Project_Explorer_Text :: (project_explorer: *ProjectExplorer, is_active: 
         label := ifx project_explorer.directory == project_state.config_directory
             then "[current project]"
             else "[open project]";
-        _, label_y := Text_To_Render_Space(*renderer, 0, 2);
+        _, label_y := Text_To_Render_Space(*renderer, 0, 1);
         Render_Text_String_At(label, renderer.align_info_main.screen_x, label_y, color=.{rgb=fRGB_WHITE, a=0.45});
     }
 
     View_Scroll(view_layer, *renderer, text_buffer);
-    if project_explorer.cursor.y >= 2 {
+    if project_explorer.cursor.y >= 1 {
         renderer.cursor_pos = .{project_explorer.cursor.x, project_explorer.cursor.y};
         Render_Cursor_Line_Block(*renderer, *project_explorer.cursor, 0.18);
     }
@@ -130,17 +129,17 @@ Project_Explorer_Set_Directory :: (directory: string) {
 Project_Explorer_Show_All_Projects :: () {
     Project_Explorer_Set_Directory("");
     explorer := *view_pool.items[tool_view_id].layers[ToolViewLayer.PROJECT_EXPLORER].project_explorer;
-    explorer.cursor.y = 2;
+    explorer.cursor.y = 1;
 }
 
 Project_Explorer_Selected_Project_Name :: () -> string {
     explorer := *view_pool.items[tool_view_id].layers[ToolViewLayer.PROJECT_EXPLORER].project_explorer;
-    if explorer.directory.count > 0 || explorer.cursor.y < 2 {
+    if explorer.directory.count > 0 || explorer.cursor.y < 1 {
         return "";
     }
     success, projects := Directory_List(Project_Config_Root());
     if !success then return "";
-    project_index := explorer.cursor.y - 2;
+    project_index := explorer.cursor.y - 1;
     list_index: s32;
     for projects {
         if !it.is_directory && !it.is_symlink {
@@ -164,7 +163,7 @@ Project_Explorer_Normal_Mode_Return :: () {
         return;
     }
 
-    if explorer.cursor.y == 2 {
+    if explorer.cursor.y == 1 {
         if explorer.directory == project_state.config_directory {
             return;
         }
@@ -175,13 +174,13 @@ Project_Explorer_Normal_Mode_Return :: () {
         }
         return;
     }
-    if explorer.cursor.y < 3 {
+    if explorer.cursor.y < 2 {
         return;
     }
 
     success, config_files := Directory_List(explorer.directory);
     if !success then return;
-    file_index := explorer.cursor.y - 3;
+    file_index := explorer.cursor.y - 2;
     list_index: s32;
     for config_files {
         if it.is_directory || it.is_symlink {
@@ -207,8 +206,10 @@ Project_Explorer_Scroll_Left :: () {
 
 Project_Explorer_Clamp_Cursor :: (cursor: *Cursor, text_buffer: *TextBuffer) {
     cursor.y = clamp(cursor.y, 0, sdw(max(text_buffer.lines.count-1, 0)));
-    if cursor.y == 1 {
-        cursor.y = ifx cursor.target_x < 0 then sdw(0) else sdw(2);
+    // Line zero is a heading, never a selectable entry. An empty projects
+    // directory has only that line, so leave its cursor at zero in that case.
+    if text_buffer.lines.count > 1 {
+        cursor.y = max(cursor.y, sdw(1));
     }
     cursor.x = 0;
     cursor.target_x = 0;

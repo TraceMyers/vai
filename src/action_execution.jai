@@ -18,13 +18,15 @@ Cursor_Scroll_Down :: () {
             cursor.x = Clamp_X_To_Line(cursor.target_x, line);
             cursor.soft_wrap_target_x = -1;
         }
-    case .FILE_EXPLORER; #through;
-    case .PROJECT_EXPLORER;
+    case .FILE_EXPLORER;
         // explorer line 1 is a blank space
         step_size = ifx cursor.y == 0 then sdw(2) else sdw(1);
         cursor.y = min(cursor.y + step_size, sdw(max(text_buffer.lines.count-1, 0)));
         line := Line_View(text_buffer, cursor.y);
         cursor.x = Clamp_X_To_Line(cursor.target_x, line);
+    case .PROJECT_EXPLORER;
+        cursor.y = min(cursor.y + 1, sdw(max(text_buffer.lines.count-1, 0)));
+        Project_Explorer_Clamp_Cursor(cursor, text_buffer);
     }
     cursor.just_moved = true;
     Add_Cursor_Move_Artifact(cursor, .SCROLL_DOWN);
@@ -53,8 +55,7 @@ Cursor_Scroll_Up :: () {
         }
     case .PROJECT_EXPLORER;
         if cursor.y != 0 {
-            step_size = ifx cursor.y == 2 then sdw(2) else sdw(1);
-            cursor.y = max(cursor.y - step_size, sdw(0));
+            cursor.y -= 1;
             Project_Explorer_Clamp_Cursor(cursor, text_buffer);
         }
     }
@@ -159,6 +160,9 @@ Cursor_Scroll_To_Bottom :: () {
     cursor.y = xx (text_buffer.lines.count-1);
     line := Line_View(text_buffer, cursor.y);
     cursor.x = Clamp_X_To_Line(cursor.target_x, line);
+    if active_layer.type == .PROJECT_EXPLORER {
+        Project_Explorer_Clamp_Cursor(cursor, text_buffer);
+    }
     cursor.soft_wrap_target_x = -1;
     cursor.just_moved = true;
 }
@@ -1243,6 +1247,8 @@ Vertical_Page_Scroll :: (up: bool, half_page: bool) {
 
     if active_layer.type == .FILE_EXPLORER {
         File_Explorer_Reset_Cursor_On_Path(cursor, text_buffer);
+    } else if active_layer.type == .PROJECT_EXPLORER {
+        Project_Explorer_Clamp_Cursor(cursor, text_buffer);
     }
 }
 Cursor_Scroll_Up_Half_Page :: #bake_arguments Vertical_Page_Scroll(up=true, half_page=true);
