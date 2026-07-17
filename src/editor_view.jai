@@ -1343,14 +1343,16 @@ RenderedTextData :: struct {
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 
 INTRO_FILE_TEXT :: #string HERE
-type ':open somefilename' to open a file.
-type ':split-horizontal somefilename' to open a file in side-by-side. (or leave out the filename to split the current file)
-type ':close view' or just ':close' to close a view.
-type ':close buffer' to close a text buffer
-type ':save' to write the selected buffer to file.
-type ':quit' to quit the program.
-type ':tools' or ':t' to toggle the last tool (the file explorer by default).
-type ':projects' or ':p' to open the project browser.
+Commands and their short names
+------------------------------
+':open' / ':o' opens a file.
+':vertical-split' / ':v' and ':horizontal-split' / ':h' split the editor.
+':close' / ':c' closes a view; ':close buffer' closes its buffer.
+':quit' / ':q' exits Vai. ':save' / ':w' writes the selected buffer.
+':set' / ':s' changes options. ':buffer-next' / ':bn' and ':buffer-previous' / ':bp'
+switch buffers.
+':tools' / ':t' toggles the last tool. ':explorer' / ':e' opens the file explorer.
+':projects' / ':p' opens the project browser.
 
 Configuration and projects
 --------------------------
@@ -1366,13 +1368,12 @@ main_directory, restores its files/views, and applies its settings after the mai
 For the active project it reads [current project] and is greyed out. Left returns to the
 project list. Open a config file from this browser to edit it normally.
 
-To create a project, use ':project-create name D:/path/to/project' (paths without spaces),
+To create a project, use ':project-create' / ':pc name D:/path/to/project' (paths without spaces),
 then find it in ':projects'. You can also create %APPDATA%/Vai/projects/<name>/project.txt
 yourself and set 'main_directory = D:/path/to/project'. If no valid project has been chosen,
 Vai creates and opens a project named 'default'. On later launches it opens the last project.
 
-Shorthand commands work as long as what you've typed could only resolve to one command.
-For example, ':o ...' loads a file into a buffer just like ':open ...' would.
+Each command has a listed short name. Longer unambiguous prefixes work too.
 
 For learning vim motions, check out vim-adventures.com. 
 If you're already familiar with vim, you'll notice a few things are different in vai, and many features are missing. 

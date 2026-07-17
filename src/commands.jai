@@ -235,6 +235,14 @@ Execute_Command_Toggle_Tool_View :: (args: [][]u32) {
     Execute_Command_Show_Tool_View(last_tool_view_layer);
 }
 
+Execute_Command_Toggle_File_Explorer :: (args: [][]u32) {
+    if tool_view_is_active && view_pool.items[tool_view_id].active_layer == cast(s8)ToolViewLayer.FILE_EXPLORER {
+        Execute_Command_Hide_Tool_View();
+        return;
+    }
+    Execute_Command_Show_Tool_View(.FILE_EXPLORER);
+}
+
 Execute_Command_Hide_Tool_View :: () {
     if !tool_view_is_active {
         return;

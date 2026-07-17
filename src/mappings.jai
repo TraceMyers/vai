@@ -97,17 +97,18 @@ HERE
 #insert #run Generate_Struct_Enum_Mapping("Command", u32, "CommandBinding", "COMPTIME_COMMAND_BINDINGS", TempEnumMapping(string, 2, CommandDataContainer), true, "As_Command", true,
 #string HERE
     .{.["none", ""],                        "NONE",                     .{}},
-    .{.["close", ""],                       "CLOSE_OBJECT",             .{proc=Execute_Command_Close}},
-    .{.["quit", ""],                        "QUIT",                     .{proc=Execute_Command_Quit}},
-    .{.["open", ""],                        "OPEN_FILE",                .{proc=Execute_Command_Open}},
-    .{.["buffer-next", "bnext"],            "NEXT_BUFFER",              .{proc=Execute_Command_Scroll_Buffer_Next}},
-    .{.["buffer-previous", "bprev"],        "PREVIOUS_BUFFER",          .{proc=Execute_Command_Scroll_Buffer_Previous}},
-    .{.["vertical-split", "vsplit"],        "VERTICAL_SPLIT",           .{proc=Execute_Command_Split_Vertical}},
-    .{.["horizontal-split", "hsplit"],      "HORIZONTAL_SPLIT",         .{proc=Execute_Command_Split_Horizontal}},
-    .{.["set", ""],                         "INTERACT_WITH_OPTION",     .{proc=Execute_Command_Set_Options}},
-    .{.["save", ""],                        "SAVE_TO_FILE",             .{proc=Execute_Command_Save}},
+    .{.["close", "c"],                      "CLOSE_OBJECT",             .{proc=Execute_Command_Close}},
+    .{.["quit", "q"],                       "QUIT",                     .{proc=Execute_Command_Quit}},
+    .{.["open", "o"],                       "OPEN_FILE",                .{proc=Execute_Command_Open}},
+    .{.["buffer-next", "bn"],                "NEXT_BUFFER",              .{proc=Execute_Command_Scroll_Buffer_Next}},
+    .{.["buffer-previous", "bp"],            "PREVIOUS_BUFFER",          .{proc=Execute_Command_Scroll_Buffer_Previous}},
+    .{.["vertical-split", "v"],               "VERTICAL_SPLIT",           .{proc=Execute_Command_Split_Vertical}},
+    .{.["horizontal-split", "h"],             "HORIZONTAL_SPLIT",         .{proc=Execute_Command_Split_Horizontal}},
+    .{.["set", "s"],                        "INTERACT_WITH_OPTION",     .{proc=Execute_Command_Set_Options}},
+    .{.["save", "w"],                       "SAVE_TO_FILE",             .{proc=Execute_Command_Save}},
     .{.["tools", "t"],                      "TOGGLE_TOOL_VIEW"          .{proc=Execute_Command_Toggle_Tool_View}},
+    .{.["explorer", "e"],                   "TOGGLE_FILE_EXPLORER"      .{proc=Execute_Command_Toggle_File_Explorer}},
     .{.["projects", "p"],                   "TOGGLE_PROJECT_VIEW"       .{proc=Execute_Command_Toggle_Project_View}},
-    .{.["project-create", ""],              "CREATE_PROJECT"            .{proc=Execute_Command_Create_Project}}
+    .{.["project-create", "pc"],            "CREATE_PROJECT"            .{proc=Execute_Command_Create_Project}}
 HERE
 );
