@@ -73,8 +73,10 @@ Inject_Modified_Utf32_Into_Frame_Input :: (input: []u32) {
     array_resize(*frame_input_stream, new_count);
     next_stream_index := frame_input_stream_index + 1;
     if next_stream_index < old_count {
-        for next_stream_index..old_count-1 {
-            frame_input_stream[it+input.count] = frame_input_stream[it];
+        source_index := old_count - 1;
+        while source_index >= next_stream_index {
+            frame_input_stream[source_index+input.count] = frame_input_stream[source_index];
+            source_index -= 1;
         }
     }
     memcpy(frame_input_stream.data + next_stream_index, input.data, input.count * size_of(u32));

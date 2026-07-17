@@ -18,6 +18,8 @@ Cursor :: struct {
     y: s32;
     // in vim, when the cursor scrolls vertically it has a target x it tries to go to that is set by moving the cursor horizontally
     target_x: s32; 
+    // The rendered column to retain while moving through soft-wrapped rows.
+    soft_wrap_target_x: s32 = -1;
     blink_timer: float32;
     scroll_timer: float32;
     begin_selection: IntVector2 = .{-1, -1};

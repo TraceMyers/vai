@@ -175,18 +175,22 @@ Item_Index_To_Byte_Index :: inline (i: s64) -> s32, s32 {
 
 Find_Active_Backwards_From :: (in_use: [..]u8, item_index: s64) -> s64 #expand {
     start_byte, start_bit := Item_Index_To_Byte_Index(item_index);
-        for byte : 0..start_byte {
+    byte := start_byte;
+    while byte >= 0 {
         in_use_chunk := in_use[byte];
         if (in_use_chunk & U8_MAX) != 0 {
-            for bit_index : 0..start_bit {
+            bit_index := start_bit;
+            while bit_index >= 0 {
                 bit := ub(1) << bit_index;
                 if (in_use_chunk & bit) != 0 {
                     item_index := Byte_Index_To_Item_Index(byte, bit_index);
                     return item_index;
                 }
+                bit_index -= 1;
             }
         }
         start_bit = 7;
+        byte -= 1;
     }
     return -1;
 }

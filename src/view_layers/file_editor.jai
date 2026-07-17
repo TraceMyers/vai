@@ -167,6 +167,33 @@ View_Axis_Follow_Cursor_Smoothly :: (cursor: *Cursor, view_axis: *float, cursor_
     }
 }
 
+Soft_Wrap_Cursor_Y_In_View :: (layer: *ViewLayer, cursor: *Cursor) -> float {
+    row_lengths := Temp_Resize_Array(s32);
+    Get_Soft_Wrap_Row_Lengths(layer, cursor.y, *row_lengths);
+    cursor_row_index, _ := Soft_Wrap_Find_Row(row_lengths, cursor.x);
+
+    view_line := cast(s32)Floor(layer.view_position.y);
+    view_line = clamp(view_line, 0, sdw(Layer_Text_Buffer(layer).lines.count - 1));
+    view_line_fraction := layer.view_position.y - cast(float)view_line;
+
+    Get_Soft_Wrap_Row_Lengths(layer, view_line, *row_lengths);
+    view_line_row_count := max(cast(s32)row_lengths.count, 1);
+    cursor_y := cast(float)cursor_row_index - view_line_fraction * cast(float)view_line_row_count;
+
+    if cursor.y > view_line {
+        for line : view_line..cursor.y-1 {
+            Get_Soft_Wrap_Row_Lengths(layer, line, *row_lengths);
+            cursor_y += cast(float)max(cast(s32)row_lengths.count, 1);
+        }
+    } else if cursor.y < view_line {
+        for line : cursor.y..view_line-1 {
+            Get_Soft_Wrap_Row_Lengths(layer, line, *row_lengths);
+            cursor_y -= cast(float)max(cast(s32)row_lengths.count, 1);
+        }
+    }
+    return cursor_y;
+}
+
 View_Scroll :: (layer: *ViewLayer, renderer: *TextRenderer, text_buffer: *TextBuffer) {
     layer_cursor := Layer_Cursor(layer);
     file_editor := layer.file_editor;
@@ -177,10 +204,18 @@ View_Scroll :: (layer: *ViewLayer, renderer: *TextRenderer, text_buffer: *TextBu
         text_buffer.saved_cursor = layer_cursor.*;
     }
 
+    soft_wrap := Bool_Option_Value(.SOFT_WRAP);
     new_y := layer.view_position.y;
+    if soft_wrap {
+        // For wrapped text, new_y is a physical-row delta from the current view.
+        // Move_View_Y translates that delta back into the fractional logical-line view position.
+        new_y = 0;
+    }
 
     vt_net := Calculate_Cursor_Net(new_y, xx renderer.line_count, IDEAL_NET_SIZE);
-    cursor_y := cast(float)layer_cursor.y;
+    cursor_y := ifx soft_wrap
+        then Soft_Wrap_Cursor_Y_In_View(layer, layer_cursor)
+        else cast(float)layer_cursor.y;
     if layer_cursor.just_moved {
         Teleport_View_Axis_To_Cursor(cursor_y, *new_y, *vt_net);
     }
@@ -198,7 +233,7 @@ View_Scroll :: (layer: *ViewLayer, renderer: *TextRenderer, text_buffer: *TextBu
 
     layer_cursor.just_moved = false;
 
-    if layer_cursor.y < text_buffer.lines.count - 1 {
+    if !soft_wrap && layer_cursor.y < text_buffer.lines.count - 1 {
         scroll_down_repeat, scroll_down_speed := Get_Action_Repeat_Rate(layer_cursor, .SCROLL_DOWN);
         scroll_up_repeat, scroll_up_speed := Get_Action_Repeat_Rate(layer_cursor, .SCROLL_UP);
         scroll_right_repeat, scroll_right_speed := Get_Action_Repeat_Rate(layer_cursor, .SCROLL_RIGHT);
@@ -217,14 +252,16 @@ View_Scroll :: (layer: *ViewLayer, renderer: *TextRenderer, text_buffer: *TextBu
         }
     }
 
-    new_y = clamp(new_y, 0, cast(float)(text_buffer.lines.count-1));
+    if !soft_wrap {
+        new_y = clamp(new_y, 0, cast(float)(text_buffer.lines.count-1));
+    }
     if Bool_Option_Value(.SOFT_WRAP) {
         layer.view_position.x = 0;
     } else {
         layer.view_position.x = max(layer.view_position.x, 0);
     }
 
-    y_delta := new_y - layer.view_position.y;
+    y_delta := ifx soft_wrap then new_y else new_y - layer.view_position.y;
     y_delta_abs := abs(y_delta);
     if y_delta_abs > 0 {
         if y_delta > 0 {
