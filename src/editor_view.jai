@@ -129,7 +129,10 @@ Prepare_Intro_File :: () -> string {
     // INTRO_FILE_NAME :: "test_files/struct_utilities.jai";
     file_data := read_entire_file(INTRO_FILE_NAME);
     defer free(file_data);
-    if file_data.count == 0 {
+    // Preserve user-authored instructions, but refresh the old stock intro so
+    // existing installations receive the project/configuration guidance.
+    has_old_stock_intro := find_index_from_left(file_data, "currently the only tool is the file explorer, which is incomplete.", 0) != -1;
+    if file_data.count == 0 || has_old_stock_intro {
         write_entire_file(INTRO_FILE_NAME, INTRO_FILE_TEXT);
     }
     return INTRO_FILE_NAME;

@@ -1132,7 +1132,7 @@ Enter_Search_Mode :: () {
 
     if Active_View_Layer().type == {
     case .FILE_EDITOR; #through;
-    case .FILE_EXPLORER;
+    case .FILE_EXPLORER; #through;
     case .PROJECT_EXPLORER;
         vi_mode = .COMMAND;
         Push_Active_View_ID(vim_console_id);
@@ -1148,7 +1148,7 @@ Enter_Command_Mode :: () {
 
     if Active_View_Layer().type == {
     case .FILE_EDITOR; #through;
-    case .FILE_EXPLORER;
+    case .FILE_EXPLORER; #through;
     case .PROJECT_EXPLORER;
         vi_mode = .COMMAND;
         Push_Active_View_ID(vim_console_id);
