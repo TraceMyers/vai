@@ -161,6 +161,7 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
     // draw text
     if file_explorer.preview_vertical_proportion != .FULL {
         Render_Text_Buffer_Lines(view_layer, *renderer, buf, false);
+        Render_File_Explorer_Forward_Path(file_explorer, *renderer);
     }
     Flush_Draws();
 
@@ -231,6 +232,22 @@ Process_Text_Input :: (using file_explorer: *FileExplorer, utf32: []u32) {
     for 0..utf32.count-1 {
         Cursor_Scroll_Right();
     }
+}
+
+Render_File_Explorer_Forward_Path :: (file_explorer: *FileExplorer, renderer: *TextRenderer) {
+    if vi_mode != .NORMAL || renderer.text_view_clip.y != 0 {
+        return;
+    }
+
+    suffix := File_Explorer_Forward_Path_Suffix();
+    if suffix.count == 0 {
+        return;
+    }
+
+    render_x := renderer.align_info_main.screen_x + xx file_explorer.directory.count * renderer.screen_char_width;
+    render_y := renderer.screen_render_begin.y;
+
+    Render_Text_String_At(suffix, render_x, render_y, color=.{rgb=fRGB_WHITE, a=0.5});
 }
 
 File_Explorer_Preview_Proportion :: (file_explorer: *FileExplorer) -> float {

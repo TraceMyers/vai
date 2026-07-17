@@ -409,10 +409,10 @@ TEXT_VERTEX_SHADER :: #string HERE
 #version 330 core
 
 out vec2 tex_coords;
-out vec3 f_color;
+out vec4 f_color;
 
 layout(location=0) in vec3 vert_position;
-layout(location=1) in vec3 vert_color;
+layout(location=1) in vec4 vert_color;
 layout(location=2) in vec2 vert_uv;
 
 uniform mat4 mvp;
@@ -430,14 +430,14 @@ TEXT_FRAGMENT_SHADER :: #string HERE
 out vec4 color;
 
 in vec2 tex_coords;
-in vec3 f_color;
+in vec4 f_color;
 
 uniform sampler2D text_sampler;
 
 void main() {
     vec4 sample = texture(text_sampler, tex_coords);
-    color = vec4(f_color.rgb, sample.a);
-    if (sample.a < 0.2) {
+    color = vec4(f_color.rgb, f_color.a * sample.a);
+    if (color.a < 0.2) {
         discard;
     }
 }

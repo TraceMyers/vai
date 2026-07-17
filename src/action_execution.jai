@@ -77,11 +77,13 @@ Cursor_Scroll_Right :: () {
         if active_layer.type == {
         case .FILE_EXPLORER;
             if cursor.y == 0 {
-                line := Line_View(text_buffer, cursor.y);
-                for cursor.x..line.count-2 {
-                    if Is_Slash(line[it]) {
-                        cursor.x = sdw(it + 1);
-                        break;
+                if !File_Explorer_Follow_Forward_Path() {
+                    line := Line_View(text_buffer, cursor.y);
+                    for cursor.x..line.count-2 {
+                        if Is_Slash(line[it]) {
+                            cursor.x = sdw(it + 1);
+                            break;
+                        }
                     }
                 }
             } else {
@@ -1408,13 +1410,77 @@ File_Explorer_Set_Directory_From_Cursor_Pos :: (cursor: *Cursor, line: []u32) {
             unmarked_utf32.allocator = temp;
             Get_Unmarked_Utf32(line_copy, *unmarked_utf32);
             new_path_utf8 := Encode(As_String(unmarked_utf32), .UTF32, .UTF8);
-            File_Explorer_Set_Directory(new_path_utf8);
+            File_Explorer_Remember_Forward_Path(File_Explorer_Get_Directory());
+            File_Explorer_Set_Directory(new_path_utf8, preserve_forward=true);
             break;
         }
     }
 }
 
-File_Explorer_Set_Directory :: (dir: string) {
+File_Explorer_Forward_Path_Suffix :: () -> string {
+    tool_view := view_pool.items[tool_view_id];
+    explorer := *tool_view.layers[ToolViewLayer.FILE_EXPLORER].file_explorer;
+    directory := explorer.directory;
+    forward_path := explorer.forward_path;
+
+    if forward_path.count <= directory.count {
+        return "";
+    }
+    for 0..directory.count-1 {
+        if directory[it] != forward_path[it] {
+            return "";
+        }
+    }
+    if !Is_Slash(forward_path[directory.count]) {
+        return "";
+    }
+    return string.{forward_path.count-directory.count, forward_path.data+directory.count};
+}
+
+File_Explorer_Clear_Forward_Path :: () {
+    tool_view := view_pool.items[tool_view_id];
+    explorer := *tool_view.layers[ToolViewLayer.FILE_EXPLORER].file_explorer;
+    String_Reset(*explorer.forward_path);
+}
+
+File_Explorer_Remember_Forward_Path :: (directory: string) {
+    if File_Explorer_Forward_Path_Suffix().count > 0 {
+        return;
+    }
+
+    tool_view := view_pool.items[tool_view_id];
+    explorer := *tool_view.layers[ToolViewLayer.FILE_EXPLORER].file_explorer;
+    String_Reset(*explorer.forward_path);
+    explorer.forward_path = copy_string(directory);
+}
+
+File_Explorer_Follow_Forward_Path :: () -> bool {
+    suffix := File_Explorer_Forward_Path_Suffix();
+    if suffix.count == 0 {
+        return false;
+    }
+
+    tool_view := view_pool.items[tool_view_id];
+    explorer := *tool_view.layers[ToolViewLayer.FILE_EXPLORER].file_explorer;
+    next_directory := explorer.forward_path;
+    for explorer.directory.count+1..next_directory.count-1 {
+        if Is_Slash(next_directory[it]) {
+            next_directory.count = it;
+            break;
+        }
+    }
+
+    success, _ := Directory_List(next_directory);
+    if !success {
+        File_Explorer_Clear_Forward_Path();
+        return false;
+    }
+
+    File_Explorer_Set_Directory(next_directory, preserve_forward=true);
+    return true;
+}
+
+File_Explorer_Set_Directory :: (dir: string, preserve_forward := false) {
     tool_view := view_pool.items[tool_view_id];
     explorer_layer := *tool_view.layers[ToolViewLayer.FILE_EXPLORER];
 
@@ -1425,6 +1491,9 @@ File_Explorer_Set_Directory :: (dir: string) {
     Convert_To_Forward_Slashes(owned_dir);
     free(explorer_layer.file_explorer.directory);
     explorer_layer.file_explorer.directory = owned_dir;
+    if !preserve_forward {
+        File_Explorer_Clear_Forward_Path();
+    }
 }
 
 File_Explorer_Get_Directory :: () -> string {

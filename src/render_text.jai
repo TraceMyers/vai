@@ -684,6 +684,13 @@ Render_Text_Line :: (renderer: *TextRenderer, align_info: *AlignInfo, utf8: []u8
     renderer.rendered_line_count += 1;
 }
 
+Render_Text_String_At :: (text: string, x: s32, y: s32, color := fRGBA_WHITE) {
+    Set_Shader_For_Text();
+    Scoped_Immediate_Text_Render();
+    prepare_text(font, text);
+    Generate_Quads_For_Prepared_Text(x, y, color=color);
+}
+
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 font: *Dynamic_Font;

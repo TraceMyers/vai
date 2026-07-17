@@ -1121,8 +1121,10 @@ DebugView :: CursorLayer(
 FileExplorer :: CursorLayer(
     struct {
         text_buffer: s64 = -1;
-        end_path_bin: BinID;
         directory: string;
+        // The destination left behind by upward path navigation.  Its suffix
+        // after `directory` is rendered as the forward-navigation trail.
+        forward_path: string;
         directory_list_outline_alpha: float;
         preview_vertical_proportion: enum {
             NONE;
