@@ -48,13 +48,28 @@ Vai_Main :: () {
     exe_path = copy_string(path_strip_filename(get_path_of_running_executable()));
     defer free(exe_path);
 
-    if !Scoped_Construct(Thread_Worker)         then return;
-    if !Scoped_Construct(Text_Buffers)          then return;
     if !Scoped_Construct(Runtime_Settings)      then return;
-    if !Scoped_Construct(Project_Configuration) then return;
-    if !Scoped_Construct(Scene_Preview_Providers) then return;
+    image_preview_smoke_test := Has_Command_Line_Argument("--image-preview-smoke-test");
+    if image_preview_smoke_test {
+        // This mode deliberately skips project configuration and the worker
+        // thread so the test never reads or writes the user's AppData files.
+        window.info = *settings_file_data.window_info;
+        window.width = 256;
+        window.height = 256;
+        window.x = -1;
+        window.y = -1;
+    } else {
+        if !Scoped_Construct(Thread_Worker)         then return;
+        if !Scoped_Construct(Text_Buffers)          then return;
+        if !Scoped_Construct(Project_Configuration) then return;
+        if !Scoped_Construct(Scene_Preview_Providers) then return;
+    }
     if !Create_Window("Vai")                    then return;
     if !Scoped_Construct(Graphics_Backend)      then return;
+    if image_preview_smoke_test {
+        assert(Run_Production_Image_Preview_Smoke_Test());
+        return;
+    }
     if !Scoped_Construct(Input)                 then return;
     if !Scoped_Construct(Viewports)             then return;
     if !Scoped_Construct(Editor_Views)          then return;
@@ -98,6 +113,15 @@ Vai_Main :: () {
     #if DEBUG_MEMORY {
         report_memory_leaks();
     }
+}
+
+Has_Command_Line_Argument :: (wanted: string) -> bool {
+    arguments := get_command_line_arguments();
+    defer array_free(arguments);
+    for arguments {
+        if it == wanted return true;
+    }
+    return false;
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

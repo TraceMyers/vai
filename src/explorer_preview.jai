@@ -139,7 +139,80 @@ Render_File_Explorer_Image_Preview :: (ul: IntVector2, lr: IntVector2) {
     }
     Flush_Draws();
 
-    Set_Image_Shader_Texture(file_explorer_image_preview.texture);
+    Set_Image_Shader_Texture(file_explorer_image_preview.texture, image_ul, image_lr);
     Render_Quad(image_ul, image_lr, .{rgb=fRGB_WHITE, a=1.0}, .{0, 0}, .{1, 1});
     Flush_Draws();
+}
+
+// This test runs through the compiled editor's own image loader and renderer.
+// It is intentionally entered only with --image-preview-smoke-test, before
+// project configuration starts, so it cannot alter a user's editor session.
+Run_Production_Image_Preview_Smoke_Test :: () -> bool {
+    source_task: AsyncTask;
+    source_task.request = .{
+        type=.LOAD_FILE_EXPLORER_IMAGE_PREVIEW,
+        load_file_explorer_image_preview=.{file_path="screenshot.png"},
+    };
+    Init_Task_Result(*source_task);
+    Load_File_Explorer_Image_Preview(*source_task);
+    source_result := *source_task.result.load_file_explorer_image_preview;
+    if !source_result.success || source_result.width <= 0 || source_result.height <= 0
+    || source_result.pixels.count != cast(s64)source_result.width * cast(s64)source_result.height * 4 {
+        Log_Error("image preview smoke test could not load screenshot.png");
+        if source_result.pixels.data != null free(source_result.pixels.data);
+        return false;
+    }
+    free(source_result.pixels.data);
+
+    // Use deterministic opaque pixels for the framebuffer assertion. The
+    // real PNG above verifies the production stb loader; these texels verify
+    // the preview shader's UV orientation without depending on screenshot.png.
+    File_Explorer_Image_Preview_Clear();
+    file_explorer_image_preview.file_path = copy_string("__image_preview_smoke_test__");
+    file_explorer_image_preview.width = 2;
+    file_explorer_image_preview.height = 2;
+    file_explorer_image_preview.pixels = NewArray(16, u8, initialized=true);
+    // Source rows are top-to-bottom: red, green / blue, white.
+    file_explorer_image_preview.pixels[0] = 255;
+    file_explorer_image_preview.pixels[3] = 255;
+    file_explorer_image_preview.pixels[5] = 255;
+    file_explorer_image_preview.pixels[7] = 255;
+    file_explorer_image_preview.pixels[10] = 255;
+    file_explorer_image_preview.pixels[11] = 255;
+    file_explorer_image_preview.pixels[12] = 255;
+    file_explorer_image_preview.pixels[13] = 255;
+    file_explorer_image_preview.pixels[14] = 255;
+    file_explorer_image_preview.pixels[15] = 255;
+
+    Begin_Draw_Frame(true);
+    Render_File_Explorer_Image_Preview(.{0, 0}, .{64, 64});
+    glFinish();
+    uploaded_sample: [4]u8;
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, file_explorer_image_preview.texture);
+    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, uploaded_sample.data);
+    glReadBuffer(GL_BACK);
+    top_left, top_right, bottom_left, bottom_right: [4]u8;
+    glReadPixels(16, window.height-16, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, top_left.data);
+    glReadPixels(48, window.height-16, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, top_right.data);
+    glReadPixels(16, window.height-48, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, bottom_left.data);
+    glReadPixels(48, window.height-48, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, bottom_right.data);
+    glReadBuffer(GL_FRONT);
+    File_Explorer_Image_Preview_Clear();
+
+    uploaded_red := uploaded_sample[0] == 255 && uploaded_sample[1] == 0 && uploaded_sample[2] == 0 && uploaded_sample[3] == 255;
+    if !uploaded_red {
+        Log_Error("image preview smoke test uploaded texture sample was rgba=(%, %, %, %)", uploaded_sample[0], uploaded_sample[1], uploaded_sample[2], uploaded_sample[3]);
+        return false;
+    }
+    rendered_expected := top_left[0] >= 245 && top_left[1] <= 10 && top_left[2] <= 10 && top_left[3] == 255
+        && top_right[0] <= 10 && top_right[1] >= 245 && top_right[2] <= 10 && top_right[3] == 255
+        && bottom_left[0] <= 10 && bottom_left[1] <= 10 && bottom_left[2] >= 245 && bottom_left[3] == 255
+        && bottom_right[0] >= 245 && bottom_right[1] >= 245 && bottom_right[2] >= 245 && bottom_right[3] == 255;
+    if !rendered_expected {
+        Log_Error("image preview smoke test corner samples were tl=(%, %, %, %), tr=(%, %, %, %), bl=(%, %, %, %), br=(%, %, %, %)", top_left[0], top_left[1], top_left[2], top_left[3], top_right[0], top_right[1], top_right[2], top_right[3], bottom_left[0], bottom_left[1], bottom_left[2], bottom_left[3], bottom_right[0], bottom_right[1], bottom_right[2], bottom_right[3]);
+        return false;
+    }
+    Log("production image preview smoke test passed");
+    return true;
 }

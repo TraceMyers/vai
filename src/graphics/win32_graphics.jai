@@ -46,7 +46,7 @@ Graphics_Backend :: struct {
         overall_success &= success;
         text_shader, success = Create_Shader(TEXT_VERTEX_SHADER, TEXT_FRAGMENT_SHADER);
         overall_success &= success;
-        image_shader, success = Create_Shader(TEXT_VERTEX_SHADER, IMAGE_FRAGMENT_SHADER);
+        image_shader, success = Create_Shader(BASIC_COLOR_VERTEX_SHADER, IMAGE_FRAGMENT_SHADER);
         overall_success &= success;
         scene_shader, success = Create_Shader(SCENE_VERTEX_SHADER, SCENE_FRAGMENT_SHADER);
         overall_success &= success;
@@ -60,9 +60,17 @@ Graphics_Backend :: struct {
         text_shader.uniform_mvp_loc = glGetUniformLocation(text_shader.id, temp_c_string("mvp"));
         image_shader.uniform_mvp_loc = glGetUniformLocation(image_shader.id, temp_c_string("mvp"));
         scene_shader.uniform_mvp_loc = glGetUniformLocation(scene_shader.id, temp_c_string("mvp"));
+        // Create_Shader constructs a local Shader record, so make the draw
+        // mode explicit instead of relying on struct-field defaults.
+        basic_color_shader.draw_style = .TRIANGLES;
+        text_shader.draw_style = .TRIANGLES;
+        image_shader.draw_style = .TRIANGLES;
+        scene_shader.draw_style = .TRIANGLES;
         // turn off default attribute locations for shaders that don't have those attributes
         basic_color_shader.uv_loc = -1;
         scene_shader.uv_loc = -1;
+        image_shader.color_loc = -1;
+        image_shader.uv_loc = -1;
 
         // copy id & attribute locations
         alpha_blend_color_shader = basic_color_shader;
@@ -80,6 +88,7 @@ Graphics_Backend :: struct {
 
         text_shader.texture_sampler_loc = glGetUniformLocation(text_shader.id, "text_sampler");
         image_shader.texture_sampler_loc = glGetUniformLocation(image_shader.id, "image_sampler");
+        image_shader.image_rect_loc = glGetUniformLocation(image_shader.id, "image_rect");
 
         vertices.data = vertex_buffer.data;
 
@@ -166,11 +175,20 @@ Set_Shader_For_Text :: inline ()            { Use_Shader(*text_shader);         
 Set_Shader_For_Image :: inline ()           { Use_Shader(*image_shader);             }
 Set_Shader_For_Scene :: inline ()           { Use_Shader(*scene_shader);             }
 
-Set_Image_Shader_Texture :: (texture: u32) {
+Set_Image_Shader_Texture :: (texture: u32, ul: IntVector2, lr: IntVector2) {
     Set_Shader_For_Image();
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture);
     glUniform1i(image_shader.texture_sampler_loc, 0);
+    // Fragment coordinates have a lower-left origin while Vai's UI
+    // coordinates start at the upper left.
+    glUniform4f(
+        image_shader.image_rect_loc,
+        xx ul.x,
+        xx (window.height-lr.y),
+        xx (lr.x-ul.x),
+        xx (lr.y-ul.y),
+    );
 }
 
 Set_Scene_Shader_Projection :: (mvp: Matrix4) {
@@ -192,27 +210,6 @@ Render_Scene_Triangle_List :: (vertices: *void, vertex_count: s64, vertex_stride
     glDrawArrays(GL_TRIANGLES, 0, xx vertex_count);
     DumpGLErrors("scene preview draw");
     Set_Shader_For_Text();
-}
-
-Set_Parameter_On_All_Shaders :: ($PARAM_NAME: string, m: Matrix4) {
-    // Uniform locations belong to the program that created them.  The old
-    // implementation issued every update against whichever program happened
-    // to be bound, which only worked when drivers coincidentally assigned the
-    // same location to every shader's mvp uniform.
-    active_shader := current_shader;
-    for unique_shaders {
-        glUseProgram(it.id);
-        Set_Shader_Parameter(it, PARAM_NAME, m);
-    }
-    if active_shader != null {
-        glUseProgram(active_shader.id);
-    }
-}
-
-Set_Shader_Parameter :: (shader: *Shader, $PARAM_NAME: string, m: Matrix4) #expand {
-    #insert -> string {
-        return tprint("glUniformMatrix4fv(shader.uniform_%_loc, 1, GL_TRUE, m.floats.data);", PARAM_NAME);
-    }
 }
 
 Render_Line :: (a: IntVector2, b: IntVector2, color := fRGBA_WHITE, uv1 := Vector2.{}, uv2 := Vector2.{}, depth := DEFAULT_DEPTH) {
@@ -342,6 +339,13 @@ Render_Quads_Generated_For_Text :: (depth := DEFAULT_DEPTH) {
     array_reset_keeping_memory(*font.current_quads);
 }
 
+#scope_export
+Set_Current_Shader_Projection :: (m: Matrix4) {
+    if current_shader != null {
+        glUniformMatrix4fv(current_shader.uniform_mvp_loc, 1, GL_TRUE, m.floats.data);
+    }
+}
+
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -369,9 +373,11 @@ Shader :: struct {
 
     uniform_mvp_loc: s32;
     texture_sampler_loc: s32;
+    image_rect_loc: s32;
 
     blend_style: ShaderBlendStyle;
-    draw_style: ShaderDrawStyle;
+    // Most shaders render the editor's batched quads. Lines opt in below.
+    draw_style: ShaderDrawStyle = .TRIANGLES;
 }
 
 Create_Shader :: (vertex: string, fragment: string) -> Shader, success: bool {
@@ -499,13 +505,16 @@ IMAGE_FRAGMENT_SHADER :: #string HERE
 
 out vec4 color;
 
-in vec2 tex_coords;
-in vec4 f_color;
-
 uniform sampler2D image_sampler;
+// x/y is the lower-left image corner in framebuffer coordinates; z/w is size.
+uniform vec4 image_rect;
 
 void main() {
-    color = texture(image_sampler, tex_coords) * f_color;
+    vec2 relative = vec2(
+        (gl_FragCoord.x - image_rect.x) / image_rect.z,
+        (gl_FragCoord.y - image_rect.y) / image_rect.w
+    );
+    color = texture(image_sampler, vec2(relative.x, 1.0-relative.y));
 }
 HERE
 
@@ -552,7 +561,6 @@ text_shader: Shader;
 image_shader: Shader;
 scene_shader: Shader;
 line_shader: Shader;
-unique_shaders := *Shader.[*basic_color_shader, *text_shader, *image_shader];
 
 va: u32; // vertex array
 vb: u32; // vertex buffer
