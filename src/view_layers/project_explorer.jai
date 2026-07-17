@@ -108,7 +108,7 @@ Render_Project_Explorer_Text :: (project_explorer: *ProjectExplorer, is_active: 
     }
 
     View_Scroll(view_layer, *renderer, text_buffer);
-    if project_explorer.cursor.y >= 1 {
+    if project_explorer.cursor.y >= Project_Explorer_First_Selectable_Line(text_buffer) {
         renderer.cursor_pos = .{project_explorer.cursor.x, project_explorer.cursor.y};
         Render_Cursor_Line_Block(*renderer, *project_explorer.cursor, 0.18);
     }
@@ -206,12 +206,23 @@ Project_Explorer_Scroll_Left :: () {
     }
 }
 
+Project_Explorer_First_Selectable_Line :: (text_buffer: *TextBuffer) -> s32 {
+    // The active project's action is informational, unlike [open project].
+    // Its first selectable row is therefore the first configuration file.
+    if text_buffer.file_path == project_state.config_directory {
+        return 2;
+    }
+    return 1;
+}
+
 Project_Explorer_Clamp_Cursor :: (cursor: *Cursor, text_buffer: *TextBuffer) {
-    cursor.y = clamp(cursor.y, 0, sdw(max(text_buffer.lines.count-1, 0)));
-    // Line zero is a heading, never a selectable entry. An empty projects
-    // directory has only that line, so leave its cursor at zero in that case.
-    if text_buffer.lines.count > 1 {
-        cursor.y = max(cursor.y, sdw(1));
+    last_line := sdw(max(text_buffer.lines.count-1, 0));
+    first_selectable_line := Project_Explorer_First_Selectable_Line(text_buffer);
+    if last_line < first_selectable_line {
+        // No selectable entry: keep the cursor on the heading but do not draw it.
+        cursor.y = 0;
+    } else {
+        cursor.y = clamp(cursor.y, first_selectable_line, last_line);
     }
     cursor.x = 0;
     cursor.target_x = 0;
