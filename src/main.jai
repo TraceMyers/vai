@@ -52,6 +52,7 @@ Vai_Main :: () {
     if !Scoped_Construct(Text_Buffers)          then return;
     if !Scoped_Construct(Runtime_Settings)      then return;
     if !Scoped_Construct(Project_Configuration) then return;
+    if !Scoped_Construct(Scene_Preview_Providers) then return;
     if !Create_Window("Vai")                    then return;
     if !Scoped_Construct(Graphics_Backend)      then return;
     if !Scoped_Construct(Input)                 then return;
@@ -153,6 +154,7 @@ GetConsoleWindow :: () -> HWND #foreign kernel32;
 #load "view_layers/file_editor.jai";
 #load "view_layers/top_bar.jai";
 #load "view_layers/vim_console.jai";
+#load "scene_preview.jai";
 #load "explorer_preview.jai";
 #load "view_layers/file_explorer.jai";
 #load "view_layers/project_explorer.jai";

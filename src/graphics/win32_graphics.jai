@@ -48,6 +48,8 @@ Graphics_Backend :: struct {
         overall_success &= success;
         image_shader, success = Create_Shader(TEXT_VERTEX_SHADER, IMAGE_FRAGMENT_SHADER);
         overall_success &= success;
+        scene_shader, success = Create_Shader(SCENE_VERTEX_SHADER, SCENE_FRAGMENT_SHADER);
+        overall_success &= success;
 
         if !overall_success {
             Log_Error("failed compiling shaders or creating shader objects");
@@ -57,8 +59,10 @@ Graphics_Backend :: struct {
         basic_color_shader.uniform_mvp_loc = glGetUniformLocation(basic_color_shader.id, temp_c_string("mvp"));
         text_shader.uniform_mvp_loc = glGetUniformLocation(text_shader.id, temp_c_string("mvp"));
         image_shader.uniform_mvp_loc = glGetUniformLocation(image_shader.id, temp_c_string("mvp"));
+        scene_shader.uniform_mvp_loc = glGetUniformLocation(scene_shader.id, temp_c_string("mvp"));
         // turn off default attribute locations for shaders that don't have those attributes
         basic_color_shader.uv_loc = -1;
+        scene_shader.uv_loc = -1;
 
         // copy id & attribute locations
         alpha_blend_color_shader = basic_color_shader;
@@ -70,6 +74,7 @@ Graphics_Backend :: struct {
         invert_color_shader.blend_style = .INVERT_COLOR_BEHIND;
         text_shader.blend_style = .ALPHA_BLEND;
         image_shader.blend_style = .ALPHA_BLEND;
+        scene_shader.blend_style = .ALPHA_BLEND;
         line_shader.blend_style = .ALPHA_BLEND;
         line_shader.draw_style = .LINES;
 
@@ -159,12 +164,34 @@ Set_Shader_For_Blended_Color :: inline ()   { Use_Shader(*alpha_blend_color_shad
 Set_Shader_For_Color_Inversion :: inline () { Use_Shader(*invert_color_shader);      }
 Set_Shader_For_Text :: inline ()            { Use_Shader(*text_shader);              }
 Set_Shader_For_Image :: inline ()           { Use_Shader(*image_shader);             }
+Set_Shader_For_Scene :: inline ()           { Use_Shader(*scene_shader);             }
 
 Set_Image_Shader_Texture :: (texture: u32) {
     Set_Shader_For_Image();
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture);
     glUniform1i(image_shader.texture_sampler_loc, 0);
+}
+
+Set_Scene_Shader_Projection :: (mvp: Matrix4) {
+    Set_Shader_For_Scene();
+    glUniformMatrix4fv(scene_shader.uniform_mvp_loc, 1, GL_TRUE, mvp.floats.data);
+}
+
+Render_Scene_Triangle_List :: (vertices: *void, vertex_count: s64, vertex_stride: s64, position_offset: s64, color_offset: s64, mvp: Matrix4) {
+    if vertices == null || vertex_count <= 0 {
+        return;
+    }
+    Set_Scene_Shader_Projection(mvp);
+    glBindBuffer(GL_ARRAY_BUFFER, vb);
+    glBufferData(GL_ARRAY_BUFFER, vertex_stride * vertex_count, vertices, GL_STREAM_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, xx vertex_stride, xx position_offset);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, xx vertex_stride, xx color_offset);
+    glEnableVertexAttribArray(1);
+    glDrawArrays(GL_TRIANGLES, 0, xx vertex_count);
+    DumpGLErrors("scene preview draw");
+    Set_Shader_For_Text();
 }
 
 Set_Parameter_On_All_Shaders :: ($PARAM_NAME: string, m: Matrix4) {
@@ -475,6 +502,35 @@ HERE
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+SCENE_VERTEX_SHADER :: #string HERE
+#version 330 core
+
+out vec4 f_color;
+
+layout(location=0) in vec3 vert_position;
+layout(location=1) in vec4 vert_color;
+
+uniform mat4 mvp;
+
+void main() {
+    gl_Position = mvp * vec4(vert_position, 1.0);
+    f_color = vert_color;
+}
+HERE
+
+SCENE_FRAGMENT_SHADER :: #string HERE
+#version 330 core
+
+in vec4 f_color;
+out vec4 color;
+
+void main() {
+    color = f_color;
+}
+HERE
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 gl_context: HGLRC;
 device_context: HDC;
 chosen_msaa: s32;
@@ -485,6 +541,7 @@ alpha_blend_color_shader: Shader;
 invert_color_shader: Shader;
 text_shader: Shader;
 image_shader: Shader;
+scene_shader: Shader;
 line_shader: Shader;
 unique_shaders := *Shader.[*basic_color_shader, *text_shader, *image_shader];
 

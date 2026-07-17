@@ -35,6 +35,8 @@ Thread_Worker_Loop :: (t: *Thread) -> s64 {
                     Load_File_Explorer_Preview(*it);
                 case .LOAD_FILE_EXPLORER_IMAGE_PREVIEW;
                     Load_File_Explorer_Image_Preview(*it);
+                case .LOAD_FILE_EXPLORER_SCENE_PREVIEW;
+                    Load_File_Explorer_Scene_Preview(*it);
                 }
                 reset_temporary_storage();
             }
@@ -53,6 +55,8 @@ Init_Task_Result :: (task: *AsyncTask) {
         task.result.load_file_explorer_preview = .{};
     case .LOAD_FILE_EXPLORER_IMAGE_PREVIEW;
         task.result.load_file_explorer_image_preview = .{};
+    case .LOAD_FILE_EXPLORER_SCENE_PREVIEW;
+        task.result.load_file_explorer_scene_preview = .{};
     }
 }
 
@@ -66,6 +70,7 @@ Load_File_Explorer_Image_Preview :: (task: *AsyncTask) {
     width, height, source_channels: s32;
     decoded_pixels := stbi_load(temp_c_string(file_path), *width, *height, *source_channels, 4);
     if decoded_pixels == null {
+        Image_Preview_Load_File(file_path, *task.result.load_file_explorer_image_preview);
         return;
     }
     defer stbi_image_free(decoded_pixels);
@@ -86,6 +91,10 @@ Load_File_Explorer_Image_Preview :: (task: *AsyncTask) {
     result.width = width;
     result.height = height;
     result.success = true;
+}
+
+Load_File_Explorer_Scene_Preview :: (task: *AsyncTask) {
+    Scene_Preview_Load_File(task.request.load_file_explorer_scene_preview.file_path, *task.result.load_file_explorer_scene_preview);
 }
 
 SearchTextRequest :: struct {
@@ -110,10 +119,23 @@ LoadFileExplorerImagePreviewResult :: struct {
     pixels: []u8;
 }
 
+LoadFileExplorerScenePreviewRequest :: struct {
+    file_path: string;
+}
+
+LoadFileExplorerScenePreviewResult :: struct {
+    success: bool;
+    vertices: []FileExplorerSceneVertex;
+    bounds_min: Vector3;
+    bounds_max: Vector3;
+    error_message: string;
+}
+
 AsyncTaskType :: enum u8 {
     SEARCH_TEXT;
     LOAD_FILE_EXPLORER_PREVIEW;
     LOAD_FILE_EXPLORER_IMAGE_PREVIEW;
+    LOAD_FILE_EXPLORER_SCENE_PREVIEW;
 }
 
 AsyncTaskRequest :: struct {
@@ -122,6 +144,7 @@ AsyncTaskRequest :: struct {
         search_text: SearchTextRequest;
         load_file_explorer_preview: LoadFileExplorerPreviewRequest;
         load_file_explorer_image_preview: LoadFileExplorerImagePreviewRequest;
+        load_file_explorer_scene_preview: LoadFileExplorerScenePreviewRequest;
     }
 }
 
@@ -130,6 +153,7 @@ AsyncTask :: struct {
     result: union {
         load_file_explorer_preview: LoadFileExplorerPreviewResult;
         load_file_explorer_image_preview: LoadFileExplorerImagePreviewResult;
+        load_file_explorer_scene_preview: LoadFileExplorerScenePreviewResult;
     }
 }
 
@@ -165,6 +189,18 @@ Process_Async_Results :: () {
                 task.result.load_file_explorer_image_preview.pixels = .{};
             }
             free(task.request.load_file_explorer_image_preview.file_path);
+        case .LOAD_FILE_EXPLORER_SCENE_PREVIEW;
+            file_explorer_scene_preview_available = true;
+            File_Explorer_Scene_Preview_Clear();
+            file_explorer_scene_preview.file_path = task.request.load_file_explorer_scene_preview.file_path;
+            file_explorer_scene_preview.vertices = task.result.load_file_explorer_scene_preview.vertices;
+            file_explorer_scene_preview.bounds_min = task.result.load_file_explorer_scene_preview.bounds_min;
+            file_explorer_scene_preview.bounds_max = task.result.load_file_explorer_scene_preview.bounds_max;
+            file_explorer_scene_preview.error_message = task.result.load_file_explorer_scene_preview.error_message;
+            task.request.load_file_explorer_scene_preview.file_path = .{};
+            task.result.load_file_explorer_scene_preview.vertices = .{};
+            task.result.load_file_explorer_scene_preview.error_message = .{};
+            free(task.request.load_file_explorer_scene_preview.file_path);
         }
     }
     array_reset_keeping_memory(working_tasks);
@@ -179,11 +215,15 @@ Process_Async_Results :: () {
         case .LOAD_FILE_EXPLORER_IMAGE_PREVIEW;
             file_explorer_image_preview_available = false;
             File_Explorer_Image_Preview_Clear();
+        case .LOAD_FILE_EXPLORER_SCENE_PREVIEW;
+            file_explorer_scene_preview_available = false;
+            File_Explorer_Scene_Preview_Clear();
         }
     }
     // there's only one preview buffer; we can only take one request per frame
     assert(task_counts[AsyncTaskType.LOAD_FILE_EXPLORER_PREVIEW] <= 1);
     assert(task_counts[AsyncTaskType.LOAD_FILE_EXPLORER_IMAGE_PREVIEW] <= 1);
+    assert(task_counts[AsyncTaskType.LOAD_FILE_EXPLORER_SCENE_PREVIEW] <= 1);
 
     next_tasks, working_tasks = working_tasks, next_tasks;
     thread_worker_should_work = working_tasks.count > 0;

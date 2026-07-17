@@ -19,10 +19,10 @@ File_Explorer_Preview_Kind_For_Extension :: (extension: string) -> FileExplorerP
     if Is_Basic_Text_File_Extension(extension) || Is_Code_File_Extension(extension) {
         return .TEXT;
     }
-    if Is_File_Explorer_Image_Extension(extension) {
+    if Is_File_Explorer_Image_Extension(extension) || Image_Preview_Has_Provider_For_Extension(extension) {
         return .IMAGE;
     }
-    if Is_File_Explorer_Scene_Extension(extension) {
+    if Is_File_Explorer_Scene_Extension(extension) || Scene_Preview_Has_Provider_For_Extension(extension) {
         return .SCENE;
     }
     return .NONE;
@@ -37,6 +37,10 @@ Is_File_Explorer_Image_Extension :: (extension: string) -> bool {
         || extension == "psd"
         || extension == "gif"
         || extension == "hdr"
+        || extension == "exr"
+        || extension == "tif"
+        || extension == "tiff"
+        || extension == "dng"
         || extension == "pic"
         || extension == "ppm"
         || extension == "pgm";
@@ -48,6 +52,7 @@ Is_File_Explorer_Scene_Extension :: (extension: string) -> bool {
     return extension == "gltf"
         || extension == "glb"
         || extension == "fbx"
+        || extension == "obj"
         || extension == "usd"
         || extension == "usda"
         || extension == "usdc"

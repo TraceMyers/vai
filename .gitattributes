@@ -1,0 +1,4 @@
+# Preserve upstream source and reference assets verbatim. Their historical
+# whitespace must not make Vai's authored-code whitespace check noisy.
+third_party/** -whitespace
+native_preview/testdata/** -whitespace

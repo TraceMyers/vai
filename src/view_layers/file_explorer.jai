@@ -147,6 +147,7 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
     if clear_file_explorer_preview {
         Clear_Text_Buffer(*file_explorer_text_preview, true);
         File_Explorer_Image_Preview_Clear();
+        File_Explorer_Scene_Preview_Clear();
     } else if selected_preview_kind == .TEXT {
         if file_explorer_preview_available && file_explorer_text_preview.file_path != selected_preview_path {
             request_data := LoadFileExplorerPreviewRequest.{copy_string(selected_preview_path)};
@@ -157,6 +158,12 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
         if file_explorer_image_preview_available && !File_Explorer_Image_Preview_Is_For_File(selected_preview_path) {
             request_data := LoadFileExplorerImagePreviewRequest.{copy_string(selected_preview_path)};
             request := AsyncTaskRequest.{type=.LOAD_FILE_EXPLORER_IMAGE_PREVIEW, load_file_explorer_image_preview=request_data};
+            Make_Unique_Thread_Work_Request(request);
+        }
+    } else if selected_preview_kind == .SCENE {
+        if file_explorer_scene_preview_available && !File_Explorer_Scene_Preview_Is_For_File(selected_preview_path) {
+            request_data := LoadFileExplorerScenePreviewRequest.{copy_string(selected_preview_path)};
+            request := AsyncTaskRequest.{type=.LOAD_FILE_EXPLORER_SCENE_PREVIEW, load_file_explorer_scene_preview=request_data};
             Make_Unique_Thread_Work_Request(request);
         }
     }
@@ -219,6 +226,12 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
         Set_View_Scissor(ul, lr);
         Set_View_Scissor(boxes.preview_ul, boxes.preview_lr);
         Render_File_Explorer_Image_Preview(boxes.preview_ul, boxes.preview_lr);
+    } else if selected_preview_kind == .SCENE
+    && File_Explorer_Scene_Preview_Is_For_File(selected_preview_path)
+    && file_explorer.preview_vertical_proportion != .NONE {
+        Set_View_Scissor(ul, lr);
+        Set_View_Scissor(boxes.preview_ul, boxes.preview_lr);
+        Render_File_Explorer_Scene_Preview(boxes.preview_ul, boxes.preview_lr);
     }
 }
 

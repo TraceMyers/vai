@@ -1375,6 +1375,17 @@ Vai creates and opens a project named 'default'. On later launches it opens the 
 
 Each command has a listed short name. Longer unambiguous prefixes work too.
 
+Explorer previews
+-----------------
+The file explorer previews common game textures: PNG, JPEG, BMP, TGA, PSD, GIF, HDR,
+OpenEXR, TIFF, DNG, PIC, PPM, PGM, and DDS (BC1/BC2/BC3 plus common uncompressed variants). It also renders an unlit static view of glTF/GLB, FBX, OBJ, USD,
+USDA, USDC, and USDZ scenes. Select an asset in the explorer to load its preview.
+
+To add another scene format, put a compatible preview-provider DLL in
+%APPDATA%/Vai/plugins/preview, then restart Vai. Providers expose a small versioned C ABI
+and run off the UI thread; source builds include native_preview/vai_scene_preview_api.h and
+docs/scene-preview-plugins.md with the contract.
+
 For learning vim motions, check out vim-adventures.com. 
 If you're already familiar with vim, you'll notice a few things are different in vai, and many features are missing. 
 In the future, more will be different, and many more features will be available... it just takes time ;d 
