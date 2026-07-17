@@ -112,7 +112,7 @@ Create_Debug_View_Undo_Redo :: (out_buffer: *TextBuffer) {
         Append_Tack :: (tack: *BinTack, tack_prefix: string) #expand {
             bin: []u8;
             if tack.count > 0 {
-                bin = Get_Bin(*undo_redo_text, *tack.bin_id);
+                bin = Get_Bin(*undo_redo_text, tack.bin_id);
                 bin.count = tack.count;
             }
             fixed := Prefix_Postfix_String(As_String(bin), tprint("[%/%/%/%] (%) : [", i, tack_prefix, prefix, place_str, `it.flags), "]");

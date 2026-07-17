@@ -482,10 +482,8 @@ CodePoint :: struct {
     encoding: TextEncoding;
     encode_success: bool;
 
-    #place bytes;
-        words: [2]u16 = ---;
-    #place bytes;
-        double_word: u32 = ---;
+    #overlay (bytes) words: [2]u16 = ---;
+    #overlay (bytes) double_word: u32 = ---;
 }
 
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }

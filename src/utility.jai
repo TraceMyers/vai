@@ -7,22 +7,19 @@ bRGBA :: struct {
     r, g, b: u8;
     a: u8 = 255;
 
-    #place r;
-        rgb: bRGB = ---;
+    #overlay (r) rgb: bRGB = ---;
 }
 
 fRGB :: struct {
     r, g, b: float32;
-#place r;
-    channels: [3]float32;
+    #overlay (r) channels: [3]float32;
 }
 
 fRGBA :: struct {
     r, g, b: float32;
     a := 1.0;
 
-    #place r;
-        rgb: fRGB = ---;
+    #overlay (r) rgb: fRGB = ---;
 }
 
 operator * :: (rgb: fRGB, x: float) -> fRGB {
@@ -411,7 +408,7 @@ DirectoryListItem :: struct {
     is_directory: bool;
 }
 
-Directory_List :: (path: string) -> bool, []DirectoryListItem #must {
+Directory_List :: (path: string) -> bool, []DirectoryListItem {
     items: [..]DirectoryListItem;
     items.allocator = temp;
     Visitor :: (info: *File_Visit_Info, user_data: *[..]DirectoryListItem) {

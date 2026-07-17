@@ -56,7 +56,10 @@ Render_File_Explorer_Text :: (using file_explorer: *FileExplorer, is_active: boo
         if directory_as_shown != directory_true {
             if upper_path_as_shown == directory_true {
                 // path being typed is editing the directory at the end of the path.
-                file_explorer.directory = upper_path_true;
+                // `upper_path_true` is derived from a temporary copy of the path.
+                // The explorer owns this field across frames, so keep an owned copy
+                // instead of leaving it pointing at temporary storage.
+                File_Explorer_Set_Directory(upper_path_true);
                 working_path = Temp_Copy_String(file_explorer.directory);
                 recreate_directory_list = true;
                 keep_path_as_shown = vi_mode == .INSERT;

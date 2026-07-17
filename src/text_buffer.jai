@@ -1012,7 +1012,7 @@ Get_Indent_Level_From_Context :: (buffer: *TextBuffer, i: s64) -> s64 {
     // try using curly braces relative to our current pos
     while (i - iter_ct) >= line_min {
         line := Raw_Line_View(buffer, i - iter_ct);
-        if line.count > 0 then for #v2 < cback : 0..line.count-1 {
+        if line.count > 0 then for cback : 0..line.count-1 {
             if line[cback] == #char "{" {
                 curly_open_level += 1;
                 if curly_open_level > 0 {

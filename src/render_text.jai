@@ -152,11 +152,11 @@ Render_Wrapped_Line :: (renderer: *TextRenderer, color_buffer: *[..]TextColorLoc
         if partial_render_buf.count >= max_render_with_indent_ct-1 {
             partial_render_buf.count = max(max_render_with_indent_ct-1, sdw(1));
             // wrap on word. search back for space
-            if partial_render_buf.count > 2 then for #v2 < 1..partial_render_buf.count-1 {
+            if partial_render_buf.count > 2 then for 1..partial_render_buf.count-1 {
                 if Is_Whitespace(partial_render_buf[it]) {
                     // make sure we're not digging into the indent
                     maybe_split_on_space_index := it;
-                    for #v2 < 0..maybe_split_on_space_index-1 {
+                    for 0..maybe_split_on_space_index-1 {
                         if !Is_Whitespace(partial_render_buf[it]) {
                             partial_render_buf.count = it + 2;
                             break;

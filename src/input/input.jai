@@ -73,7 +73,7 @@ Inject_Modified_Utf32_Into_Frame_Input :: (input: []u32) {
     array_resize(*frame_input_stream, new_count);
     next_stream_index := frame_input_stream_index + 1;
     if next_stream_index < old_count {
-        for #v2 < next_stream_index..old_count-1 {
+        for next_stream_index..old_count-1 {
             frame_input_stream[it+input.count] = frame_input_stream[it];
         }
     }

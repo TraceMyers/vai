@@ -117,11 +117,15 @@ Cursor_Scroll_Left :: () {
             old_x := cursor.x;
             cursor.x -= 2;
             Cursor_Back_Up_To_Slash(cursor, line);
-            if cursor.x != old_x {
+            if cursor.x > 0 && cursor.x != old_x {
                 File_Explorer_Set_Directory_From_Cursor_Pos(cursor, line);
+            } else {
+                // Do not turn a drive/root path into an invalid prefix such as "D:".
+                cursor.x = old_x;
             }
         }
     }
+    cursor.target_x = cursor.x;
     cursor.just_moved = true;
     Add_Cursor_Move_Artifact(cursor, .SCROLL_LEFT);
 }
@@ -926,10 +930,10 @@ Normal_Mode_Return :: () {
             if !list_success {
                 split_success, left, right := split_from_right(try_new_path, #char "/");
                 if split_success {
-                    File_Explorer_Set_Directory(copy_string(left));
+                    File_Explorer_Set_Directory(left);
                 }
             } else {
-                File_Explorer_Set_Directory(copy_string(try_new_path));
+                File_Explorer_Set_Directory(try_new_path);
             }
         } else {
             working_directory := File_Explorer_Get_Directory();
@@ -976,7 +980,7 @@ Normal_Mode_Return :: () {
                 new_dir := tprint("%/%", working_directory, directory_list[target_index].name);
                 success, _ := Directory_List(new_dir);
                 if success {
-                    File_Explorer_Set_Directory(copy_string(new_dir));
+                    File_Explorer_Set_Directory(new_dir);
                     File_Explorer_Clamp_Y_To_Directory_List(cursor, true);
                 } else {
                     // TODO: access denie?
@@ -1372,13 +1376,14 @@ Clamp_X_To_Line :: (x: s32, line: []u32, $TAB_EXPANSION_SKIP: TabExpansionSkip =
 }
 
 Cursor_Back_Up_To_Slash :: (cursor: *Cursor, line: []u32) {
-    if cursor.x > 1 then for #v2 < 0..cursor.x-1 {
+    cursor.x = clamp(cursor.x, 0, sdw(line.count));
+    last_component_start: s32 = 0;
+    if cursor.x > 0 then for 0..cursor.x-1 {
         if Is_Slash(line[it]) {
-            cursor.x = it + 1;
-            return;
+            last_component_start = it + 1;
         }
     }
-    cursor.x = 0;
+    cursor.x = last_component_start;
 }
 
 File_Explorer_Reset_Cursor_On_Path :: (cursor: *Cursor, text_buffer: *TextBuffer) {
@@ -1386,11 +1391,15 @@ File_Explorer_Reset_Cursor_On_Path :: (cursor: *Cursor, text_buffer: *TextBuffer
         line := Line_View(text_buffer, cursor.y);
         cursor.x = sdw(line.count - 1);
         Cursor_Back_Up_To_Slash(cursor, line);
+        cursor.target_x = cursor.x;
     }
 }
 
 File_Explorer_Set_Directory_From_Cursor_Pos :: (cursor: *Cursor, line: []u32) {
     // maybe not a great name, because it's not a deep copy, just a ptr,count copy
+    if cursor.x < 0 || cursor.x >= line.count {
+        return;
+    }
     line_copy := line;
     for cursor.x..line_copy.count-1 {
         if Is_Slash(line_copy[it]) {
@@ -1398,9 +1407,8 @@ File_Explorer_Set_Directory_From_Cursor_Pos :: (cursor: *Cursor, line: []u32) {
             unmarked_utf32: [..]u32;
             unmarked_utf32.allocator = temp;
             Get_Unmarked_Utf32(line_copy, *unmarked_utf32);
-            new_path_utf8 := Encode(As_String(unmarked_utf32), .UTF32, .UTF8, allocator=context.allocator);
+            new_path_utf8 := Encode(As_String(unmarked_utf32), .UTF32, .UTF8);
             File_Explorer_Set_Directory(new_path_utf8);
-            File_Explorer_Clamp_Y_To_Directory_List(cursor);
             break;
         }
     }
@@ -1409,8 +1417,14 @@ File_Explorer_Set_Directory_From_Cursor_Pos :: (cursor: *Cursor, line: []u32) {
 File_Explorer_Set_Directory :: (dir: string) {
     tool_view := view_pool.items[tool_view_id];
     explorer_layer := *tool_view.layers[ToolViewLayer.FILE_EXPLORER];
+
+    // Directory paths can originate from a temporary UTF-32 conversion or an
+    // editable text-buffer view.  Store one owned, normalized copy before
+    // releasing the previous path so neither input path can outlive its data.
+    owned_dir := copy_string(dir);
+    Convert_To_Forward_Slashes(owned_dir);
     free(explorer_layer.file_explorer.directory);
-    explorer_layer.file_explorer.directory = dir;
+    explorer_layer.file_explorer.directory = owned_dir;
 }
 
 File_Explorer_Get_Directory :: () -> string {

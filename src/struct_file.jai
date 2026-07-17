@@ -41,7 +41,7 @@ Struct_String_Assign :: (s: *$StructType, member_name: string, value: string) {
                 fmt_string,
                 it.name, 
                 it.name, 
-                <<cast(*Type) *it.type,
+                (cast(*Type) *it.type).*,
                 parse_function
             );
             made_first_line = true;
@@ -60,9 +60,9 @@ Struct_Text_File_Line_Iterate :: (
     endline_index := find_index_from_left(file_substring, "\n", 0);
     if endline_index == -1 {
         endline_index = file_substring.count;
-        <<line_count = endline_index;
+        line_count.* = endline_index;
     } else {
-        <<line_count = endline_index + 1;
+        line_count.* = endline_index + 1;
     }
 
     full_line := slice(file_substring, 0, endline_index);
@@ -70,8 +70,8 @@ Struct_Text_File_Line_Iterate :: (
     
     if equals_index == -1 then return false;
 
-    <<token_left = trim(slice(full_line, 0, equals_index));
-    <<token_right = trim(slice(full_line, equals_index + 1, full_line.count - (equals_index + 1)));
+    token_left.* = trim(slice(full_line, 0, equals_index));
+    token_right.* = trim(slice(full_line, equals_index + 1, full_line.count - (equals_index + 1)));
 
     if token_left.count <= 0 || token_right.count <= 0 then return false;
 
@@ -79,7 +79,7 @@ Struct_Text_File_Line_Iterate :: (
 }
 
 Load_Struct_From_Text_File :: (file_path: string, s: *$StructType) {
-    <<s = StructType.{};
+    s.* = StructType.{};
     struct_file, success := file_open(file_path, keep_existing_content=true);
     if success {
         defer file_close(*struct_file);

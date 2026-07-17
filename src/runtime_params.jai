@@ -38,8 +38,7 @@ SettingsFileData :: struct {
     relative_line_numbers := false;
     tool_view_screen_proportion := 0.3;
     
-    #place window_width;
-        window_info: WindowInfo = ---;
+    #overlay (window_width) window_info: WindowInfo = ---;
 }
 
 settings_file_data: SettingsFileData;

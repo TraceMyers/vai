@@ -117,6 +117,13 @@ ViewportOffsetType :: enum u8 {
     PROPORTION; PIXELS;
 }
 
+ViewportPixelOffsets :: struct {
+    left_pixels: s32;
+    top_pixels: s32;
+    right_pixels: s32;
+    bottom_pixels: s32;
+}
+
 Viewport :: struct {
     left: float;
     top: float;
@@ -125,15 +132,9 @@ Viewport :: struct {
     type: ViewportOffsetType;
     inverted: bool;
 
-#place left;
-    left_pixels: s32;
-    top_pixels: s32;
-    right_pixels: s32;
-    bottom_pixels: s32;
-#place left;
-    offsets: [4]float32;
-#place left;
-    pixel_offsets: [4]s32;
+    #overlay (left) using pixel_sides: ViewportPixelOffsets;
+    #overlay (left) offsets: [4]float32;
+    #overlay (left) pixel_offsets: [4]s32;
 }
 
 ViewportRect :: struct {
@@ -161,7 +162,7 @@ Shave_Rect_Dimension :: (rect_pivot: *s32, rect_dimension: *s32, v: *Viewport, m
     }
     if a_shave == 0 && b_shave == 0 then return;
 
-    overshave := a_shave + b_shave - <<rect_dimension;
+    overshave := a_shave + b_shave - rect_dimension.*;
     if overshave > 0 {
         b_delta := min(overshave, b_shave);
         b_shave = max(b_shave - b_delta, 0);

@@ -46,37 +46,37 @@ isLegalUTF8 :: (source: *u8, length: s64) -> bool {
 	srcptr := source+length;
 
     if length >= 4 {
-        a := <<srcptr;
+        a := srcptr.*;
         srcptr -= 1;
         if a < 0x80 return false;
         if a > 0xBF return false;
     }
 
     if length >= 3 {
-        a := <<srcptr;
+        a := srcptr.*;
         srcptr -= 1;
         if a < 0x80 return false;
         if a > 0xBF return false;
     }
 
     if length >= 2 {
-        a := << srcptr;
+        a := srcptr.*;
         srcptr -= 1;
         if a > 0xBF return false;
 
-        if << source == 0xE0 {
+        if source.* == 0xE0 {
             if a < 0xA0 return false;
-        } else if << source == 0xF0 {
+        } else if source.* == 0xF0 {
             if a < 0x90 return false;
-        } else if << source == 0xF4 {
+        } else if source.* == 0xF4 {
             if a > 0x8F return false;
         } else {
             if a < 0x80 return false;
         }
     }
 
-    if (<< source >= 0x80) && (<< source <= 0xC2) return false;
-    if << source > 0xF4 return false;
+    if (source.* >= 0x80) && (source.* <= 0xC2) return false;
+    if source.* > 0xF4 return false;
 
     return true;
 }
@@ -472,7 +472,7 @@ load_font :: (path: string, basename: string, pixel_height: int) -> font: *Dynam
         if !loaded_font return null;
     }
 
-    load_font_part_2(result, <<loaded_font, pixel_height);
+    load_font_part_2(result, loaded_font.*, pixel_height);
     return result;
 }
 
@@ -633,7 +633,7 @@ get_font_at_size :: (memory: [] u8, pixel_height: int) -> *Dynamic_Font {
         array_add(*loaded_memory_fonts, loaded);
     }
 
-    load_font_part_2(result, << loaded, pixel_height);
+    load_font_part_2(result, loaded.*, pixel_height);
     return result;
 }
 
@@ -864,7 +864,7 @@ copy_glyph_to_bitmap :: (face: FT_Face, data: *Glyph_Data) {
 find_or_create_glyph :: (using font: *Dynamic_Font,
                          utf32: u32, glyph_index: u32, hash_key: int) -> *Glyph_Data {
 
-    data, success := table_find(*font.glyph_lookup, hash_key);
+    success, data := table_find(*font.glyph_lookup, hash_key);
     if success  return data;
 
     face := font.private1;  // XXX Why not using?
@@ -1127,9 +1127,9 @@ read4_from_offset :: inline (base: *u8, offset: s64, reversed: bool) -> u32 #exp
     ptr := cast(*u32) (base + offset);
 
     if reversed {
-        return byte_swap(<< ptr);
+        return byte_swap(ptr.*);
     } else {
-        return << ptr;
+        return ptr.*;
     }
 }
 
@@ -1137,9 +1137,9 @@ read2_from_offset :: inline (base: *u8, offset: s64, reversed: bool) -> u16 {
     ptr := cast(*u16) (base + offset);
 
     if reversed {
-        return byte_swap(<< ptr);
+        return byte_swap(ptr.*);
     } else {
-        return << ptr;
+        return ptr.*;
     }
 }
 
@@ -1265,7 +1265,7 @@ expand_feature :: (using font: *Dynamic_Font, feature: *Font_Feature, lookup_lis
                     sub_dest.glyphs = NewArray(count, u16);
 
                     for * sub_dest.glyphs {
-                         << it = read2_from_offset(subtable, 6 + 2 * it_index, reversed);
+                         it.* = read2_from_offset(subtable, 6 + 2 * it_index, reversed);
                     }
                 } else {
                     assert(false);
@@ -1299,7 +1299,7 @@ FT_ROUND :: inline (x: int) -> int {
 
 #scope_file
 
-#import "freetype-2.12.1";
+#import "freetype";
 #import "Hash_Table";
 #import "Hash";
 #import "Unicode";

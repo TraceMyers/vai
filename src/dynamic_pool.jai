@@ -175,10 +175,10 @@ Item_Index_To_Byte_Index :: inline (i: s64) -> s32, s32 {
 
 Find_Active_Backwards_From :: (in_use: [..]u8, item_index: s64) -> s64 #expand {
     start_byte, start_bit := Item_Index_To_Byte_Index(item_index);
-    for #v2 < byte : 0..start_byte {
+        for byte : 0..start_byte {
         in_use_chunk := in_use[byte];
         if (in_use_chunk & U8_MAX) != 0 {
-            for #v2 < bit_index : 0..start_bit {
+            for bit_index : 0..start_bit {
                 bit := ub(1) << bit_index;
                 if (in_use_chunk & bit) != 0 {
                     item_index := Byte_Index_To_Item_Index(byte, bit_index);

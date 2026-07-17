@@ -76,10 +76,15 @@ Vai_Main :: () {
         Update_Window_Events();
 
         if quit then break;
+
+        // Input actions mutate text buffers, so their per-frame UTF-32 storage must
+        // exist before translating (and executing) those actions.  Initializing it
+        // only for rendering left command/input execution using storage that had
+        // already been shut down and reset at the end of the previous frame.
+        Begin_Update_Text_Buffers();
         any_input := Translate_Inputs_To_Actions();
         do_full_update := any_input | resized | ALWAYS_FULL_UPDATE;
 
-        Begin_Update_Text_Buffers();
         Render_Views(do_full_update);
         Render_Text_End_Frame();
         End_Update_Text_Buffers();
