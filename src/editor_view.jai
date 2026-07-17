@@ -68,6 +68,7 @@ Create_Base_Views :: () {
         layer.file_explorer.text_buffer = Request_Item(*file_buffers);
         file_buffers.items[layer.file_explorer.text_buffer].flags = .FILE_EXPLORER;
         layer.file_explorer.directory = copy_string(get_working_directory());
+        Convert_To_Forward_Slashes(layer.file_explorer.directory);
         tool_view_id = Add_View(.{type=.PROPORTION, left=0.0}, *layer, ROOT_ID);
     }
     {

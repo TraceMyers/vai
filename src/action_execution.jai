@@ -1452,6 +1452,7 @@ File_Explorer_Remember_Forward_Path :: (directory: string) {
     explorer := *tool_view.layers[ToolViewLayer.FILE_EXPLORER].file_explorer;
     String_Reset(*explorer.forward_path);
     explorer.forward_path = copy_string(directory);
+    Convert_To_Forward_Slashes(explorer.forward_path);
 }
 
 File_Explorer_Follow_Forward_Path :: () -> bool {
