@@ -73,6 +73,11 @@ Parse_Command :: (str: []u32) -> Command {
                     break;
                 }
             }
+            // An explicit shorthand (for example, :p) takes precedence over
+            // a longer command that merely shares its prefix.
+            if match_ct == str.count && binding_input.count == str.count {
+                return As_Command(it_index);
+            }
             if match_ct > 0 {
                 if match_ct == best_match_ct {
                     num_matches += 1;

@@ -1350,7 +1350,7 @@ type ':close buffer' to close a text buffer
 type ':save' to write the selected buffer to file.
 type ':quit' to quit the program.
 type ':tools' or ':t' to toggle the last tool (the file explorer by default).
-type ':projects' to open the project browser.
+type ':projects' or ':p' to open the project browser.
 
 Configuration and projects
 --------------------------

@@ -107,7 +107,7 @@ HERE
     .{.["set", ""],                         "INTERACT_WITH_OPTION",     .{proc=Execute_Command_Set_Options}},
     .{.["save", ""],                        "SAVE_TO_FILE",             .{proc=Execute_Command_Save}},
     .{.["tools", "t"],                      "TOGGLE_TOOL_VIEW"          .{proc=Execute_Command_Toggle_Tool_View}},
-    .{.["projects", ""],                    "TOGGLE_PROJECT_VIEW"       .{proc=Execute_Command_Toggle_Project_View}},
+    .{.["projects", "p"],                   "TOGGLE_PROJECT_VIEW"       .{proc=Execute_Command_Toggle_Project_View}},
     .{.["project-create", ""],              "CREATE_PROJECT"            .{proc=Execute_Command_Create_Project}}
 HERE
 );
