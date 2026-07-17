@@ -30,20 +30,26 @@ Struct_String_Assign :: (s: *$StructType, member_name: string, value: string) {
                 // else ifx it.type.type == .ENUM then // would need to iterate through enum names.
             fmt_string: string;
             if it.type.type == .STRING {
-                fmt_string = "if member_name == \"%\" { s.% = %value }\n";
+                // The source file's memory is released after loading, so string
+                // fields must own their parsed value rather than point into it.
+                fmt_string = "if member_name == \"%\" { if s.%.data != null { free(s.%); } s.% = copy_string(value); }\n";
             } else {
                 fmt_string = ifx !made_first_line
                     then "if member_name == \"%\" { s.% = cast(%) %(*value); }\n"
                     else "else if member_name == \"%\" { s.% = cast(%) %(*value); }\n";
             }
-            print_to_builder(
-                *builder, 
-                fmt_string,
-                it.name, 
-                it.name, 
-                (cast(*Type) *it.type).*,
-                parse_function
-            );
+            if it.type.type == .STRING {
+                print_to_builder(*builder, fmt_string, it.name, it.name, it.name, it.name);
+            } else {
+                print_to_builder(
+                    *builder,
+                    fmt_string,
+                    it.name,
+                    it.name,
+                    (cast(*Type) *it.type).*,
+                    parse_function
+                );
+            }
             made_first_line = true;
             size_count = next_size;
         }
@@ -78,8 +84,10 @@ Struct_Text_File_Line_Iterate :: (
     return true;
 }
 
-Load_Struct_From_Text_File :: (file_path: string, s: *$StructType) {
-    s.* = StructType.{};
+Load_Struct_From_Text_File :: (file_path: string, s: *$StructType, reset := true) {
+    if reset {
+        s.* = StructType.{};
+    }
     struct_file, success := file_open(file_path, keep_existing_content=true);
     if success {
         defer file_close(*struct_file);

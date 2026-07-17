@@ -18,8 +18,9 @@ Cursor_Scroll_Down :: () {
             cursor.x = Clamp_X_To_Line(cursor.target_x, line);
             cursor.soft_wrap_target_x = -1;
         }
-    case .FILE_EXPLORER;
-        // file explorer line 1 is a blank space
+    case .FILE_EXPLORER; #through;
+    case .PROJECT_EXPLORER;
+        // explorer line 1 is a blank space
         step_size = ifx cursor.y == 0 then sdw(2) else sdw(1);
         cursor.y = min(cursor.y + step_size, sdw(max(text_buffer.lines.count-1, 0)));
         line := Line_View(text_buffer, cursor.y);
@@ -50,6 +51,12 @@ Cursor_Scroll_Up :: () {
             cursor.y = max(cursor.y - step_size, sdw(0));
             File_Explorer_Reset_Cursor_On_Path(cursor, text_buffer);
         }
+    case .PROJECT_EXPLORER;
+        if cursor.y != 0 {
+            step_size = ifx cursor.y == 2 then sdw(2) else sdw(1);
+            cursor.y = max(cursor.y - step_size, sdw(0));
+            Project_Explorer_Clamp_Cursor(cursor, text_buffer);
+        }
     }
     cursor.just_moved = true;
     Add_Cursor_Move_Artifact(cursor, .SCROLL_UP);
@@ -79,6 +86,8 @@ Cursor_Scroll_Right :: () {
             } else {
                 Normal_Mode_Return();
             }
+        case .PROJECT_EXPLORER;
+            Normal_Mode_Return();
         }
     }
     cursor.target_x = cursor.x;
@@ -116,6 +125,8 @@ Cursor_Scroll_Left :: () {
                 // Do not turn a drive/root path into an invalid prefix such as "D:".
                 cursor.x = old_x;
             }
+        case .PROJECT_EXPLORER;
+            Project_Explorer_Scroll_Left();
         }
     }
     cursor.target_x = cursor.x;
@@ -136,6 +147,8 @@ Cursor_Scroll_To_Top :: () {
         if prev_y != 0 {
             File_Explorer_Reset_Cursor_On_Path(cursor, text_buffer);
         }
+    case .PROJECT_EXPLORER;
+        Project_Explorer_Clamp_Cursor(cursor, text_buffer);
     }
     cursor.soft_wrap_target_x = -1;
     cursor.just_moved = true;
@@ -159,6 +172,8 @@ Cursor_Scroll_To_Line_End :: () {
         cursor.x = Clamp_X_To_Line(cursor.x, line);
     case .FILE_EXPLORER;
         File_Explorer_Reset_Cursor_On_Path(cursor, text_buffer);
+    case .PROJECT_EXPLORER;
+        Project_Explorer_Clamp_Cursor(cursor, text_buffer);
     }
     cursor.target_x = cursor.x;
     cursor.soft_wrap_target_x = -1;
@@ -200,7 +215,7 @@ Cursor_Scroll_To_Line_Zero :: () {
 Scroll_To_Next_Editor :: () {
     Init_Cursor_Proc_Or_Return(true);
 
-    if active_layer.type == .FILE_EXPLORER {
+    if active_layer.type == .FILE_EXPLORER || active_layer.type == .PROJECT_EXPLORER {
         tool_view_is_active = false;
         Pop_Active_View_ID();
         return;
@@ -274,7 +289,7 @@ Scroll_File_Buffer_Action_Previous :: #bake_arguments Scroll_File_Buffer_Action(
 
 Insert_New_Line :: () {
     Init_Cursor_Proc_Or_Return(true);
-    if active_layer.type == .FILE_EXPLORER {
+    if active_layer.type == .FILE_EXPLORER || active_layer.type == .PROJECT_EXPLORER {
         Enter_Normal_Mode();
         Normal_Mode_Return();
         return;
@@ -293,6 +308,8 @@ Enter_Insert_Mode :: (append: bool) {
         cursor.y = 0;
         line := Line_View(text_buffer, cursor.y);
         cursor.x = xx line.count;
+    case .PROJECT_EXPLORER;
+        return;
     }
     vi_mode = .INSERT;
     if append {
@@ -311,6 +328,8 @@ Enter_Normal_Mode :: () {
         Cursor_Scroll_Left();
         if active_layer.type == .FILE_EXPLORER {
             File_Explorer_Reset_Cursor_On_Path(cursor, text_buffer);
+        } else if active_layer.type == .PROJECT_EXPLORER {
+            Project_Explorer_Clamp_Cursor(cursor, text_buffer);
         }
     case .VISUAL;
     case .COMMAND;
@@ -386,6 +405,9 @@ Delete_Character :: () {
 
 Insert_Line_And_Enter_Insert_Mode :: (append: bool) {
     Init_Cursor_Proc_Or_Return(true);
+    if active_layer.type != .FILE_EDITOR {
+        return;
+    }
     is_change := active_layer.type == .FILE_EDITOR;
     indentation_added := false;
     if append {
@@ -1002,6 +1024,8 @@ Normal_Mode_Return :: () {
                 Open_File_In_Editor(*editor_layer.file_editor, file_path, false);
             }
         }
+    case .PROJECT_EXPLORER;
+        Project_Explorer_Normal_Mode_Return();
     }
 }
 
@@ -1109,6 +1133,7 @@ Enter_Search_Mode :: () {
     if Active_View_Layer().type == {
     case .FILE_EDITOR; #through;
     case .FILE_EXPLORER;
+    case .PROJECT_EXPLORER;
         vi_mode = .COMMAND;
         Push_Active_View_ID(vim_console_id);
         array_reset_keeping_memory(*auxiliary_input_buffer);
@@ -1124,6 +1149,7 @@ Enter_Command_Mode :: () {
     if Active_View_Layer().type == {
     case .FILE_EDITOR; #through;
     case .FILE_EXPLORER;
+    case .PROJECT_EXPLORER;
         vi_mode = .COMMAND;
         Push_Active_View_ID(vim_console_id);
         array_reset_keeping_memory(*auxiliary_input_buffer);

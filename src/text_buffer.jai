@@ -912,6 +912,7 @@ TextBuffer :: struct {
     saved_cursor: Cursor;
     flags: enum_flags {
         FILE_EXPLORER;
+        PROJECT_EXPLORER;
         OS_CONSOLE;
     }
 }

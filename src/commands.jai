@@ -150,7 +150,7 @@ Execute_Command_Close :: (args: [][]u32) {
     case .NONE;
     case .VIEW;
         if Active_View_ID() == tool_view_id {
-            Execute_Command_Toggle_Tool_View(.[]);
+            Execute_Command_Hide_Tool_View();
         } else {
             Close_View(Active_View_ID());
         }
@@ -223,22 +223,62 @@ Execute_Command_Save :: (args: [][]u32) {
 }
 
 Execute_Command_Toggle_Tool_View :: (args: [][]u32) {
+    if tool_view_is_active && view_pool.items[tool_view_id].active_layer == cast(s8)ToolViewLayer.FILE_EXPLORER {
+        Execute_Command_Hide_Tool_View();
+        return;
+    }
+    Execute_Command_Show_Tool_View(.FILE_EXPLORER);
+}
+
+Execute_Command_Hide_Tool_View :: () {
+    if !tool_view_is_active {
+        return;
+    }
+    tool_view := *view_pool.items[tool_view_id];
+    base_empty_view := *view_pool.items[base_empty_view_id];
+    tool_view_is_active = false;
+    tool_view.viewport.left = 0.0;
+    base_empty_view.viewport.right = 1.0;
+    if Active_View_ID() == tool_view_id {
+        Pop_Active_View_ID();
+    }
+}
+
+Execute_Command_Show_Tool_View :: (layer: ToolViewLayer) {
     tool_view := *view_pool.items[tool_view_id];
     base_empty_view := *view_pool.items[base_empty_view_id];
     screen_proportion := *settings_file_data.tool_view_screen_proportion;
     screen_proportion.* = clamp(screen_proportion.*, 0.05, 1.0);
-    if tool_view_is_active {
-        tool_view_is_active = false;
-        tool_view.viewport.left = 0.0;
-        base_empty_view.viewport.right = 1.0;
-        Pop_Active_View_ID();
-    } else {
+    tool_view.active_layer = cast(s8)layer;
+    tool_view.layers[tool_view.active_layer].need_reinit = true;
+    if !tool_view_is_active {
         tool_view_is_active = true;
         tool_view.viewport.left = screen_proportion.*;
         base_empty_view.viewport.right = 1.0 - screen_proportion.*;
-        tool_view.layers[tool_view.active_layer].need_reinit = true;
         Push_Active_View_ID(tool_view_id);
     }
+}
+
+Execute_Command_Toggle_Project_View :: (args: [][]u32) {
+    if tool_view_is_active && view_pool.items[tool_view_id].active_layer == cast(s8)ToolViewLayer.PROJECT_EXPLORER {
+        Execute_Command_Hide_Tool_View();
+        return;
+    }
+    Project_Explorer_Show_Current_Project();
+    Execute_Command_Show_Tool_View(.PROJECT_EXPLORER);
+}
+
+Execute_Command_Create_Project :: (args: [][]u32) {
+    if args.count == 0 {
+        return;
+    }
+    name := Encode(As_String(args[0]), .UTF32, .UTF8);
+    main_directory := ifx args.count > 1
+        then Encode(As_String(args[1]), .UTF32, .UTF8)
+        else get_working_directory();
+    Project_Create(name, main_directory);
+    Project_Explorer_Show_All_Projects();
+    Execute_Command_Show_Tool_View(.PROJECT_EXPLORER);
 }
 
 Execute_Command_Scroll_Buffer :: (args: [][]u32, next: bool) {

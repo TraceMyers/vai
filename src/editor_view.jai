@@ -18,6 +18,7 @@ Editor_Views :: struct {
     }
 
     Shutdown :: () {
+        Project_Save_View_Session();
         Shutdown(*view_layer_pool);
         Shutdown(*view_pool);
     }
@@ -75,6 +76,14 @@ Create_Base_Views :: () {
         layer: ViewLayer;
         layer.type = .OS_CONSOLE;
         layer.os_console = .{};
+        Add_View_Layer(*view_pool.items[tool_view_id], *layer);
+    }
+    {
+        layer: ViewLayer;
+        layer.type = .PROJECT_EXPLORER;
+        layer.project_explorer = .{};
+        layer.project_explorer.text_buffer = Request_Item(*file_buffers);
+        file_buffers.items[layer.project_explorer.text_buffer].flags = .PROJECT_EXPLORER;
         Add_View_Layer(*view_pool.items[tool_view_id], *layer);
     }
     // ------------------------------------------
@@ -270,6 +279,10 @@ Process_Text_Input :: (utf32: []u32) -> bool {
             return true;
         case .FILE_EXPLORER;
             Process_Text_Input(*active_view_layer.file_explorer, utf32);
+            return true;
+        case .PROJECT_EXPLORER;
+            // Project browsing is intentionally navigation-only. Configuration
+            // files open in a regular editor before they can be modified.
             return true;
         case .VIM_CONSOLE;
             return false;
@@ -972,6 +985,7 @@ ViewLayerType :: enum_flags u16 {
     FILE_EDITOR;
     VIM_CONSOLE;
     FILE_EXPLORER;
+    PROJECT_EXPLORER;
     OS_CONSOLE;
     DEBUG;
 }
@@ -982,6 +996,7 @@ ViewLayerData :: union {
     file_editor: FileEditor = ---;
     vim_console: VimConsole = ---;
     file_explorer: FileExplorer = ---;
+    project_explorer: ProjectExplorer = ---;
     os_console: OSConsole = ---;
     debug: DebugView = ---;
 }
@@ -1025,6 +1040,11 @@ Layer_Text_Buffer :: (layer: *ViewLayer) -> *TextBuffer {
         if buffer_index != -1 {
             return *file_buffers.items[buffer_index];
         }
+    case .PROJECT_EXPLORER;
+        buffer_index := layer.project_explorer.text_buffer;
+        if buffer_index != -1 {
+            return *file_buffers.items[buffer_index];
+        }
     case .DEBUG;
         if layer.debug.type == .GENERAL_DEBUG 
         || Active_View_Layer().type == .FILE_EDITOR 
@@ -1041,6 +1061,10 @@ Layer_Render_Line_Y_Offset :: (layer: *ViewLayer, line: s32) -> s32 {
     }
     if layer.type == {
     case .FILE_EXPLORER;
+        if line >= 2 {
+            return -Integer_Option_Value(.FONT_SIZE) >> 1;
+        }
+    case .PROJECT_EXPLORER;
         if line >= 2 {
             return -Integer_Option_Value(.FONT_SIZE) >> 1;
         }
@@ -1132,6 +1156,15 @@ FileExplorer :: CursorLayer(
             HALF;
             FULL;
         } = .HALF;
+    }
+);
+
+ProjectExplorer :: CursorLayer(
+    struct {
+        text_buffer: s64 = -1;
+        // Empty means the all-projects list. Otherwise, this is the expanded
+        // project's configuration directory.
+        directory: string;
     }
 );
 
@@ -1255,6 +1288,8 @@ Find_First_Layer_Of_Type_In_View_Stack :: (type: ViewLayerType) -> *ViewLayer {
 
 ToolViewLayer :: enum {
     FILE_EXPLORER :: 0;
+    OS_CONSOLE    :: 1;
+    PROJECT_EXPLORER :: 2;
 }
 
 VIEW_CHILDREN_MAX :: 16;
@@ -1289,7 +1324,7 @@ view_layer_id_counter: u32;
 selected_view_side: Side2D;
 
 ROOT_ID :: 0;
-OS_CONSOLE_LAYER :: 1;
+OS_CONSOLE_LAYER :: ToolViewLayer.OS_CONSOLE;
 
 RenderedTextData :: struct {
     text_row: s32;
@@ -1307,7 +1342,27 @@ type ':close view' or just ':close' to close a view.
 type ':close buffer' to close a text buffer
 type ':save' to write the selected buffer to file.
 type ':quit' to quit the program.
-type ':tools' to open the tool view. currently the only tool is the file explorer, which is incomplete.
+type ':tools' to open the file explorer.
+type ':projects' to open the project browser.
+
+Configuration and projects
+--------------------------
+Vai stores all of its writable configuration in %APPDATA%/Vai, never beside the executable.
+The main configuration is in %APPDATA%/Vai/main/settings.txt. Each project has its own
+folder under %APPDATA%/Vai/projects/<project-name>. Its project.txt selects the project's
+main_directory, settings.txt optionally overrides main settings, and views.txt is maintained
+by Vai to remember the files, buffers, and editor views that were open.
+
+Open ':projects' to browse project folders. Enter or right on a project expands its config
+folder. The first row is [open project]; activating it changes Vai to that project's
+main_directory, restores its files/views, and applies its settings after the main settings.
+For the active project it reads [current project] and is greyed out. Left returns to the
+project list. Open a config file from this browser to edit it normally.
+
+To create a project, use ':project-create name D:/path/to/project' (paths without spaces),
+then find it in ':projects'. You can also create %APPDATA%/Vai/projects/<name>/project.txt
+yourself and set 'main_directory = D:/path/to/project'. If no valid project has been chosen,
+Vai creates and opens a project named 'default'. On later launches it opens the last project.
 
 Shorthand commands work as long as what you've typed could only resolve to one command.
 For example, ':o ...' loads a file into a buffer just like ':open ...' would.
