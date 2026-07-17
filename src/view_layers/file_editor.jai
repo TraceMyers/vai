@@ -233,7 +233,7 @@ View_Scroll :: (layer: *ViewLayer, renderer: *TextRenderer, text_buffer: *TextBu
 
     layer_cursor.just_moved = false;
 
-    if !soft_wrap && layer_cursor.y < text_buffer.lines.count - 1 {
+    if soft_wrap || layer_cursor.y < text_buffer.lines.count - 1 {
         scroll_down_repeat, scroll_down_speed := Get_Action_Repeat_Rate(layer_cursor, .SCROLL_DOWN);
         scroll_up_repeat, scroll_up_speed := Get_Action_Repeat_Rate(layer_cursor, .SCROLL_UP);
         scroll_right_repeat, scroll_right_speed := Get_Action_Repeat_Rate(layer_cursor, .SCROLL_RIGHT);
