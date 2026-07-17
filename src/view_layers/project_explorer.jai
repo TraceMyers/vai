@@ -69,6 +69,10 @@ Render_Project_Explorer_Text :: (project_explorer: *ProjectExplorer, is_active: 
         view_layer.view_position = .{};
     }
 
+    // The directory may have changed since the last input event. Clamp here,
+    // immediately before rendering, so the cursor never draws at a stale row.
+    Project_Explorer_Clamp_Cursor(*project_explorer.cursor, text_buffer);
+
     Set_Shader_For_Blended_Color();
     line_y : s32 = 2;
     if is_project_config {
@@ -104,6 +108,7 @@ Render_Project_Explorer_Text :: (project_explorer: *ProjectExplorer, is_active: 
 
     View_Scroll(view_layer, *renderer, text_buffer);
     if project_explorer.cursor.y >= 2 {
+        renderer.cursor_pos = .{project_explorer.cursor.x, project_explorer.cursor.y};
         Render_Cursor_Line_Block(*renderer, *project_explorer.cursor, 0.18);
     }
 }

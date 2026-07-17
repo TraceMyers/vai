@@ -223,11 +223,11 @@ Execute_Command_Save :: (args: [][]u32) {
 }
 
 Execute_Command_Toggle_Tool_View :: (args: [][]u32) {
-    if tool_view_is_active && view_pool.items[tool_view_id].active_layer == cast(s8)ToolViewLayer.FILE_EXPLORER {
+    if tool_view_is_active {
         Execute_Command_Hide_Tool_View();
         return;
     }
-    Execute_Command_Show_Tool_View(.FILE_EXPLORER);
+    Execute_Command_Show_Tool_View(last_tool_view_layer);
 }
 
 Execute_Command_Hide_Tool_View :: () {
@@ -250,6 +250,7 @@ Execute_Command_Show_Tool_View :: (layer: ToolViewLayer) {
     screen_proportion := *settings_file_data.tool_view_screen_proportion;
     screen_proportion.* = clamp(screen_proportion.*, 0.05, 1.0);
     tool_view.active_layer = cast(s8)layer;
+    last_tool_view_layer = layer;
     tool_view.layers[tool_view.active_layer].need_reinit = true;
     if !tool_view_is_active {
         tool_view_is_active = true;

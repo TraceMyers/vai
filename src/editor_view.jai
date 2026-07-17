@@ -1308,6 +1308,7 @@ kb_cursor_blink_time := 0.68;
 
 tool_view_id: s64;
 tool_view_is_active: bool;
+last_tool_view_layer: ToolViewLayer = .FILE_EXPLORER;
 
 editor_view_stack_buffer: [128]s64;
 editor_view_stack: []s64;
@@ -1345,7 +1346,7 @@ type ':close view' or just ':close' to close a view.
 type ':close buffer' to close a text buffer
 type ':save' to write the selected buffer to file.
 type ':quit' to quit the program.
-type ':tools' to open the file explorer.
+type ':tools' or ':t' to toggle the last tool (the file explorer by default).
 type ':projects' to open the project browser.
 
 Configuration and projects
