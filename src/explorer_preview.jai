@@ -79,11 +79,17 @@ Render_File_Explorer_Image_Preview :: (ul: IntVector2, lr: IntVector2) {
         return;
     }
 
+    // Image previews are a 2D overlay. They must not compete with the
+    // checkerboard or a previously rendered scene in the depth buffer.
+    Disable_Depth_Test();
+    defer Enable_Depth_Test();
+
     if file_explorer_image_preview.texture == 0 {
         if file_explorer_image_preview.pixels.count == 0 {
             return;
         }
         glGenTextures(1, *file_explorer_image_preview.texture);
+        glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, file_explorer_image_preview.texture);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);

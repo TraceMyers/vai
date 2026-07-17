@@ -100,7 +100,7 @@ Copy_Previous_Render_Target :: () {
 }
 
 Disable_Depth_Test :: inline () {
-    glDisable(GL_DEPTH);
+    glDisable(GL_DEPTH_TEST);
 }
 
 Enable_Depth_Test :: inline () {
