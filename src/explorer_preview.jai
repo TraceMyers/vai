@@ -89,6 +89,10 @@ Render_File_Explorer_Image_Preview :: (ul: IntVector2, lr: IntVector2) {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        // Simp's font uploader leaves this at its atlas stride. Our decoded
+        // RGBA pixels are tightly packed, so retaining that state makes GL
+        // read past the image allocation when a preview texture is created.
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glTexImage2D(GL_TEXTURE_2D, 0, cast(s32)GL_RGBA8, xx file_explorer_image_preview.width, xx file_explorer_image_preview.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, file_explorer_image_preview.pixels.data);
         free(file_explorer_image_preview.pixels.data);
