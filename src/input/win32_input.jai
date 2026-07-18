@@ -11,8 +11,27 @@ Platform_Shutdown_Input :: () {
 }
 
 Take_Raw_Input :: inline (input: u32) {
+    if Mouse_Input_Locks_Keyboard() {
+        return;
+    }
     assert(input <= U16_MAX);
     array_add(*raw_input, xx input);
+}
+
+Discard_Platform_Keyboard_Input_For_Mouse :: () {
+    array_reset_keeping_memory(*raw_input);
+}
+
+Platform_Refresh_Mouse_Buttons :: () {
+    // A captured button-up can be lost when Windows changes focus or another
+    // window takes capture. Never leave the editor in a permanent mouse-input
+    // lock in that case.
+    LEFT_MOUSE_BUTTON_VIRTUAL_KEY :: 0x01;
+    HELD_DOWN : s16 : 0x8000;
+    if mouse_left_button_down && (GetAsyncKeyState(LEFT_MOUSE_BUTTON_VIRTUAL_KEY) & HELD_DOWN) == 0 {
+        Cancel_Mouse_Interaction();
+        ReleaseCapture();
+    }
 }
 
 Update_Modifier_Keys :: () {

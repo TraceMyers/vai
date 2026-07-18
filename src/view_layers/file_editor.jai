@@ -147,7 +147,47 @@ Teleport_View_Axis_To_Cursor :: (cursor_axis: float, view_axis: *float, net: *Cu
     }
 }
 
-View_Axis_Follow_Cursor_Smoothly :: (cursor: *Cursor, view_axis: *float, cursor_axis: float, net_boundary: float, net_size: float, action: Action, compare_greater: bool, scroll_speed: float, clamp_to_zero := true) {
+Smooth_View_Axis_Toward_Cursor :: (
+    view_axis: *float,
+    cursor_axis: float,
+    net_boundary: float,
+    net_size: float,
+    compare_greater: bool,
+    scroll_speed: float,
+    delta_seconds: float32,
+    drive_continuously: bool,
+) -> still_catching_up: bool {
+    target_diff := cursor_axis - net_boundary;
+    catchup_distance := ifx compare_greater then target_diff else -target_diff;
+    if !drive_continuously && catchup_distance <= 0 {
+        return false;
+    }
+
+    dt := clamp(delta_seconds, 0.0, cast(float32)INTERACTIVE_DELTA_TIME_MAX);
+    direction := ifx compare_greater then 1.0 else -1.0;
+    correction_speed := catchup_distance / max(net_size, 1.0);
+    directional_speed := max(scroll_speed + correction_speed, 0.0);
+    step := directional_speed * dt;
+
+    if drive_continuously {
+        // Constant velocity is what made the original feel smooth. This cap is
+        // only a guard against running away during a missing OS repeat; at
+        // normal repeat cadence the cursor advances before it is reached.
+        MAX_PREDICTION_ROWS :: 2.0;
+        available_distance := catchup_distance + MAX_PREDICTION_ROWS;
+        if available_distance <= 0 {
+            return true;
+        }
+        step = min(step, available_distance);
+    } else {
+        step = min(step, catchup_distance);
+    }
+
+    view_axis.* += direction * step;
+    return drive_continuously || step < catchup_distance;
+}
+
+View_Axis_Follow_Cursor_Smoothly :: (cursor: *Cursor, view_axis: *float, cursor_axis: float, net_boundary: float, net_size: float, action: Action, compare_greater: bool, scroll_speed: float, drive_continuously: bool, clamp_to_zero := true) {
     if cursor.active_scroll_action != action {
         if compare_greater {
             if cursor_axis > net_boundary {
@@ -158,15 +198,21 @@ View_Axis_Follow_Cursor_Smoothly :: (cursor: *Cursor, view_axis: *float, cursor_
         }
     }
     if cursor.active_scroll_action == action {
-        CORRECTION_SPEED :: 1.0;
-        target_pos_diff := cursor_axis - net_boundary;
-        correction_norm := target_pos_diff / net_size;
-        if !compare_greater {
-            scroll_speed = -scroll_speed;
-        }
-        view_axis.* += (scroll_speed + CORRECTION_SPEED * correction_norm) * Smoothed_Delta_Time();
+        still_catching_up := Smooth_View_Axis_Toward_Cursor(
+            view_axis,
+            cursor_axis,
+            net_boundary,
+            net_size,
+            compare_greater,
+            scroll_speed,
+            Interactive_Delta_Time(),
+            drive_continuously,
+        );
         if clamp_to_zero {
             view_axis.* = max(view_axis.*, 0);
+        }
+        if !still_catching_up {
+            cursor.active_scroll_action = .NONE;
         }
     }
 }
@@ -220,9 +266,6 @@ View_Scroll :: (layer: *ViewLayer, renderer: *TextRenderer, text_buffer: *TextBu
     cursor_y := ifx soft_wrap
         then Soft_Wrap_Cursor_Y_In_View(layer, layer_cursor)
         else cast(float)layer_cursor.y;
-    if layer_cursor.just_moved {
-        Teleport_View_Axis_To_Cursor(cursor_y, *new_y, *vt_net, clamp_to_zero=!soft_wrap);
-    }
 
     ul := Upper_Left();
     lr := Lower_Right();
@@ -231,29 +274,68 @@ View_Scroll :: (layer: *ViewLayer, renderer: *TextRenderer, text_buffer: *TextBu
     col_count := (cast(float) viewport_width / cast(float) renderer.screen_char_width) - (IDEAL_NET_SIZE - 1.0);
     hz_net := Calculate_Cursor_Net(layer.view_position.x, col_count, IDEAL_NET_SIZE);
     cursor_x := cast(float)layer_cursor.x;
-    if layer_cursor.just_moved {
-        Teleport_View_Axis_To_Cursor(cursor_x, *layer.view_position.x, *hz_net);
+
+    held_scroll_action := Held_Cursor_Scroll_Action();
+    latest_move_action := Cursor_Latest_Move_Action(layer_cursor);
+    repeated_move_action := Action.NONE;
+    if layer_cursor.just_moved
+    && (latest_move_action == .SCROLL_DOWN
+        || latest_move_action == .SCROLL_UP
+        || latest_move_action == .SCROLL_RIGHT
+        || latest_move_action == .SCROLL_LEFT)
+    && Cursor_Latest_Move_Was_Repeated(layer_cursor, latest_move_action) {
+        repeated_move_action = latest_move_action;
     }
 
+    held_repeating_action := Action.NONE;
+    if held_scroll_action != .NONE
+    && Cursor_Latest_Move_Action(layer_cursor) == held_scroll_action
+    && Cursor_Latest_Move_Was_Repeated(layer_cursor, held_scroll_action) {
+        held_repeating_action = held_scroll_action;
+    }
+
+    input_scroll_action := ifx held_repeating_action != .NONE then held_repeating_action else repeated_move_action;
+    if input_scroll_action != .NONE
+    && layer_cursor.active_scroll_action != .NONE
+    && layer_cursor.active_scroll_action != input_scroll_action {
+        layer_cursor.active_scroll_action = .NONE;
+    } else if input_scroll_action == .NONE
+    && layer_cursor.just_moved
+    && layer_cursor.active_scroll_action != .NONE
+    && latest_move_action != layer_cursor.active_scroll_action {
+        layer_cursor.active_scroll_action = .NONE;
+    }
+
+    smooth_scroll_action := ifx input_scroll_action != .NONE
+        then input_scroll_action
+        else layer_cursor.active_scroll_action;
+    smooth_vertical := smooth_scroll_action == .SCROLL_DOWN || smooth_scroll_action == .SCROLL_UP;
+    smooth_horizontal := smooth_scroll_action == .SCROLL_RIGHT || smooth_scroll_action == .SCROLL_LEFT;
+
+    if layer_cursor.just_moved && !smooth_vertical {
+        Teleport_View_Axis_To_Cursor(cursor_y, *new_y, *vt_net, clamp_to_zero=!soft_wrap);
+    }
+    if layer_cursor.just_moved && !smooth_horizontal {
+        Teleport_View_Axis_To_Cursor(cursor_x, *layer.view_position.x, *hz_net);
+    }
     layer_cursor.just_moved = false;
 
-    if soft_wrap || layer_cursor.y < text_buffer.lines.count - 1 {
-        scroll_down_repeat, scroll_down_speed := Get_Action_Repeat_Rate(layer_cursor, .SCROLL_DOWN);
-        scroll_up_repeat, scroll_up_speed := Get_Action_Repeat_Rate(layer_cursor, .SCROLL_UP);
-        scroll_right_repeat, scroll_right_speed := Get_Action_Repeat_Rate(layer_cursor, .SCROLL_RIGHT);
-        scroll_left_repeat, scroll_left_speed := Get_Action_Repeat_Rate(layer_cursor, .SCROLL_LEFT);
-
-        if scroll_down_repeat {
-            View_Axis_Follow_Cursor_Smoothly(layer_cursor, *new_y, cursor_y, vt_net.max, vt_net.size, .SCROLL_DOWN, true, scroll_down_speed, clamp_to_zero=!soft_wrap);
-        } else if scroll_up_repeat {
-            View_Axis_Follow_Cursor_Smoothly(layer_cursor, *new_y, cursor_y, vt_net.min, vt_net.size, .SCROLL_UP, false, scroll_up_speed, clamp_to_zero=!soft_wrap);
-        } else if scroll_right_repeat {
-            View_Axis_Follow_Cursor_Smoothly(layer_cursor, *layer.view_position.x, cursor_x, hz_net.max, hz_net.size, .SCROLL_RIGHT, true, scroll_right_speed);
-        } else if scroll_left_repeat {
-            View_Axis_Follow_Cursor_Smoothly(layer_cursor, *layer.view_position.x, cursor_x, hz_net.min, hz_net.size, .SCROLL_LEFT, false, scroll_left_speed);
-        } else {
-            layer_cursor.active_scroll_action = .NONE;
-        }
+    fallback_scroll_speed := max(settings_file_data.key_repeat_rate, 1.0);
+    scroll_speed := min(
+        Cursor_Scroll_Repeat_Rate(layer_cursor, smooth_scroll_action, fallback_scroll_speed),
+        max(settings_file_data.view_max_speed, 1.0),
+    );
+    drive_continuously := held_repeating_action == smooth_scroll_action;
+    if smooth_scroll_action == {
+    case .SCROLL_DOWN;
+        View_Axis_Follow_Cursor_Smoothly(layer_cursor, *new_y, cursor_y, vt_net.max, vt_net.size, .SCROLL_DOWN, true, scroll_speed, drive_continuously, clamp_to_zero=!soft_wrap);
+    case .SCROLL_UP;
+        View_Axis_Follow_Cursor_Smoothly(layer_cursor, *new_y, cursor_y, vt_net.min, vt_net.size, .SCROLL_UP, false, scroll_speed, drive_continuously, clamp_to_zero=!soft_wrap);
+    case .SCROLL_RIGHT;
+        View_Axis_Follow_Cursor_Smoothly(layer_cursor, *layer.view_position.x, cursor_x, hz_net.max, hz_net.size, .SCROLL_RIGHT, true, scroll_speed, drive_continuously);
+    case .SCROLL_LEFT;
+        View_Axis_Follow_Cursor_Smoothly(layer_cursor, *layer.view_position.x, cursor_x, hz_net.min, hz_net.size, .SCROLL_LEFT, false, scroll_speed, drive_continuously);
+    case;
     }
 
     if !soft_wrap {

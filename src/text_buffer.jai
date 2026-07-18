@@ -56,6 +56,7 @@ Text_Buffers :: struct {
         Circular_Buffer_Reset(*registers.number_registers);
         Bin_Pool_Shutdown(*register_text);
         deinit(*registers.tack_map);
+        String_Reset(*file_explorer_selected_preview_path);
         // Shutdown_Text_Buffer(*file_explorer_text_preview);
     }
 
@@ -90,6 +91,7 @@ Shutdown_Text_Buffer :: no_inline (buffer: *TextBuffer) {
     array_reset(*buffer.lines);
     String_Reset(*buffer.file_path);
     Opposing_Circular_Buffer_Reset(*buffer.change_history);
+    Shutdown_Buffer_Highlight(*buffer.highlight);
 }
 
 Clear_Text_Buffer :: (using buffer: *TextBuffer, keep_allocations: bool) {
@@ -170,6 +172,7 @@ Load_File_Into_Buffer :: (file_path: string, buffer: *TextBuffer, initialize_cha
         }
     }
 
+    Maybe_Enable_Highlight(buffer);
     return true;
 }
 
@@ -769,6 +772,7 @@ Get_Current_Change :: (buffer: *TextBuffer) -> *TextChange {
 Add_Line_To_Change :: (buffer: *TextBuffer, row: s64, flags: LineChangeFlags) {
     Init_Cursor_Proc_Or_Return();
     mid_change = true;
+    buffer.highlight.dirty = true; // any recorded content edit invalidates highlighting
 
     current_change := Get_Current_Change(buffer);
     if current_change.need_overwrite {
@@ -915,6 +919,7 @@ TextBuffer :: struct {
         PROJECT_EXPLORER;
         OS_CONSOLE;
     }
+    highlight: BufferHighlight;
 }
 
 Utf32Buffer :: struct {

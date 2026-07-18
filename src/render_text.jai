@@ -114,8 +114,9 @@ Initialize_Text_Renderer :: (using renderer: *TextRenderer, in_view_layer: *View
     }
 }
 
-Render_Wrapped_Line :: (renderer: *TextRenderer, color_buffer: *[..]TextColorLocation, utf8_buffer: *[..]u8, marked_utf32: []u32, render_line: *RenderLineData, just_count_lines := false, out_row_lengths: *[..]s32 = null) -> s32 {
+Render_Wrapped_Line :: (renderer: *TextRenderer, color_buffer: *[..]TextColorLocation, utf8_buffer: *[..]u8, marked_utf32: []u32, render_line: *RenderLineData, just_count_lines := false, out_row_lengths: *[..]s32 = null, hl_colors: []u8 = .[]) -> s32 {
     remaining_utf32 := marked_utf32;
+    remaining_colors := hl_colors; // per-glyph syntax colors, parallel to remaining_utf32
 
     assert(render_line.total_reindent_on_wrap <= LOTTA_SPACES.count);
     indent_header := string.{render_line.total_reindent_on_wrap, LOTTA_SPACES.data};
@@ -223,9 +224,23 @@ Render_Wrapped_Line :: (renderer: *TextRenderer, color_buffer: *[..]TextColorLoc
 
             rendered_line := RenderedTextData.{render_line.line_index, 0, xx use_indent_str.count, wrapped_line_ct > 0};
 
-            Get_Unmarked_Utf8(partial_render_buf, utf8_buffer, color_buffer);
+            partial_colors: []u8;
+            if remaining_colors.count > 0 {
+                partial_colors = remaining_colors;
+                if partial_colors.count > partial_render_buf.count then partial_colors.count = partial_render_buf.count;
+            }
+            if partial_colors.count > 0 {
+                Get_Unmarked_Utf8_Colored(partial_render_buf, partial_colors, utf8_buffer, color_buffer);
+            } else {
+                Get_Unmarked_Utf8(partial_render_buf, utf8_buffer, color_buffer);
+            }
             if use_indent_str.count > 0 {
                 indented := tprint("%0%", indent_header, As_String(utf8_buffer.*));
+                // The indent is prepended to the rendered bytes, so shift color
+                // runs past it (and default-color the indent itself).
+                if partial_colors.count > 0 {
+                    Offset_Color_Locations(color_buffer, xx (indented.count - utf8_buffer.count));
+                }
                 Render_Text_Line(renderer, *renderer.align_info_main, As_Array(indented, u8), color_buffer.*, render_line.y_offset);
                 if renderer.view_layer.type == .FILE_EDITOR {
                     if selection_ends_in_text || selection_ends_at_end {
@@ -252,6 +267,11 @@ Render_Wrapped_Line :: (renderer: *TextRenderer, color_buffer: *[..]TextColorLoc
 
         remaining_utf32.count -= partial_render_buf.count;
         remaining_utf32.data += partial_render_buf.count;
+        if remaining_colors.count > 0 {
+            adv := min(partial_render_buf.count, remaining_colors.count);
+            remaining_colors.data  += adv;
+            remaining_colors.count -= adv;
+        }
         if render_line.set_wrapped_text_selection_begin {
             wrapped_text_selection_begins_at = S64_MAX;
         } else {
@@ -291,6 +311,12 @@ Render_Text_Buffer_Lines :: (view_layer: *ViewLayer, renderer: *TextRenderer, bu
     rendered_lines_at: [..]s32;
     rendered_lines_at.allocator = temp;
 
+    // Syntax highlighting: bring the buffer's byte->color map up to date once per
+    // frame (whole-buffer reparse when dirty).  Cheap when unchanged.
+    if buffer && buffer.highlight.enabled {
+        Highlight_Reparse_If_Dirty(buffer);
+    }
+
     {
         Scoped_Immediate_Text_Render();
 
@@ -329,6 +355,13 @@ Render_Text_Buffer_Lines :: (view_layer: *ViewLayer, renderer: *TextRenderer, bu
             }
 
             marked_utf32 := Line_View(buffer, render_line.line_index);
+
+            // Per-glyph syntax colors, parallel to marked_utf32 (pre-clip).
+            hl_colors: []u8;
+            use_syntax_colors := buffer != null && buffer.highlight.enabled;
+            if use_syntax_colors {
+                hl_colors = Compute_Expanded_Line_Colors(buffer, render_line.line_index, marked_utf32);
+            }
             {
                 using render_line;
                 no_hz_clip = view_layer && view_layer.type == .FILE_EXPLORER;
@@ -344,13 +377,21 @@ Render_Text_Buffer_Lines :: (view_layer: *ViewLayer, renderer: *TextRenderer, bu
             if glyphs_in_view_horizontally {
                 marked_utf32.data += renderer.text_view_clip.x;
                 marked_utf32.count -= renderer.text_view_clip.x;
+                if use_syntax_colors && hl_colors.count > renderer.text_view_clip.x {
+                    hl_colors.data  += renderer.text_view_clip.x;
+                    hl_colors.count -= renderer.text_view_clip.x;
+                }
             }
 
             if (render_line.no_hz_clip || glyphs_in_view_horizontally) && marked_utf32.count != 0 {
                 if render_line.do_line_wrap {
-                    Render_Wrapped_Line(renderer, *color_buffer, *utf8_buffer, marked_utf32, *render_line);
+                    Render_Wrapped_Line(renderer, *color_buffer, *utf8_buffer, marked_utf32, *render_line, hl_colors = hl_colors);
                 } else {
-                    Get_Unmarked_Utf8(marked_utf32, *utf8_buffer, *color_buffer);
+                    if use_syntax_colors {
+                        Get_Unmarked_Utf8_Colored(marked_utf32, hl_colors, *utf8_buffer, *color_buffer);
+                    } else {
+                        Get_Unmarked_Utf8(marked_utf32, *utf8_buffer, *color_buffer);
+                    }
                     Render_Text_Line(renderer, *renderer.align_info_main, utf8_buffer, color_buffer, render_line.y_offset);
                     if view_layer && view_layer.type == .FILE_EDITOR {
                         using view_layer.file_editor;

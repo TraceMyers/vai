@@ -54,12 +54,17 @@ Input :: struct {
 
     Shutdown :: () {
         Platform_Shutdown_Input();
+        Command_Autocomplete_Close(false);
+        array_reset(*command_autocomplete.initial_input);
+        array_reset(*command_autocomplete.matches);
         array_reset(*action_input_buffer);
         array_reset(*action_binding_buffer);
         array_reset(*action_code_point_strings);
         array_reset(*action_repeat_buffer);
         array_reset(*search_pattern);
         Reset(*key_pressed);
+        mouse_interaction = .{};
+        array_reset(*mouse_events);
     }
 
 }
@@ -86,6 +91,17 @@ Translate_Inputs_To_Actions :: () -> any_input: bool {
     // TODO: use text buffer?
     auxiliary_input_buffer_prev_count = auxiliary_input_buffer.count;
 
+    // Mouse interactions own their complete gesture, from press through the
+    // final release.  Do not let a key typed during a drag leak into the
+    // command buffer or the held-arrow scrolling path.
+    mouse_input_locks_keyboard := Mouse_Input_Locks_Keyboard();
+    mouse_input_processed := Process_Mouse_Input();
+    mouse_input_locks_keyboard = mouse_input_locks_keyboard || Mouse_Input_Locks_Keyboard();
+    if mouse_input_locks_keyboard {
+        Discard_Keyboard_Input_For_Mouse();
+        return true;
+    }
+
     action_matches: [..]ActionMatch;
     action_matches.allocator = temp;
 
@@ -93,7 +109,7 @@ Translate_Inputs_To_Actions :: () -> any_input: bool {
     skip := false;
     processed_input := Process_Raw_Input();
     if processed_input.count == 0 && action_input_buffer.count == 0 && action_repeat_buffer.count == 0 {
-        return false;
+        return mouse_input_processed;
     }
 
     frame_input_stream_index = -1;
@@ -157,6 +173,9 @@ Dump_Action_Input_Buffer :: (action_matches: *[..]ActionMatch = null) {
         any_exact_action_matches = Push_Exact_Action_Matches(action_matches);
     } 
     if (vi_mode == .COMMAND || vi_mode == .INSERT) && !any_exact_action_matches {
+        if vi_mode == .COMMAND {
+            Command_Autocomplete_Cancel_For_Typed_Input();
+        }
         detected_change_ignore := false;
         for action_repeat_buffer {
             if mid_change then array_add(*last_change_input, it);
@@ -227,6 +246,10 @@ Push_Exact_Action_Matches :: (actions: *[..]ActionMatch) -> bool {
             }
             action_executor_proc := DEFAULT_ACTION_BINDINGS[it.action].extension.proc;
             if action_executor_proc != null {
+                if !Hidden_View_Allows_Action(it.action) {
+                    any_exact = true;
+                    continue;
+                }
                 repeat_ct: s64;
                 parse_repeat_ct_success: bool;
                 if action_repeat_buffer.count > 0 {
@@ -291,6 +314,57 @@ Action_Code_Point_String :: (binding: ActionBinding) -> []u32 {
     array.data = xx *action_code_point_strings[binding.code_point_string_index];
     array.count = xx binding.code_point_string_count;
     return array;
+}
+
+Mapped_Input_For_Action :: (action: Action, preferred_mode: ViMode) -> string {
+    for action_bindings {
+        if it.count <= 0 {
+            continue;
+        }
+        for binding_index: 0..it.count-1 {
+            binding := action_binding_buffer[it.offset + binding_index];
+            if binding.action == action && (binding.modes & preferred_mode) != 0 {
+                return Format_Action_Input(Action_Code_Point_String(binding));
+            }
+        }
+    }
+    return "";
+}
+
+Format_Action_Input :: (input: []u32) -> string {
+    previous_allocator := context.allocator;
+    context.allocator = temp;
+    defer context.allocator = previous_allocator;
+    builder: String_Builder;
+    for packed_code_point: input {
+        code_point, modifiers := Unpack_Modified_Code_Point(packed_code_point);
+        has_modifiers := modifiers != .NONE;
+        if has_modifiers {
+            print_to_builder(*builder, "<");
+            if (modifiers & .CONTROL) != 0 then print_to_builder(*builder, "ctrl+");
+            if (modifiers & .ALT) != 0 then print_to_builder(*builder, "alt+");
+            if (modifiers & .SHIFT) != 0 then print_to_builder(*builder, "shift+");
+            if (modifiers & .META) != 0 then print_to_builder(*builder, "meta+");
+        }
+
+        if code_point == #char "\x1b" {
+            print_to_builder(*builder, "esc");
+        } else if code_point == #char "\r" || code_point == #char "\n" {
+            print_to_builder(*builder, "enter");
+        } else if code_point == #char "\t" {
+            print_to_builder(*builder, "tab");
+        } else if code_point == #char " " {
+            print_to_builder(*builder, "space");
+        } else {
+            single_code_point := u32.[code_point];
+            print_to_builder(*builder, Encode(As_String(single_code_point), .UTF32, .UTF8));
+        }
+
+        if has_modifiers {
+            print_to_builder(*builder, ">");
+        }
+    }
+    return builder_to_string(*builder,,temp);
 }
 
 Action_Bindings :: (first_byte: u8) -> []ActionBinding {
@@ -489,7 +563,21 @@ Unpack_Modified_Code_Point :: inline (code_point: u32) -> code_point: u32, modif
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 Is_Virtual_Key_Pressed :: (key: VirtualKey) -> bool {
-    return Is_Bit_Set(*key_pressed, xx key);
+    return !Mouse_Input_Locks_Keyboard() && Is_Bit_Set(*key_pressed, xx key);
+}
+
+Held_Cursor_Scroll_Action :: () -> Action {
+    if vi_mode != .NORMAL && vi_mode != .VISUAL {
+        return .NONE;
+    }
+    if (modifier_keys & (.META | .CONTROL | .SHIFT | .ALT)) != 0 {
+        return .NONE;
+    }
+    if Is_Virtual_Key_Pressed(.J) then return .SCROLL_DOWN;
+    if Is_Virtual_Key_Pressed(.K) then return .SCROLL_UP;
+    if Is_Virtual_Key_Pressed(.L) then return .SCROLL_RIGHT;
+    if Is_Virtual_Key_Pressed(.H) then return .SCROLL_LEFT;
+    return .NONE;
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -539,6 +627,7 @@ ActionDataContainer :: struct {
 
 CommandDataContainer :: struct {
     proc: Command_Executor = null;
+    description: string;
 }
 
 ActionExecutorData :: struct {
@@ -617,3 +706,4 @@ executing_action := Action.NONE;
 #if OS == .WINDOWS {
     #load "win32_input.jai";
 }
+#load "mouse.jai";

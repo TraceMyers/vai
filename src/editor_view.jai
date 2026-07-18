@@ -129,9 +129,12 @@ Prepare_Intro_File :: () -> string {
     // INTRO_FILE_NAME :: "test_files/struct_utilities.jai";
     file_data := read_entire_file(INTRO_FILE_NAME);
     defer free(file_data);
-    // Preserve user-authored instructions, but refresh the old stock intro so
-    // existing installations receive the project/configuration guidance.
-    has_old_stock_intro := find_index_from_left(file_data, "currently the only tool is the file explorer, which is incomplete.", 0) != -1;
+    // Preserve user-authored instructions, but refresh a stock intro so existing
+    // installations receive the current reference.  Detect earlier stock versions
+    // by a distinctive phrase each contained; none appear in the current text, so
+    // a refreshed or user-edited file is never rewritten again.
+    has_old_stock_intro := find_index_from_left(file_data, "currently the only tool is the file explorer, which is incomplete.", 0) != -1
+        || find_index_from_left(file_data, "vim-adventures.com", 0) != -1;
     if file_data.count == 0 || has_old_stock_intro {
         write_entire_file(INTRO_FILE_NAME, INTRO_FILE_TEXT);
     }
@@ -149,6 +152,36 @@ Active_View_Layer :: inline () -> *ViewLayer {
 
 View_From_ID :: inline (id: s64) -> *View {
     return *view_pool.items[id];
+}
+
+Find_View_Screen_Rect :: (wanted_view_id: s64, from_view_id: s64, from_rect: ViewportRect) -> ViewportRect, bool {
+    if wanted_view_id == from_view_id {
+        return from_rect, true;
+    }
+
+    view := View_From_ID(from_view_id);
+    for view.children {
+        child := View_From_ID(it);
+        child_rect := from_rect;
+        Apply_Viewport_To_Rect(*child_rect, *child.viewport);
+        result_rect, found := Find_View_Screen_Rect(wanted_view_id, it, child_rect);
+        if found {
+            return result_rect, true;
+        }
+    }
+    return .{}, false;
+}
+
+Set_Rendering_Bounds_To_View :: (view_id: s64) -> bool {
+    if view_id < 0 || !Is_Item_In_Use(*view_pool, view_id) {
+        return false;
+    }
+    rect, found := Find_View_Screen_Rect(view_id, ROOT_ID, Window_Viewport_Rect());
+    if !found {
+        return false;
+    }
+    rendering_scissor_ul, rendering_scissor_lr = Viewport_Rect_Points(*rect, s32);
+    return true;
 }
 
 Active_Layer_Of_View :: inline (v: *View) -> *ViewLayer {
@@ -325,7 +358,7 @@ Clear_View :: (id: s64) {
         view.layers.data = null;
         view.layers.count = 0;
     }
-    view.* = .{};
+    Return_Item(*view_pool, id, .DISALLOW);
 }
 
 Find_Valid_Child_View_To_Make_Active :: (parent: *View) -> s64 {
@@ -391,21 +424,27 @@ Close_View :: (id: s64, dependent_id := -1) {
             valid_active_id := Find_Valid_Child_View_To_Make_Active(parent);
             assert(valid_active_id != -1);
 
-            parent_of_parent := Get_Parent(parent);
-            replaced_parent_with_child := false;
-            if parent_of_parent != null {
-                for *parent_of_parent.children {
-                    if it.* == parent_id {
-                        child.viewport = parent.viewport;
-                        it.* = parent.children[0];
-                        parent.children.count = 0;
-                        Clear_View(parent_id);
-                        replaced_parent_with_child = true;
-                        break;
+            if parent_id == base_empty_view_id {
+                // The workspace staging node has a stable global ID and must
+                // survive after its final split is closed.
+                child.viewport = .{inverted=true};
+            } else {
+                parent_of_parent := Get_Parent(parent);
+                replaced_parent_with_child := false;
+                if parent_of_parent != null {
+                    for *parent_of_parent.children {
+                        if it.* == parent_id {
+                            child.viewport = parent.viewport;
+                            it.* = parent.children[0];
+                            parent.children.count = 0;
+                            Clear_View(parent_id);
+                            replaced_parent_with_child = true;
+                            break;
+                        }
                     }
                 }
-            } 
-            assert(replaced_parent_with_child); 
+                assert(replaced_parent_with_child);
+            }
 
             for *editor_view_stack {
                 if it.* == id || it.* == dependent_id {
@@ -455,23 +494,186 @@ Close_Text_Buffer :: (id: s64) {
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+Custom_Title_Bar_Display_Text :: () -> string {
+    if Is_Empty(*view_pool) || editor_view_stack.count == 0 {
+        return "";
+    }
+    layer := Active_View_Layer();
+    if layer != null {
+        if layer.type == {
+        case .FILE_EXPLORER;
+            if layer.file_explorer.directory.count > 0 {
+                return layer.file_explorer.directory;
+            }
+        case .PROJECT_EXPLORER;
+            if layer.project_explorer.directory.count > 0 {
+                return layer.project_explorer.directory;
+            }
+        case;
+        }
+        buffer := Layer_Text_Buffer(layer);
+        if buffer != null && buffer.file_path.count > 0 {
+            return buffer.file_path;
+        }
+    }
+
+    // Command bars and tool layers may temporarily own input. Keep the most
+    // recently selected editor path visible instead of blanking the title.
+    stack_index := editor_view_stack.count;
+    while stack_index > 0 {
+        stack_index -= 1;
+        view_id := editor_view_stack[stack_index];
+        if view_id < 0 || !Is_Item_In_Use(*view_pool, view_id) {
+            continue;
+        }
+        view := View_From_ID(view_id);
+        editor_layer := Active_Layer_Of_View(view);
+        if editor_layer == null || editor_layer.type != .FILE_EDITOR {
+            continue;
+        }
+        buffer := Layer_Text_Buffer(editor_layer);
+        if buffer != null && buffer.file_path.count > 0 {
+            return buffer.file_path;
+        }
+    }
+    if project_state.main_directory.count > 0 {
+        return project_state.main_directory;
+    }
+    working_directory := get_working_directory();
+    Convert_To_Forward_Slashes(working_directory);
+    return working_directory;
+}
+
+Custom_Title_Bar_Elide_From_Left :: (text: string, maximum_character_count: s32) -> string {
+    if maximum_character_count <= 0 {
+        return "";
+    }
+    if text.count <= cast(s64)maximum_character_count {
+        return text;
+    }
+    if maximum_character_count <= 3 {
+        return "...";
+    }
+    suffix_count := cast(s64)(maximum_character_count - 3);
+    suffix := string.{suffix_count, text.data + text.count - suffix_count};
+    return tprint("...%", suffix);
+}
+
+Render_Custom_Title_Bar :: (render_pass: ViewRenderPass) {
+    title_bar_height := min(Custom_Title_Bar_Height(), max(window.height, 0));
+    if title_bar_height <= 0 || window.width <= 0 {
+        return;
+    }
+    button_width := Custom_Title_Bar_Button_Width();
+    title_bar_ul: IntVector2 = .{0, 0};
+    title_bar_lr: IntVector2 = .{window.width, title_bar_height};
+
+    if render_pass == {
+    case .BACKGROUND;
+        Render_Quad(title_bar_ul, title_bar_lr, .{0.035, 0.19, 0.245, 1.0});
+        for button: CustomTitleBarButton.MINIMIZE..CustomTitleBarButton.CLOSE {
+            ul, lr := Custom_Title_Bar_Button_Rect(button, window.width, title_bar_height, button_width);
+            color := fRGBA.{0.015, 0.12, 0.17, 1.0};
+            if Custom_Title_Bar_Hovered_Button() == button {
+                color = ifx button == .CLOSE
+                    then fRGBA.{0.72, 0.10, 0.15, 1.0}
+                    else fRGBA.{0.09, 0.27, 0.32, 1.0};
+            }
+            if Custom_Title_Bar_Pressed_Button() == button
+            && Custom_Title_Bar_Hovered_Button() == button {
+                color = ifx button == .CLOSE
+                    then fRGBA.{0.56, 0.07, 0.11, 1.0}
+                    else fRGBA.{0.06, 0.21, 0.26, 1.0};
+            }
+            Render_Quad(ul, lr, color);
+        }
+    case .LINES;
+        border_color := fRGBA.{0.22, 0.35, 0.39, 0.72};
+        Render_Line(.{0, title_bar_height-1}, .{window.width, title_bar_height-1}, border_color);
+        for button: CustomTitleBarButton.MINIMIZE..CustomTitleBarButton.CLOSE {
+            ul, lr := Custom_Title_Bar_Button_Rect(button, window.width, title_bar_height, button_width);
+            Render_Line(ul, .{ul.x, lr.y}, border_color);
+
+            center: IntVector2 = .{(ul.x+lr.x)/2, (ul.y+lr.y)/2};
+            glyph_half := max((title_bar_height * 5) / (CUSTOM_TITLE_BAR_HEIGHT_96 * 2), 4);
+            glyph_color := fRGBA.{0.78, 0.84, 0.85, 0.95};
+            if Custom_Title_Bar_Hovered_Button() == button {
+                glyph_color = .{0.93, 0.96, 0.96, 1.0};
+            }
+            if button == {
+            case .MINIMIZE;
+                glyph_y := center.y + glyph_half / 2;
+                Render_Line(.{center.x-glyph_half, glyph_y}, .{center.x+glyph_half, glyph_y}, glyph_color);
+            case .MAXIMIZE;
+                Render_Quad_Lines(
+                    .{center.x-glyph_half, center.y-glyph_half},
+                    .{center.x+glyph_half, center.y+glyph_half},
+                    glyph_color,
+                );
+            case .CLOSE;
+                Render_Line(
+                    .{center.x-glyph_half, center.y-glyph_half},
+                    .{center.x+glyph_half, center.y+glyph_half},
+                    glyph_color,
+                );
+                Render_Line(
+                    .{center.x+glyph_half, center.y-glyph_half},
+                    .{center.x-glyph_half, center.y+glyph_half},
+                    glyph_color,
+                );
+            case;
+            }
+        }
+    case .TEXT;
+        identity_x := max((10 * title_bar_height) / CUSTOM_TITLE_BAR_HEIGHT_96, 6);
+        identity := "vai";
+        path_x := identity_x + cast(s32)(identity.count + 2) * Width(font);
+        controls_left := max(window.width - button_width*3, 0);
+        available_path_width := max(controls_left - path_x - 8, 0);
+        available_path_characters := ifx Width(font) > 0 then available_path_width / Width(font) else 0;
+        path := "title-bar-path-probe";
+        line_height: s32 = xx (get_baseline_height(font) * 4);
+        text_y := max((title_bar_height + line_height) / 2, line_height);
+
+        saved_scissor_ul := rendering_scissor_ul;
+        saved_scissor_lr := rendering_scissor_lr;
+        rendering_scissor_ul = title_bar_ul;
+        rendering_scissor_lr = .{controls_left, title_bar_height};
+        Set_Scissor(rendering_scissor_ul, rendering_scissor_lr);
+        Render_Text_String_At(identity, identity_x, text_y, .{0.78, 0.86, 0.87, 0.96});
+        if path.count > 0 {
+            Render_Text_String_At(path, path_x, text_y, .{0.46, 0.55, 0.57, 0.88});
+        }
+        rendering_scissor_ul = saved_scissor_ul;
+        rendering_scissor_lr = saved_scissor_lr;
+        Set_Scissor(rendering_scissor_ul, rendering_scissor_lr);
+    case;
+    }
+}
+
 Render_Views :: (full_update: bool) {
     Begin_Draw_Frame(full_update);
     defer End_Draw_Frame();
     debug_view_open = Count_Layers_Of_Type(*view_pool.items[ROOT_ID], .DEBUG, true) > 0;
     if Is_Empty(*view_pool) then return;
+    Collapse_Views_At_Or_Below_Bar_Size();
+    Refresh_Collapsed_View_Bar_Proportions();
     
     if full_update {
         // walking the view tree multiple times because tree traversal is pretty cheap + number of draw calls can be reduced by grouping draws into natural batches (background rects, lines, text, etc..)
         Set_Shader_For_Blended_Color();
+        Render_Custom_Title_Bar(.BACKGROUND);
         Walk_View_Tree(0, Render_View, ViewRenderPass.BACKGROUND);
+        Render_Mouse_View_Resize_Interface();
         Flush_Draws();
         Set_Shader_For_Lines();
+        Render_Custom_Title_Bar(.LINES);
         Walk_View_Tree(0, Render_View, ViewRenderPass.LINES);
         Flush_Draws();
         // Set_Shader_For
         // Walk_View_Tree(0, Render_View, ViewRenderPass.IMAGES);
         Set_Shader_For_Text();
+        Render_Custom_Title_Bar(.TEXT);
         Walk_View_Tree(0, Render_View, ViewRenderPass.TEXT);
         Flush_Draws();
         // it's the responsibility of the render proc to set the shader when doing foreground rendering
@@ -489,6 +691,32 @@ Render_View :: (view: *View, view_id: s64, viewport_id: s64, render_pass: ViewRe
     if render_pass == .BACKGROUND {
         view.pixel_dimensions.x = rendering_scissor_lr.x - rendering_scissor_ul.x;
         view.pixel_dimensions.y = rendering_scissor_lr.y - rendering_scissor_ul.y;
+    }
+    if rendering_scissor_lr.x <= rendering_scissor_ul.x
+    || rendering_scissor_lr.y <= rendering_scissor_ul.y {
+        return;
+    }
+
+    if View_Has_Hidden_Group_Ancestor(view_id) {
+        return;
+    }
+
+    if view.hidden_group {
+        Flush_Draws();
+        if render_pass == .TEXT || render_pass == .FOREGROUND {
+            Set_Scissor(rendering_scissor_ul, rendering_scissor_lr);
+        }
+        Render_Hidden_View_Group(view, view_id, render_pass);
+        return;
+    }
+
+    if view.hidden {
+        Flush_Draws();
+        if render_pass == .TEXT || render_pass == .FOREGROUND {
+            Set_Scissor(rendering_scissor_ul, rendering_scissor_lr);
+        }
+        Render_Collapsed_View_Tab(view, view_id == Active_View_ID(), render_pass);
+        return;
     }
 
     if view.layers.data != null {
@@ -556,10 +784,273 @@ Render_Resize_View_Interface :: () {
     whole_view_color := fRGBA.{0.7, 0.6, 0.5, 0.1};
     Render_Quad(rendering_scissor_ul, rendering_scissor_lr, whole_view_color);
 
+    Render_Quad(begin, end, Resize_View_Interface_Side_Color());
+}
+
+Resize_View_Interface_Side_Color :: () -> fRGBA {
     sin_xt := cast(float) sin(seconds_since_init() * 2.69);
     alpha := Respace(sin_xt, .{-1.0, 1.0}, .{0.25, 0.6});
-    side_color := fRGBA.{0.9, 0.45, 0.6, alpha};
-    Render_Quad(begin, end, side_color);
+    return .{0.9, 0.45, 0.6, alpha};
+}
+
+Render_Mouse_View_Resize_Interface :: () {
+    edge: [2]*View;
+    side: Side2D;
+    found_edge := false;
+
+    if mouse_interaction.active && mouse_interaction.mode == .VIEW_EDGE {
+        edge = mouse_interaction.edge;
+        side = mouse_interaction.edge_side;
+        found_edge = View_Edge_Is_Live(*edge);
+    } else if !mouse_left_button_down && mouse_hover_position_is_known {
+        hit := Find_Mouse_View_Hit(mouse_hover_position);
+        if hit.view != null && !hit.view.hidden {
+            edge, side, found_edge = Find_Mouse_View_Resize_Edge(hit, mouse_hover_position);
+        }
+    }
+    if !found_edge {
+        return;
+    }
+
+    edge_view_id := edge[0] - view_pool.items.data;
+    rect, found_rect := Find_View_Screen_Rect(edge_view_id, ROOT_ID, Window_Viewport_Rect());
+    if !found_rect {
+        return;
+    }
+    begin, end := Viewport_Rect_Points(*rect, s32);
+    band_width := min(sdw(8), ifx side == .LEFT || side == .RIGHT
+        then max(end.x - begin.x, 0)
+        else max(end.y - begin.y, 0));
+    if band_width <= 0 {
+        return;
+    }
+
+    if side == {
+    case .LEFT;
+        end.x = begin.x + band_width;
+    case .RIGHT;
+        begin.x = end.x - band_width;
+    case .TOP;
+        end.y = begin.y + band_width;
+    case .BOTTOM;
+        begin.y = end.y - band_width;
+    }
+    Render_Quad(begin, end, Resize_View_Interface_Side_Color());
+}
+
+Collapsed_View_Bar_Thickness :: (side: Side2D) -> s32 {
+    if collapsed_view_bar_thickness_for_tests > 0 {
+        return collapsed_view_bar_thickness_for_tests;
+    }
+    if side == .LEFT || side == .RIGHT {
+        return max(Width(font) + 10, sdw(18));
+    }
+    line_height: s32 = xx (get_baseline_height(font) * 4);
+    line_height += xx (cast(float32)line_height * line_spacing_factor);
+    return max(line_height + 8, sdw(20));
+}
+
+Collapsed_View_Label :: (view: *View) -> string {
+    layer := Active_Layer_Of_View(view);
+    if layer == null {
+        return "view";
+    }
+    if layer.type == .FILE_EDITOR {
+        buffer := Layer_Text_Buffer(layer);
+        if buffer != null && buffer.file_path.count > 0 {
+            success, unused, name := split_from_right(buffer.file_path, #char "/");
+            if !success {
+                success, unused, name = split_from_right(buffer.file_path, #char "\\");
+            }
+            if success && name.count > 0 {
+                return name;
+            }
+            return buffer.file_path;
+        }
+        return "untitled";
+    }
+    if layer.type == {
+    case .FILE_EXPLORER;
+        return "file explorer";
+    case .PROJECT_EXPLORER;
+        return "project explorer";
+    case .OS_CONSOLE;
+        return "console";
+    case .DEBUG;
+        return "debug";
+    case;
+    }
+    return "view";
+}
+
+Render_Collapsed_View_Tab :: (view: *View, is_active: bool, render_pass: ViewRenderPass) {
+    Render_Collapsed_Tab(Collapsed_View_Label(view), view.hidden_side, is_active, render_pass);
+}
+
+Render_Collapsed_Tab :: (label: string, side: Side2D, is_active: bool, render_pass: ViewRenderPass) {
+    Render_Collapsed_Tab_In_Rect(label, side, is_active, render_pass, rendering_scissor_ul, rendering_scissor_lr);
+}
+
+Render_Collapsed_Tab_In_Rect :: (label: string, side: Side2D, is_active: bool, render_pass: ViewRenderPass, ul: IntVector2, lr: IntVector2) {
+    if lr.x <= ul.x || lr.y <= ul.y {
+        return;
+    }
+
+    if render_pass == {
+    case .BACKGROUND;
+        background := ifx is_active
+            then fRGBA.{0.22, 0.34, 0.39, 1.0}
+            else fRGBA.{0.06, 0.20, 0.25, 1.0};
+        Render_Quad(ul, lr, background);
+    case .LINES;
+        alpha := ifx is_active then 0.95 else 0.45;
+        Render_Quad_Lines(ul, lr, .{rgb=fRGB_WHITE, a=alpha});
+    case .TEXT;
+        color := ifx is_active
+            then fRGBA.{rgb=fRGB_WHITE, a=1.0}
+            else fRGBA.{rgb=fRGB_WHITE, a=0.65};
+        line_height: s32 = xx (get_baseline_height(font) * 4);
+        line_height += xx (cast(float32)line_height * line_spacing_factor);
+        vertical := side == .LEFT || side == .RIGHT;
+        if vertical {
+            x := ul.x + max(((lr.x - ul.x) - Width(font)) / 2, 1);
+            y := ul.y + line_height;
+            stacked_letter_spacing := max((line_height * 3) / 4, sdw(1));
+            for 0..label.count-1 {
+                if y > lr.y {
+                    break;
+                }
+                character := string.{1, label.data + it};
+                Render_Text_String_At(character, x, y, color);
+                y += stacked_letter_spacing;
+            }
+        } else {
+            Render_Text_String_At(label, ul.x + 6, ul.y + line_height, color);
+        }
+    case;
+    }
+}
+
+Collect_Hidden_Leaf_View_IDs :: (view_id: s64, view_ids: *[..]s64) {
+    if View_ID_Is_Selectable(view_id) {
+        view := View_From_ID(view_id);
+        if view.hidden {
+            array_add(view_ids, view_id);
+        }
+        return;
+    }
+    view := View_From_ID(view_id);
+    for view.children {
+        Collect_Hidden_Leaf_View_IDs(it, view_ids);
+    }
+}
+
+Hidden_Group_Shelf_Side :: (view: *View) -> Side2D {
+    return ifx view.hidden_group_collapsed then view.hidden_group_side else .TOP;
+}
+
+Hidden_Group_Tab_Rect :: (group_ul: IntVector2, group_lr: IntVector2, side: Side2D, tab_index: s64, tab_count: s64) -> IntVector2, IntVector2 {
+    shelf_ul := group_ul;
+    shelf_lr := group_lr;
+    vertical := side == .LEFT || side == .RIGHT;
+    if !vertical {
+        shelf_lr.y = min(shelf_lr.y, shelf_ul.y + Collapsed_View_Bar_Thickness(.TOP));
+        width := max(shelf_lr.x - shelf_ul.x, 0);
+        tab_ul: IntVector2 = .{shelf_ul.x + xx (cast(s64)width * tab_index / tab_count), shelf_ul.y};
+        tab_lr: IntVector2 = .{shelf_ul.x + xx (cast(s64)width * (tab_index + 1) / tab_count), shelf_lr.y};
+        return tab_ul, tab_lr;
+    }
+
+    shelf_lr.x = min(shelf_lr.x, shelf_ul.x + Collapsed_View_Bar_Thickness(.LEFT));
+    height := max(shelf_lr.y - shelf_ul.y, 0);
+    tab_ul: IntVector2 = .{shelf_ul.x, shelf_ul.y + xx (cast(s64)height * tab_index / tab_count)};
+    tab_lr: IntVector2 = .{shelf_lr.x, shelf_ul.y + xx (cast(s64)height * (tab_index + 1) / tab_count)};
+    return tab_ul, tab_lr;
+}
+
+Render_Hidden_View_Group :: (group: *View, group_id: s64, render_pass: ViewRenderPass) {
+    hidden_view_ids: [..]s64;
+    hidden_view_ids.allocator = temp;
+    Collect_Hidden_Leaf_View_IDs(group_id, *hidden_view_ids);
+    if hidden_view_ids.count == 0 {
+        return;
+    }
+
+    group_ul := rendering_scissor_ul;
+    group_lr := rendering_scissor_lr;
+    side := Hidden_Group_Shelf_Side(group);
+    for hidden_view_ids {
+        tab_ul, tab_lr := Hidden_Group_Tab_Rect(group_ul, group_lr, side, it_index, hidden_view_ids.count);
+        hidden_view := View_From_ID(it);
+        Render_Collapsed_Tab_In_Rect(Collapsed_View_Label(hidden_view), side, it == Active_View_ID(), render_pass, tab_ul, tab_lr);
+    }
+
+    if group.hidden_group_collapsed {
+        return;
+    }
+
+    shelf_height := Collapsed_View_Bar_Thickness(.TOP);
+    empty_ul: IntVector2 = .{group_ul.x, min(group_ul.y + shelf_height, group_lr.y)};
+    empty_lr := group_lr;
+    if empty_lr.x <= empty_ul.x || empty_lr.y <= empty_ul.y {
+        return;
+    }
+
+    if render_pass == {
+    case .BACKGROUND;
+        Render_Quad(empty_ul, empty_lr, .{rgb=file_editor_background_color, a=1.0});
+        dot_color := fRGBA.{0.405, 0.485, 0.51, 0.26};
+        dot_step := max(sdw(18), 8);
+        dot_size := max(sdw(2), 2);
+        dot_center := IntVector2.{(empty_ul.x+empty_lr.x)/2, (empty_ul.y+empty_lr.y)/2};
+        feather_radius := cast(float)min(empty_lr.x-empty_ul.x, empty_lr.y-empty_ul.y);
+        feather_inner := feather_radius * 0.10;
+        feather_outer := feather_radius * 0.42;
+        y := empty_ul.y + dot_step / 2;
+        row: s32;
+        while y < empty_lr.y {
+            x := empty_ul.x + dot_step / 2 + (row % 2) * (dot_step / 2);
+            while x < empty_lr.x {
+                feather := Circular_Feather_From_Center(.{x, y}, dot_center, feather_inner, feather_outer);
+                if feather > 0.01 {
+                    color := dot_color;
+                    color.a *= feather;
+                    Render_Quad(.{x, y}, .{min(x + dot_size, empty_lr.x), min(y + dot_size, empty_lr.y)}, color);
+                }
+                x += dot_step;
+            }
+            y += dot_step;
+            row += 1;
+        }
+    case .LINES;
+        center_x := (empty_ul.x + empty_lr.x) / 2;
+        center_y := (empty_ul.y + empty_lr.y) / 2 - sdw(18);
+        icon_half_width := max(sdw(18), 10);
+        icon_half_height := max(sdw(14), 8);
+        icon_ul: IntVector2 = .{center_x - icon_half_width, center_y - icon_half_height};
+        icon_lr: IntVector2 = .{center_x + icon_half_width, center_y + icon_half_height};
+        icon_color := fRGBA.{0.46, 0.52, 0.54, 0.55};
+        Render_Quad_Lines(icon_ul, icon_lr, icon_color);
+        header_y := icon_ul.y + max(sdw(8), 4);
+        Render_Line(.{icon_ul.x, header_y}, .{icon_lr.x, header_y}, icon_color);
+        x_center := icon_lr.x - max(sdw(7), 4);
+        x_half := max(sdw(3), 2);
+        Render_Line(.{x_center - x_half, icon_ul.y + max(sdw(2), 1)}, .{x_center + x_half, header_y - max(sdw(2), 1)}, icon_color);
+        Render_Line(.{x_center + x_half, icon_ul.y + max(sdw(2), 1)}, .{x_center - x_half, header_y - max(sdw(2), 1)}, icon_color);
+    case .TEXT;
+        show_input := Mapped_Input_For_Action(.SHOW_ACTIVE_VIEW, .NORMAL);
+        if show_input.count == 0 {
+            show_input = "show";
+        }
+        hint := tprint("Select a hidden view's tab then show it with %", show_input);
+        line_height: s32 = xx (get_baseline_height(font) * 4);
+        line_height += xx (cast(float32)line_height * line_spacing_factor);
+        hint_width := xx hint.count * Width(font);
+        hint_x := max(empty_ul.x + (empty_lr.x - empty_ul.x - hint_width) / 2, empty_ul.x + 4);
+        hint_y := (empty_ul.y + empty_lr.y) / 2 + sdw(18) + line_height;
+        Render_Text_String_At(hint, hint_x, min(hint_y, empty_lr.y - 2), .{0.48, 0.53, 0.55, 0.68});
+    case;
+    }
 }
 
 Get_View_Edge :: (view: *View, side: Side2D) -> [2]*View, Side2D {
@@ -623,16 +1114,8 @@ Move_View_Edge :: (edge: *[2]*View, side: Side2D, direction: Side2D) {
 
     dir := ifx direction == side_opposite then -1.0 else 1.0;
     delta := dir * norm_speed;
-
-    edge.*[0].viewport.offsets[side_opposite] = clamp(edge.*[0].viewport.offsets[side_opposite] + delta, 0.01, .99);
-    edge.*[1].viewport.offsets[side] = 1.0 - edge.*[0].viewport.offsets[side_opposite];
-
-    view_ids := s64.[edge.*[0] - view_pool.items.data, edge.*[1] - view_pool.items.data];    
-    if view_ids[0] == tool_view_id {
-        settings_file_data.tool_view_screen_proportion = edge.*[0].viewport.offsets[side_opposite];
-    } else if view_ids[1] == tool_view_id {
-        settings_file_data.tool_view_screen_proportion = edge.*[1].viewport.offsets[side];
-    }
+    start_proportion := edge.*[0].viewport.offsets[side_opposite];
+    Resize_View_Edge_To_Proportion(edge, side, start_proportion + delta, start_proportion, 1.0 - start_proportion);
 }
 
 Balance_View_Edge :: (edge: *[2]*View, side: Side2D, proportion: float) {
@@ -650,10 +1133,474 @@ Balance_View_Edge :: (edge: *[2]*View, side: Side2D, proportion: float) {
     }
 }
 
+Get_Direct_View_Split_Edge :: (view: *View) -> edge: [2]*View, side: Side2D, success: bool {
+    empty_edge: [2]*View;
+    parent := Get_Parent(view);
+    if parent == null || parent.children.count < 2 {
+        return empty_edge, .LEFT, false;
+    }
+
+    family, found_family := Get_View_Family(view);
+    if !found_family {
+        return empty_edge, .LEFT, false;
+    }
+
+    if view.viewport.left > 0.0 && family.sibling.viewport.right > 0.0 {
+        return .[view, family.sibling], .RIGHT, true;
+    }
+    if view.viewport.right > 0.0 && family.sibling.viewport.left > 0.0 {
+        return .[view, family.sibling], .LEFT, true;
+    }
+    if view.viewport.top > 0.0 && family.sibling.viewport.bottom > 0.0 {
+        return .[view, family.sibling], .BOTTOM, true;
+    }
+    if view.viewport.bottom > 0.0 && family.sibling.viewport.top > 0.0 {
+        return .[view, family.sibling], .TOP, true;
+    }
+    return empty_edge, .LEFT, false;
+}
+
+View_ID_Is_Selectable :: (view_id: s64) -> bool {
+    if view_id < 0 || view_id == ROOT_ID || view_id == vim_console_id {
+        return false;
+    }
+    if !Is_Item_In_Use(*view_pool, view_id) {
+        return false;
+    }
+    return view_pool.items[view_id].layers.count > 0;
+}
+
+View_ID_Has_Tab_Or_Content :: (view_id: s64) -> bool {
+    if !View_ID_Is_Selectable(view_id) {
+        return false;
+    }
+    view := *view_pool.items[view_id];
+    if view.hidden {
+        return true;
+    }
+    if view_id == tool_view_id && view.viewport.left <= 0.0 {
+        return false;
+    }
+    return true;
+}
+
+Find_Visible_Selectable_View_ID :: (from_view_id: s64, excluding_view_id: s64) -> s64 {
+    view := *view_pool.items[from_view_id];
+    if from_view_id != excluding_view_id
+    && View_ID_Is_Selectable(from_view_id)
+    && !view.hidden
+    && (from_view_id != tool_view_id || view.viewport.left > 0.0) {
+        return from_view_id;
+    }
+    for view.children {
+        found := Find_Visible_Selectable_View_ID(it, excluding_view_id);
+        if found >= 0 {
+            return found;
+        }
+    }
+    return -1;
+}
+
+Set_Direct_View_Split_Proportion :: (view: *View, sibling: *View, side: Side2D, proportion: float) {
+    side_opposite := Opposite(side);
+    view.viewport.offsets[side_opposite] = clamp(proportion, 0.0001, 0.9999);
+    sibling.viewport.offsets[side] = 1.0 - view.viewport.offsets[side_opposite];
+}
+
+View_Split_Parent_Axis_Length :: (view: *View, side: Side2D) -> s32 {
+    parent_id := Find_Parent(view);
+    if parent_id < 0 {
+        return sdw(1);
+    }
+    parent_rect, found := Find_View_Screen_Rect(parent_id, ROOT_ID, Window_Viewport_Rect());
+    if !found {
+        return sdw(1);
+    }
+    return max(ifx side == .LEFT || side == .RIGHT
+        then parent_rect.dimensions.x
+        else parent_rect.dimensions.y, sdw(1));
+}
+
+Collapsed_View_Bar_Proportion :: (side: Side2D, total_length: s32) -> float {
+    safe_total_length := max(total_length, sdw(1));
+    // Viewport shaving rounds upward. Keeping the normalized target slightly
+    // inside the desired integer size makes that ceil land on the exact bar
+    // thickness across window sizes.
+    target_pixels := max(cast(float)Collapsed_View_Bar_Thickness(side) - 0.25, 0.25);
+    return clamp(target_pixels / cast(float)safe_total_length, 0.0001, 0.9999);
+}
+
+View_Has_Hidden_Group_Ancestor :: (view_id: s64) -> bool {
+    parent_id := Find_Parent(view_id);
+    while parent_id >= 0 {
+        parent := View_From_ID(parent_id);
+        if parent.hidden_group {
+            return true;
+        }
+        parent_id = Find_Parent(parent_id);
+    }
+    return false;
+}
+
+Hidden_Subtree_State :: (view_id: s64) -> all_hidden: bool, selectable_leaf_count: s64 {
+    if View_ID_Is_Selectable(view_id) {
+        return View_From_ID(view_id).hidden, 1;
+    }
+
+    view := View_From_ID(view_id);
+    all_descendants_hidden := true;
+    leaf_count: s64;
+    for view.children {
+        child_all_hidden, child_leaf_count := Hidden_Subtree_State(it);
+        if child_leaf_count > 0 {
+            leaf_count += child_leaf_count;
+            all_descendants_hidden = all_descendants_hidden && child_all_hidden;
+        }
+    }
+    return all_descendants_hidden && leaf_count > 0, leaf_count;
+}
+
+View_Qualifies_As_Hidden_Group :: (view_id: s64) -> bool {
+    view := View_From_ID(view_id);
+    if view.layers.count > 0 || view.children.count < 2 {
+        return false;
+    }
+    all_hidden, selectable_leaf_count := Hidden_Subtree_State(view_id);
+    return all_hidden && selectable_leaf_count >= 2;
+}
+
+Collect_Maximal_Hidden_Group_IDs :: (view_id: s64, group_ids: *[..]s64) {
+    if View_Qualifies_As_Hidden_Group(view_id) {
+        array_add(group_ids, view_id);
+        return;
+    }
+    view := View_From_ID(view_id);
+    for view.children {
+        Collect_Maximal_Hidden_Group_IDs(it, group_ids);
+    }
+}
+
+Collect_Active_Hidden_Group_IDs :: (view_id: s64, group_ids: *[..]s64) {
+    view := View_From_ID(view_id);
+    if view.hidden_group {
+        array_add(group_ids, view_id);
+    }
+    for view.children {
+        Collect_Active_Hidden_Group_IDs(it, group_ids);
+    }
+}
+
+View_ID_List_Contains :: (view_ids: []s64, view_id: s64) -> bool {
+    for view_ids {
+        if it == view_id {
+            return true;
+        }
+    }
+    return false;
+}
+
+Deactivate_Hidden_View_Group :: (group_id: s64) {
+    group := View_From_ID(group_id);
+    if group.hidden_group_collapsed {
+        family, found_family := Get_View_Family(group);
+        if found_family {
+            Set_Direct_View_Split_Proportion(group, family.sibling, group.hidden_group_side, group.hidden_group_saved_proportion);
+        }
+    }
+    group.hidden_group = false;
+    group.hidden_group_collapsed = false;
+}
+
+Activate_Hidden_View_Group :: (group_id: s64) {
+    group := View_From_ID(group_id);
+    group.hidden_group = true;
+    group.hidden_group_collapsed = false;
+    group.hidden_group_side = .TOP;
+
+    // The base editor split owns the full workspace. It keeps its height so it
+    // can render a shelf plus the unmistakably empty dotted background.
+    if group_id == base_empty_view_id {
+        return;
+    }
+
+    edge, side, found_edge := Get_Direct_View_Split_Edge(group);
+    if !found_edge {
+        return;
+    }
+
+    side_opposite := Opposite(side);
+    saved_proportion := group.viewport.offsets[side_opposite];
+    total_length := View_Split_Parent_Axis_Length(group, side);
+    bar_proportion := Collapsed_View_Bar_Proportion(side, total_length);
+
+    group.hidden_group_collapsed = true;
+    group.hidden_group_side = side;
+    group.hidden_group_saved_proportion = clamp(saved_proportion, 0.01, 0.99);
+    Set_Direct_View_Split_Proportion(group, edge[1], side, bar_proportion);
+
+    sibling_id := edge[1] - view_pool.items.data;
+    if View_ID_Is_Selectable(sibling_id) {
+        edge[1].hidden_saved_proportion = 1.0 - group.hidden_group_saved_proportion;
+    }
+}
+
+Reapply_Individual_Hidden_View_Layouts :: (view_id: s64) {
+    view := View_From_ID(view_id);
+    if View_ID_Is_Selectable(view_id) && view.hidden && !View_Has_Hidden_Group_Ancestor(view_id) {
+        edge, side, found_edge := Get_Direct_View_Split_Edge(view);
+        if found_edge && !edge[1].hidden && !edge[1].hidden_group {
+            total_length := View_Split_Parent_Axis_Length(view, side);
+            bar_proportion := Collapsed_View_Bar_Proportion(side, total_length);
+            Set_Direct_View_Split_Proportion(view, edge[1], side, bar_proportion);
+        }
+        return;
+    }
+    for view.children {
+        Reapply_Individual_Hidden_View_Layouts(it);
+    }
+}
+
+Update_Hidden_View_Groups :: () {
+    if !Is_Item_In_Use(*view_pool, base_empty_view_id) {
+        return;
+    }
+
+    desired_group_ids: [..]s64;
+    desired_group_ids.allocator = temp;
+    active_group_ids: [..]s64;
+    active_group_ids.allocator = temp;
+    Collect_Maximal_Hidden_Group_IDs(base_empty_view_id, *desired_group_ids);
+    Collect_Active_Hidden_Group_IDs(base_empty_view_id, *active_group_ids);
+
+    // Restore old outer geometry before collapsing a newly maximal ancestor.
+    for active_group_ids {
+        if !View_ID_List_Contains(desired_group_ids, it) {
+            Deactivate_Hidden_View_Group(it);
+        }
+    }
+    for desired_group_ids {
+        if !View_ID_List_Contains(active_group_ids, it) {
+            Activate_Hidden_View_Group(it);
+        }
+    }
+    Reapply_Individual_Hidden_View_Layouts(base_empty_view_id);
+}
+
+Refresh_Collapsed_View_Bar_Proportions_Recursive :: (view_id: s64) {
+    view := View_From_ID(view_id);
+    if view.hidden_group && view.hidden_group_collapsed {
+        family, found_family := Get_View_Family(view);
+        if found_family {
+            total_length := View_Split_Parent_Axis_Length(view, view.hidden_group_side);
+            bar_proportion := Collapsed_View_Bar_Proportion(view.hidden_group_side, total_length);
+            Set_Direct_View_Split_Proportion(view, family.sibling, view.hidden_group_side, bar_proportion);
+        }
+    } else if View_ID_Is_Selectable(view_id)
+    && view.hidden
+    && !View_Has_Hidden_Group_Ancestor(view_id) {
+        edge, side, found_edge := Get_Direct_View_Split_Edge(view);
+        if found_edge {
+            total_length := View_Split_Parent_Axis_Length(view, side);
+            bar_proportion := Collapsed_View_Bar_Proportion(side, total_length);
+            Set_Direct_View_Split_Proportion(view, edge[1], side, bar_proportion);
+        }
+    }
+
+    for view.children {
+        Refresh_Collapsed_View_Bar_Proportions_Recursive(it);
+    }
+}
+
+Refresh_Collapsed_View_Bar_Proportions :: () {
+    if Is_Empty(*view_pool) {
+        return;
+    }
+    Refresh_Collapsed_View_Bar_Proportions_Recursive(ROOT_ID);
+}
+
+Collect_Views_At_Or_Below_Bar_Size :: (view_id: s64, view_ids: *[..]s64) {
+    view := View_From_ID(view_id);
+    if View_ID_Is_Selectable(view_id) {
+        if !view.hidden && !View_Has_Hidden_Group_Ancestor(view_id) {
+            edge, side, found_edge := Get_Direct_View_Split_Edge(view);
+            if found_edge {
+                rect, found_rect := Find_View_Screen_Rect(view_id, ROOT_ID, Window_Viewport_Rect());
+                if found_rect {
+                    axis_length := ifx side == .LEFT || side == .RIGHT
+                        then rect.dimensions.x
+                        else rect.dimensions.y;
+                    if axis_length <= Collapsed_View_Bar_Thickness(side) {
+                        array_add(view_ids, view_id);
+                    }
+                }
+            }
+        }
+        return;
+    }
+    for view.children {
+        Collect_Views_At_Or_Below_Bar_Size(it, view_ids);
+    }
+}
+
+Collapse_Views_At_Or_Below_Bar_Size :: () {
+    view_ids: [..]s64;
+    view_ids.allocator = temp;
+    Collect_Views_At_Or_Below_Bar_Size(ROOT_ID, *view_ids);
+    for view_ids {
+        saved_proportion := -1.0;
+        belongs_to_mouse_drag := false;
+        if mouse_interaction.active
+        && mouse_interaction.mode == .VIEW_EDGE
+        && View_Edge_Is_Live(*mouse_interaction.edge) {
+            first_id := mouse_interaction.edge[0] - view_pool.items.data;
+            second_id := mouse_interaction.edge[1] - view_pool.items.data;
+            if it == first_id {
+                saved_proportion = mouse_interaction.edge_restore_first_proportion;
+                belongs_to_mouse_drag = true;
+            } else if it == second_id {
+                saved_proportion = mouse_interaction.edge_restore_second_proportion;
+                belongs_to_mouse_drag = true;
+            }
+        }
+        if Hide_View(it, saved_proportion) && belongs_to_mouse_drag {
+            // Pixel rounding can make the layout pass recognize the terminal
+            // bar one frame before the proportion comparison does. Preserve
+            // that drag's original restore size, but leave the captured edge
+            // armed so reversing the pointer can reveal the pane again.
+        }
+    }
+}
+
+Hide_View :: (view_id: s64, saved_proportion_override: float = -1.0) -> bool {
+    if !View_ID_Is_Selectable(view_id) {
+        return false;
+    }
+    view := *view_pool.items[view_id];
+    if view.hidden {
+        return true;
+    }
+
+    edge, side, found_edge := Get_Direct_View_Split_Edge(view);
+    if !found_edge {
+        return false;
+    }
+
+    fallback_view_id := previous_selected_view_id;
+    if fallback_view_id == view_id || !View_ID_Has_Tab_Or_Content(fallback_view_id) {
+        fallback_view_id = Find_Visible_Selectable_View_ID(ROOT_ID, view_id);
+    }
+    if Active_View_ID() == view_id && fallback_view_id < 0 {
+        return false;
+    }
+
+    side_opposite := Opposite(side);
+    saved_proportion := view.viewport.offsets[side_opposite];
+    sibling := edge[1];
+    if sibling.hidden {
+        saved_proportion = view.hidden_saved_proportion;
+    } else if sibling.hidden_group && sibling.hidden_group_collapsed {
+        saved_proportion = 1.0 - sibling.hidden_group_saved_proportion;
+    }
+    if saved_proportion_override >= 0.0 {
+        saved_proportion = saved_proportion_override;
+    }
+    total_length := View_Split_Parent_Axis_Length(view, side);
+    bar_proportion := Collapsed_View_Bar_Proportion(side, total_length);
+
+    view.hidden_side = side;
+    view.hidden_saved_proportion = clamp(saved_proportion, 0.01, 0.99);
+    sibling_id := sibling - view_pool.items.data;
+    if View_ID_Is_Selectable(sibling_id) && !sibling.hidden {
+        sibling.hidden_saved_proportion = 1.0 - view.hidden_saved_proportion;
+    }
+    view.hidden = true;
+    Set_Direct_View_Split_Proportion(view, sibling, side, bar_proportion);
+    Update_Hidden_View_Groups();
+
+    if view_id == tool_view_id {
+        tool_view_is_active = false;
+    }
+    if Active_View_ID() == view_id {
+        if View_ID_Uses_Overlay_Stack(view_id) {
+            Deactivate_Active_Overlay_View_ID(view_id, fallback_view_id);
+        } else {
+            Replace_Active_View_ID(fallback_view_id);
+        }
+    }
+    return true;
+}
+
+Show_View :: (view_id: s64) -> bool {
+    if !View_ID_Is_Selectable(view_id) {
+        return false;
+    }
+    view := *view_pool.items[view_id];
+    if !view.hidden {
+        return true;
+    }
+
+    // A captured mouse gesture can outlive a topology change. Treat a
+    // detached tab as unavailable without sending it through the diagnostic
+    // family lookup used for genuinely malformed view trees.
+    if Find_Parent(view_id) < 0 {
+        return false;
+    }
+    family, found_family := Get_View_Family(view);
+    if !found_family {
+        return false;
+    }
+    Set_Direct_View_Split_Proportion(view, family.sibling, view.hidden_side, view.hidden_saved_proportion);
+    view.hidden = false;
+    Update_Hidden_View_Groups();
+    if view_id == tool_view_id {
+        tool_view_is_active = true;
+        settings_file_data.tool_view_screen_proportion = view.hidden_saved_proportion;
+    }
+    return true;
+}
+
+Resize_View_Edge_To_Proportion :: (
+    edge: *[2]*View,
+    side: Side2D,
+    requested_proportion: float,
+    saved_first_proportion: float,
+    saved_second_proportion: float
+) -> collapsed: bool {
+    total_length := View_Split_Parent_Axis_Length(edge.*[0], side);
+    first_id := edge.*[0] - view_pool.items.data;
+    second_id := edge.*[1] - view_pool.items.data;
+    first_can_collapse := View_ID_Is_Selectable(first_id) && !edge.*[0].hidden;
+    second_can_collapse := View_ID_Is_Selectable(second_id) && !edge.*[1].hidden;
+
+    first_minimum := ifx first_can_collapse
+        then Collapsed_View_Bar_Proportion(side, total_length)
+        else 0.01;
+    second_side := Opposite(side);
+    second_minimum := ifx second_can_collapse
+        then Collapsed_View_Bar_Proportion(second_side, total_length)
+        else 0.01;
+
+    if first_can_collapse && requested_proportion <= first_minimum {
+        Balance_View_Edge(edge, side, first_minimum);
+        if Hide_View(first_id, saved_first_proportion) {
+            return true;
+        }
+    }
+    if second_can_collapse && 1.0 - requested_proportion <= second_minimum {
+        Balance_View_Edge(edge, side, 1.0 - second_minimum);
+        if Hide_View(second_id, saved_second_proportion) {
+            return true;
+        }
+    }
+
+    Balance_View_Edge(edge, side, clamp(requested_proportion, first_minimum, 1.0 - second_minimum));
+    return false;
+}
+
 // when the window is receiving no new input, we just copy the old render target to the new one. however,
 // for the cursor to blink we need to redraw a few things.
 Render_Partial_Update :: (view: *View, view_id: s64, viewport_id: s64, unused: *void) {
-    if view.layers.data == null then return;
+    if view.layers.data == null || view.hidden || View_Has_Hidden_Group_Ancestor(view_id) then return;
     active_layer := *view.layers[view.active_layer];
     if view_id != Active_View_ID() {
         active_view_layer := Active_View_Layer();
@@ -798,11 +1745,11 @@ ViewFamily :: struct {
 
 Get_View_Family :: (v: *View) -> family: ViewFamily, success: bool {
     parent := Get_Parent(v);
-    parent_is_root := parent - view_pool.items.data == 0;
     if parent == null {
         #if DEBUG_VIEWS then Log_Warning("parent is null");
         return .{}, false;
     }
+    parent_is_root := parent - view_pool.items.data == 0;
     if parent.children.count < 1 || parent.layers.count != 0 {
         #if DEBUG_VIEWS then Log_Warning("parent child count is %", parent.children.count);
         return .{}, false;
@@ -952,22 +1899,22 @@ Set_View_Scissor :: (ul: IntVector2, lr: IntVector2) {
 }
 
 Scroll_View_Down :: (layer: *ViewLayer, y_max: float32, speed: float32) {
-    row_delta := speed * xx delta_time;
+    row_delta := speed * Interactive_Delta_Time();
     Move_View_Y(layer, row_delta, y_max, .DOWN);
 }
 
 Scroll_View_Up :: (layer: *ViewLayer, y_min: float32, speed: float32) {
-    row_delta := speed * xx delta_time;
+    row_delta := speed * Interactive_Delta_Time();
     Move_View_Y(layer, row_delta, y_min, .UP);
 }
 
 Scroll_View_Right :: (layer: *ViewLayer, x_max: float32, speed: float32) {
-    layer.view_position.x += speed * xx delta_time;
+    layer.view_position.x += speed * Interactive_Delta_Time();
     layer.view_position.x = min(layer.view_position.x, x_max);
 }
 
 Scroll_View_Left :: (layer: *ViewLayer, x_min: float32, speed: float32) {
-    layer.view_position.x -= speed * xx delta_time;
+    layer.view_position.x -= speed * Interactive_Delta_Time();
     layer.view_position.x = max(layer.view_position.x, x_min);
 }
 
@@ -1157,11 +2104,12 @@ FileExplorer :: CursorLayer(
         // after `directory` is rendered as the forward-navigation trail.
         forward_path: string;
         directory_list_outline_alpha: float;
-        preview_vertical_proportion: enum {
-            NONE;
-            HALF;
-            FULL;
-        } = .HALF;
+        // The divider between the directory list and the preview.  Unlike the
+        // old three-state setting, this is a continuous proportion so keyboard
+        // and mouse resizing can share one layout.
+        preview_vertical_proportion: float = 0.5;
+        preview_saved_vertical_proportion: float = 0.5;
+        preview_hidden: bool;
     }
 );
 
@@ -1203,6 +2151,13 @@ View :: struct {
     children: []s16;
     pixel_dimensions: IntVector2;
     active_layer: s8 = -1;
+    hidden: bool;
+    hidden_side: Side2D;
+    hidden_saved_proportion: float = 0.5;
+    hidden_group: bool;
+    hidden_group_collapsed: bool;
+    hidden_group_side: Side2D;
+    hidden_group_saved_proportion: float = 0.5;
 }
 
 LateViewDraw :: struct {
@@ -1262,11 +2217,70 @@ Replace_Background_View_ID :: (id: s64, bg_steps: u32 = 1) {
 
 Replace_Active_View_ID :: (id: s64) {
     assert(editor_view_stack.count > 0);
+    previous_id := Active_View_ID();
+    if previous_id != id && View_ID_Is_Selectable(previous_id) && View_ID_Is_Selectable(id) {
+        previous_selected_view_id = previous_id;
+    }
     editor_view_stack[editor_view_stack.count-1] = id;
+}
+
+View_ID_Uses_Overlay_Stack :: (view_id: s64) -> bool {
+    return view_id == tool_view_id || view_id == vim_console_id;
+}
+
+Remove_View_ID_From_Active_Stack :: (view_id: s64) {
+    if editor_view_stack.count == 0 {
+        return;
+    }
+    write_index: s64;
+    for read_index: 0..editor_view_stack.count-1 {
+        if editor_view_stack[read_index] == view_id {
+            continue;
+        }
+        editor_view_stack[write_index] = editor_view_stack[read_index];
+        write_index += 1;
+    }
+    editor_view_stack.count = write_index;
+}
+
+Focus_Overlay_View_ID :: (view_id: s64) -> bool {
+    if Active_View_ID() == view_id {
+        return true;
+    }
+    Remove_View_ID_From_Active_Stack(view_id);
+    if editor_view_stack.count == 0 {
+        return false;
+    }
+    Push_Active_View_ID(view_id);
+    return true;
+}
+
+Deactivate_Active_Overlay_View_ID :: (view_id: s64, fallback_view_id: s64) -> bool {
+    if Active_View_ID() != view_id {
+        return false;
+    }
+
+    if editor_view_stack.count > 1 {
+        Pop_Active_View_ID();
+    } else if View_ID_Is_Selectable(fallback_view_id) {
+        Replace_Active_View_ID(fallback_view_id);
+        return true;
+    } else {
+        return false;
+    }
+
+    if View_ID_Is_Selectable(fallback_view_id) && Active_View_ID() != fallback_view_id {
+        Replace_Active_View_ID(fallback_view_id);
+    }
+    return true;
 }
 
 Push_Active_View_ID :: (id: s64) {
     assert(editor_view_stack.count < editor_view_stack_buffer.count);
+    previous_id := Active_View_ID();
+    if previous_id != id && View_ID_Is_Selectable(previous_id) && View_ID_Is_Selectable(id) {
+        previous_selected_view_id = previous_id;
+    }
     editor_view_stack.count += 1;
     editor_view_stack[editor_view_stack.count-1] = id;
 }
@@ -1275,19 +2289,28 @@ Pop_Active_View_ID :: () -> s64 {
     assert(editor_view_stack.count > 0);
     id := editor_view_stack[editor_view_stack.count-1];
     editor_view_stack.count -= 1;
+    next_id := Active_View_ID();
+    if id != next_id && View_ID_Is_Selectable(id) && View_ID_Is_Selectable(next_id) {
+        previous_selected_view_id = id;
+    }
     return id;
 }
 
 Find_First_Layer_Of_Type_In_View_Stack :: (type: ViewLayerType) -> *ViewLayer {
+    _, layer := Find_First_View_And_Layer_Of_Type_In_View_Stack(type);
+    return layer;
+}
+
+Find_First_View_And_Layer_Of_Type_In_View_Stack :: (type: ViewLayerType) -> view_id: s64, layer: *ViewLayer {
     assert(editor_view_stack.count > 0);
     for < editor_view_stack {
         view := view_pool.items[it];
         active_layer := *view.layers[view.active_layer];
         if active_layer.type == type {
-            return active_layer;
+            return it, active_layer;
         }
     }
-    return null;
+    return -1, null;
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1329,6 +2352,8 @@ base_empty_view_id: s64;
 view_layer_id_counter: u32;
 
 selected_view_side: Side2D;
+previous_selected_view_id: s64 = -1;
+collapsed_view_bar_thickness_for_tests: s32 = -1;
 
 ROOT_ID :: 0;
 OS_CONSOLE_LAYER :: ToolViewLayer.OS_CONSOLE;
@@ -1343,50 +2368,111 @@ RenderedTextData :: struct {
 #scope_file // ------------------------------------------------------------------------------------------------ { FILE }
 
 INTRO_FILE_TEXT :: #string HERE
-Commands and their short names
-------------------------------
-':open' / ':o' opens a file.
-':vertical-split' / ':v' and ':horizontal-split' / ':h' split the editor.
-':close' / ':c' closes a view; ':close buffer' closes its buffer.
-':quit' / ':q' exits Vai. ':save' / ':w' writes the selected buffer.
-':set' / ':s' changes options. ':buffer-next' / ':bn' and ':buffer-previous' / ':bp'
-switch buffers.
-':tools' / ':t' toggles the last tool. ':explorer' / ':e' opens the file explorer.
-':projects' / ':p' opens the project browser.
+vai quick reference
+===================
+Modal editor, vim-style. Esc returns to Normal mode from anywhere.
 
-Configuration and projects
---------------------------
-Vai stores all of its writable configuration in %APPDATA%/Vai, never beside the executable.
-The main configuration is in %APPDATA%/Vai/main/settings.txt. Each project has its own
-folder under %APPDATA%/Vai/projects/<project-name>. Its project.txt selects the project's
-main_directory, settings.txt optionally overrides main settings, and views.txt is maintained
-by Vai to remember the files, buffers, and editor views that were open.
 
-Open ':projects' to browse project folders. Enter or right on a project expands its config
-folder. The first row is [open project]; activating it changes Vai to that project's
-main_directory, restores its files/views, and applies its settings after the main settings.
-For the active project it reads [current project] and is greyed out. Left returns to the
-project list. Open a config file from this browser to edit it normally.
+NORMAL mode
+-----------
+Move   h j k l          left / down / up / right
+       w W  b B         word forward / back   (W B = whitespace-delimited)
+       e E              end of word
+       0  H  L          line: column 0 / first non-blank / end
+       gg  G            top / bottom of file
+       {  }             previous / next blank line
+       <C-u> <C-d>      half page up / down
+       <C-U> <C-D>      full page up / down
+       -  =             previous / next buffer
+Edit   i  a             insert before / after cursor
+       o  O             open line below / above
+       x                delete character
+       dd dw diw        delete line / word / inner word
+       cc cw ciw        change line / word / inner word
+       d0 c0            delete / change to column 0
+       r<c>             replace character with <c>
+       ~                toggle case
+       yy  p  P         yank line / paste after / before
+       u  <C-r>         undo / redo
+       .                repeat last change
+       <C-/>            toggle line comment
+Find   /                search;  n N  next / prev match
+Enter  v  :             visual mode / command mode
+       <CR>             activate current row (explorer, projects, results)
+Views  <C-h> <C-s>      hide / show active view
+       <C-j> <C-k> <C-l>  grab bottom / top / right edge to resize
+       <C-w><C-w>       focus next editor
 
-To create a project, use ':project-create' / ':pc name D:/path/to/project' (paths without spaces),
-then find it in ':projects'. You can also create %APPDATA%/Vai/projects/<name>/project.txt
-yourself and set 'main_directory = D:/path/to/project'. If no valid project has been chosen,
-Vai creates and opens a project named 'default'. On later launches it opens the last project.
 
-Each command has a listed short name. Longer unambiguous prefixes work too.
+INSERT mode
+-----------
+Type to insert text.  <CR> new line.  Backspace deletes.  Esc returns to Normal.
 
-Explorer previews
+
+VISUAL mode
+-----------
+h j k l w b e ...   extend the selection
+d  c  y             delete / change / yank selection
+U  u                uppercase / lowercase selection
+<C-/>               toggle comment.   Esc returns to Normal.
+
+
+RESIZE-VIEW mode
+----------------
+<C-h> <C-j> <C-k> <C-l>   move the active edge left / down / up / right
+h  s                      hide / show a view
+/                         make view proportions equal
+
+
+COMMAND mode  (:)
 -----------------
-The file explorer previews common game textures: PNG, JPEG, BMP, TGA, PSD, GIF, HDR,
-OpenEXR, TIFF, DNG, PIC, PPM, PGM, and DDS (BC1/BC2/BC3 plus common uncompressed variants). It also renders an unlit static view of glTF/GLB, FBX, OBJ, USD,
-USDA, USDC, and USDZ scenes. Select an asset in the explorer to load its preview.
+Type a command name and <CR>. Tab autocompletes. Unambiguous prefixes work.
+  :open  :o  <path>            open a file
+  :save  :w                    save the current buffer
+  :close :c  [buffer]          close the view (or its buffer)
+  :quit  :q                    exit vai
+  :vertical-split    :v        split the view vertically
+  :horizontal-split  :h        split the view horizontally
+  :buffer-next       :bn       show the next buffer
+  :buffer-previous   :bp       show the previous buffer
+  :set   :s  <option> <value>  change a setting (see below)
+  :tools :t                    toggle the last tool window
+  :explorer :e                 file explorer
+  :projects :p                 project browser
+  :project-create :pc <name> <path>   create a project (path without spaces)
 
-To add another scene format, put a compatible preview-provider DLL in
-%APPDATA%/Vai/plugins/preview, then restart Vai. Providers expose a small versioned C ABI
-and run off the UI thread; source builds include native_preview/vai_scene_preview_api.h and
-docs/scene-preview-plugins.md with the contract.
 
-For learning vim motions, check out vim-adventures.com. 
-If you're already familiar with vim, you'll notice a few things are different in vai, and many features are missing. 
-In the future, more will be different, and many more features will be available... it just takes time ;d 
+Settings  (:set <name> <value>)
+-------------------------------
+  line-numbers           bool   show line numbers              (on)
+  relative-line-numbers  bool   relative line numbers          (off)
+  smart-case             bool   ignore case unless uppercase   (on)
+  indent-width           int    spaces per indent              (4)
+  auto-indent            bool   auto-indent new lines          (on)
+  soft-wrap              bool   wrap long lines                (on)
+  soft-wrap-indent       int    indent for wrapped lines       (2)
+  font-size              int    editor font size               (14)
+
+
+Tool windows
+------------
+  :explorer   Browse files. <CR>/l open, h go up. Selecting an asset previews
+              images (PNG JPEG BMP TGA PSD GIF HDR EXR TIFF DNG PIC PPM PGM DDS)
+              and unlit 3D scenes (glTF GLB FBX OBJ USD USDA USDC USDZ).
+  :projects   Browse and switch projects. [open project] switches to it and
+              restores its files/views; <CR>/l expands its config folder, h back.
+  :tools      Toggle the most recently used tool window.
+
+
+Configuration
+-------------
+All writable config lives in %APPDATA%/Vai (never beside the executable):
+  main/settings.txt             global settings
+  projects/<name>/project.txt   sets the project's main_directory
+  projects/<name>/settings.txt  per-project setting overrides
+  projects/<name>/views.txt     open files/views (managed by vai)
+If no project is chosen, vai opens one named 'default'; later launches reopen
+the last project. Drop a preview-provider DLL in %APPDATA%/Vai/plugins/preview
+to add scene formats (see docs/scene-preview-plugins.md). .jai files are
+syntax-highlighted.
 HERE

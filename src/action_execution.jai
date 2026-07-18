@@ -85,7 +85,12 @@ Cursor_Scroll_Right :: () {
                     }
                 }
             } else {
-                Normal_Mode_Return();
+                // Unlike Enter (which stays in the explorer), the right key also
+                // moves the cursor into the editor when a file is opened.
+                opened, editor_view_id := File_Explorer_Open_Selected(cursor);
+                if opened {
+                    Deactivate_Active_Overlay_View_ID(tool_view_id, editor_view_id);
+                }
             }
         case .PROJECT_EXPLORER;
             Normal_Mode_Return();
@@ -216,55 +221,62 @@ Cursor_Scroll_To_Line_Zero :: () {
     cursor.just_moved = true;
 }
 
+EditorSortInfo :: struct {
+    view_id: s32;
+    rect_upper_left: IntVector2;
+}
+
+Next_Editor_Index :: (active_view_id: s64, sort_info: []EditorSortInfo) -> s64 {
+    if sort_info.count == 0 {
+        return -1;
+    }
+    for sort_info {
+        if it.view_id == active_view_id {
+            return (it_index + 1) % sort_info.count;
+        }
+    }
+    return 0;
+}
+
+Collect_Editor_Sort_Info :: (view: *View, view_id: s64, viewport_id: s64, sort_info: *[..]EditorSortInfo) {
+    if view.layers.data == null then return;
+    active_layer := view.layers[view.active_layer];
+    if active_layer.type != .FILE_EDITOR then return;
+    array_add(sort_info, .{xx view_id, Upper_Left()});
+}
+
+Editor_View_Compare :: (a: EditorSortInfo, b: EditorSortInfo) -> s32 {
+    if a.rect_upper_left.x < b.rect_upper_left.x {
+        return b.rect_upper_left.x - a.rect_upper_left.x;
+    } else {
+        return b.rect_upper_left.x - a.rect_upper_left.x;
+    }
+}
+
 Scroll_To_Next_Editor :: () {
     Init_Cursor_Proc_Or_Return(true);
 
     if active_layer.type == .FILE_EXPLORER || active_layer.type == .PROJECT_EXPLORER {
-        tool_view_is_active = false;
-        Pop_Active_View_ID();
+        if Active_View_ID() == tool_view_id && editor_view_stack.count > 1 {
+            Pop_Active_View_ID();
+        }
         return;
     }
-
-    //  --- proc specific stuff ---
-    EditorSortInfo :: struct {
-        view_id: s32;
-        rect_upper_left: IntVector2;
-    }
-    Collect_Sort_Info :: (view: *View, view_id: s64, viewport_id: s64, sort_info: *[..]EditorSortInfo) {
-        if view.layers.data == null then return;
-        active_layer := view.layers[view.active_layer];
-        if active_layer.type != .FILE_EDITOR then return;
-        array_add(sort_info, .{xx view_id, Upper_Left()});
-    }
-    View_Compare :: (a: EditorSortInfo, b: EditorSortInfo) -> s32 {
-        if a.rect_upper_left.x < b.rect_upper_left.x {
-            return b.rect_upper_left.x - a.rect_upper_left.x;
-        } else {
-            return b.rect_upper_left.x - a.rect_upper_left.x;
-        }
-    }
-    //  ---------------------------
 
     sort_info: [..]EditorSortInfo;
     sort_info.allocator = temp;
 
     if action_iteration == 0 {
-        Walk_View_Tree(0, Collect_Sort_Info, *sort_info);
-        quick_sort(sort_info, View_Compare);
+        Walk_View_Tree(0, Collect_Editor_Sort_Info, *sort_info);
+        quick_sort(sort_info, Editor_View_Compare);
     }
     if repeating_action {
         Serialize_Or_Deserialize(*action_repeat_data, *sort_info);
     }
 
-    next_editor := -1;
-    for sort_info {
-        if it.view_id == Active_View_ID() {
-            next_editor = it_index + 1;
-            break;
-        }
-    }
-    if next_editor >= sort_info.count {
-        next_editor = 0;
+    next_editor := Next_Editor_Index(Active_View_ID(), sort_info);
+    if next_editor < 0 {
+        return;
     }
 
     Replace_Active_View_ID(sort_info[next_editor].view_id);
@@ -272,9 +284,8 @@ Scroll_To_Next_Editor :: () {
 
 Grab_View_Side :: (side: Side2D) {
     Init_Cursor_Proc_Or_Return(true);
-    active_view_is_tool := Active_View_ID() == tool_view_id;
     vi_mode = .RESIZE_VIEW;
-    selected_view_side = side;
+    selected_view_side = ifx active_view.hidden then active_view.hidden_side else side;
 }
 Grab_View_Left_Side :: #bake_arguments Grab_View_Side(side=.LEFT);
 Grab_View_Right_Side :: #bake_arguments Grab_View_Side(side=.RIGHT);
@@ -306,6 +317,16 @@ Insert_New_Line :: () {
 }
 
 Enter_Insert_Mode :: (append: bool) {
+    if Active_View_ID() >= 0 {
+        view_before_insert := Active_View();
+        if view_before_insert.hidden {
+            Show_View(Active_View_ID());
+        }
+        layer_before_insert := Active_Layer_Of_View(view_before_insert);
+        if layer_before_insert != null && layer_before_insert.type == .FILE_EXPLORER {
+            Show_File_Explorer_Preview(*layer_before_insert.file_explorer, view_before_insert.pixel_dimensions.y);
+        }
+    }
     Init_Cursor_Proc_Or_Return(true);
     if active_layer.type == {
     case .FILE_EXPLORER;
@@ -324,6 +345,10 @@ Enter_Insert_Mode_Prepend   :: #bake_arguments Enter_Insert_Mode(append=false);
 Enter_Insert_Mode_Append    :: #bake_arguments Enter_Insert_Mode(append=true);
 
 Enter_Normal_Mode :: () {
+    if vi_mode == .COMMAND && Command_Autocomplete_Cancel() {
+        return;
+    }
+
     if vi_mode == {
     case .INSERT;
         Init_Cursor_Proc_Or_Return(true);
@@ -344,6 +369,7 @@ Enter_Normal_Mode :: () {
         Pop_Active_View_ID();
         if layer.vim_console.mode == {
         case .COMMAND;
+            Command_Autocomplete_Close(false);
             if auxiliary_input_buffer.count > 0 {
                 temp_buffer: [..]u32;
                 temp_buffer.allocator = temp;
@@ -369,6 +395,7 @@ Enter_Normal_Mode :: () {
 Backspace :: () {
     if vi_mode == .COMMAND {
         Init_Cursor_Proc_Or_Return(true, false);
+        Command_Autocomplete_Cancel();
         auxiliary_input_buffer.count = max(0, auxiliary_input_buffer.count - 1);
         return;
     } else {
@@ -940,8 +967,96 @@ Make_Selection_Uppercase :: #bake_arguments Change_Selection_Case(to_upper=true)
 Make_Selection_Lowercase :: #bake_arguments Change_Selection_Case(to_upper=false);
 
 Create_Command_Autocomplete_Suggestions :: () {
-    // TODO: create suggestions menu
-    Log("hello I'm a suggestion ;)");
+    if vi_mode != .COMMAND {
+        return;
+    }
+    layer := Active_View_Layer();
+    if layer.type != .VIM_CONSOLE || layer.vim_console.mode != .COMMAND {
+        return;
+    }
+    Command_Autocomplete_Advance();
+}
+
+Command_Mode_Return :: () {
+    if Command_Autocomplete_Accept() {
+        return;
+    }
+    Enter_Normal_Mode();
+}
+
+// Activate the selected file-explorer list row (cursor.y != 0).  A directory row
+// changes the explorer's directory and returns opened_file=false.  A file row
+// opens the file into the first editor view and returns (true, that view's id) so
+// the caller can decide whether to move keyboard focus into the editor.
+File_Explorer_Open_Selected :: (cursor: *Cursor) -> opened_file: bool, editor_view_id: s64 {
+    working_directory := File_Explorer_Get_Directory();
+    success, directory_list := Directory_List(working_directory);
+    if !success {
+        return false, -1;
+    }
+    // line 1 is an empty line in the file explorer
+    target_iter_ct := cursor.y - 2;
+    if target_iter_ct < 0 || target_iter_ct > directory_list.count {
+        return false, -1;
+    }
+    i := 0;
+
+    target_index := -1;
+    item_is_directory := false;
+    for directory_list {
+        if !it.is_directory && !it.is_symlink {
+            continue;
+        }
+        if i == target_iter_ct {
+            target_index = it_index;
+            item_is_directory = true;
+            break;
+        }
+        i += 1;
+    }
+
+    if target_index == -1 then for directory_list {
+        if it.is_directory || it.is_symlink {
+            continue;
+        }
+        if i == target_iter_ct {
+            target_index = it_index;
+            break;
+        }
+        i += 1;
+    }
+
+    if target_index == -1 {
+        return false, -1;
+    }
+    if item_is_directory {
+        new_dir := tprint("%/%", working_directory, directory_list[target_index].name);
+        dir_success, _ := Directory_List(new_dir);
+        if dir_success {
+            File_Explorer_Set_Directory(new_dir);
+            File_Explorer_Clamp_Y_To_Directory_List(cursor, true);
+        } else {
+            // TODO: access denie?
+        }
+        return false, -1;
+    } else {
+        ext_success, path, extension := split_from_right(directory_list[target_index].name, #char ".");
+        if !ext_success {
+            return false, -1;
+        }
+        if !Is_Basic_Text_File_Extension(extension) && !Is_Code_File_Extension(extension) {
+            // TODO: try load file anyway?
+            return false, -1;
+        }
+        editor_view_id, editor_layer := Find_First_View_And_Layer_Of_Type_In_View_Stack(.FILE_EDITOR);
+        if !editor_layer {
+            // TODO: make one
+            return false, -1;
+        }
+        file_path := tprint("%/%", working_directory, directory_list[target_index].name);
+        Open_File_In_Editor(*editor_layer.file_editor, file_path, false);
+        return true, editor_view_id;
+    }
 }
 
 Normal_Mode_Return :: () {
@@ -961,72 +1076,7 @@ Normal_Mode_Return :: () {
                 File_Explorer_Set_Directory(try_new_path);
             }
         } else {
-            working_directory := File_Explorer_Get_Directory();
-            success, directory_list := Directory_List(working_directory);
-            if !success {
-                return;
-            }
-            // line 1 is an empty line in the file explorer
-            target_iter_ct := cursor.y - 2;
-            if target_iter_ct < 0 || target_iter_ct > directory_list.count {
-                return;
-            }
-            i := 0;
-
-            target_index := -1;
-            item_is_directory := false;
-            for directory_list {
-                if !it.is_directory && !it.is_symlink {
-                    continue;
-                }
-                if i == target_iter_ct {
-                    target_index = it_index;
-                    item_is_directory = true;
-                    break;
-                }
-                i += 1;
-            }
-
-            if target_index == -1 then for directory_list {
-                if it.is_directory || it.is_symlink {
-                    continue;
-                }
-                 if i == target_iter_ct {
-                    target_index = it_index;
-                    break;
-                }
-                i += 1;           
-            }
-
-            if target_index == -1 {
-                return;
-            }
-            if item_is_directory {
-                new_dir := tprint("%/%", working_directory, directory_list[target_index].name);
-                success, _ := Directory_List(new_dir);
-                if success {
-                    File_Explorer_Set_Directory(new_dir);
-                    File_Explorer_Clamp_Y_To_Directory_List(cursor, true);
-                } else {
-                    // TODO: access denie?
-                }
-            } else {
-                ext_success, path, extension := split_from_right(directory_list[target_index].name, #char ".");
-                if !ext_success {
-                    return;
-                }
-                if !Is_Basic_Text_File_Extension(extension) && !Is_Code_File_Extension(extension) {
-                    // TODO: try load file anyway?
-                    return;
-                }
-                editor_layer := Find_First_Layer_Of_Type_In_View_Stack(.FILE_EDITOR);
-                if !editor_layer {
-                    // TODO: make one
-                    return;
-                }
-                file_path := tprint("%/%", working_directory, directory_list[target_index].name);
-                Open_File_In_Editor(*editor_layer.file_editor, file_path, false);
-            }
+            File_Explorer_Open_Selected(cursor);
         }
     case .PROJECT_EXPLORER;
         Project_Explorer_Normal_Mode_Return();
@@ -1138,6 +1188,7 @@ Enter_Search_Mode :: () {
     case .FILE_EDITOR; #through;
     case .FILE_EXPLORER; #through;
     case .PROJECT_EXPLORER;
+        Command_Autocomplete_Close(false);
         vi_mode = .COMMAND;
         Push_Active_View_ID(vim_console_id);
         array_reset_keeping_memory(*auxiliary_input_buffer);
@@ -1154,6 +1205,7 @@ Enter_Command_Mode :: () {
     case .FILE_EDITOR; #through;
     case .FILE_EXPLORER; #through;
     case .PROJECT_EXPLORER;
+        Command_Autocomplete_Close(false);
         vi_mode = .COMMAND;
         Push_Active_View_ID(vim_console_id);
         array_reset_keeping_memory(*auxiliary_input_buffer);
@@ -1270,27 +1322,108 @@ Cursor_Scroll_To_Empty_Line :: (scroll_down: bool) {
 Cursor_Scroll_Up_To_Empty_Line :: #bake_arguments Cursor_Scroll_To_Empty_Line(scroll_down=false);
 Cursor_Scroll_Down_To_Empty_Line :: #bake_arguments Cursor_Scroll_To_Empty_Line(scroll_down=true);
 
-Change_File_Explorer_Preview_Size :: (increase: bool) {
+Resize_File_Explorer_Preview :: (direction: Side2D) {
     Init_Cursor_Proc_Or_Return();
-
-    if active_layer.type != .FILE_EXPLORER {
+    if active_layer.type != .FILE_EXPLORER || (direction != .TOP && direction != .BOTTOM) {
         return;
     }
 
     file_explorer := *active_layer.file_explorer;
-    direction := ifx increase then sdw(1) else sdw(-1);
-    prop_s32 := cast(s32)file_explorer.preview_vertical_proportion;
-    VerticalProportionType :: type_of(file_explorer.preview_vertical_proportion);
-    prop_s32 = clamp(prop_s32 + direction, 0, cast(s32)enum_highest_value(VerticalProportionType));
-    file_explorer.preview_vertical_proportion = cast(VerticalProportionType)prop_s32;
+    if file_explorer.preview_hidden {
+        Show_File_Explorer_Preview(file_explorer, active_view.pixel_dimensions.y);
+    }
+    available_height := max(active_view.pixel_dimensions.y - FILE_EXPLORER_OUTER_VERTICAL_PADDING * 2, 1);
+    proportion_step := cast(float)File_Explorer_Directory_Minimum_Height() / cast(float)available_height;
+    proportion_delta := ifx direction == .TOP then proportion_step else -proportion_step;
+    Set_File_Explorer_Preview_Proportion(file_explorer, file_explorer.preview_vertical_proportion + proportion_delta, active_view.pixel_dimensions.y);
 }
-Decrease_File_Explorer_Preview_Size :: #bake_arguments Change_File_Explorer_Preview_Size(increase=false);
-Increase_File_Explorer_Preview_Size :: #bake_arguments Change_File_Explorer_Preview_Size(increase=true);
+
+Hide_Active_View :: () {
+    if Active_View_ID() < 0 {
+        return;
+    }
+    active_view := Active_View();
+    active_layer := Active_Layer_Of_View(active_view);
+    if active_layer == null {
+        return;
+    }
+    did_hide := false;
+    if active_view.hidden {
+        return;
+    } else if active_layer.type == .FILE_EXPLORER {
+        Hide_File_Explorer_Preview(*active_layer.file_explorer);
+        did_hide = true;
+    } else {
+        did_hide = Hide_View(Active_View_ID());
+    }
+    if did_hide {
+        vi_mode = .NORMAL;
+    }
+}
+
+Show_Active_View :: () {
+    if Active_View_ID() < 0 {
+        return;
+    }
+    active_view := Active_View();
+    active_layer := Active_Layer_Of_View(active_view);
+    if active_layer == null {
+        return;
+    }
+    if active_view.hidden {
+        Show_View(Active_View_ID());
+    } else if active_layer.type == .FILE_EXPLORER {
+        Show_File_Explorer_Preview(*active_layer.file_explorer, active_view.pixel_dimensions.y);
+    } else {
+        Show_View(Active_View_ID());
+    }
+    if vi_mode == .RESIZE_VIEW {
+        vi_mode = .NORMAL;
+    }
+}
+
+Hidden_View_Allows_Action :: (action: Action) -> bool {
+    if Active_View_ID() < 0 || !Active_View().hidden {
+        return true;
+    }
+    if action == {
+    case .HIDE_ACTIVE_VIEW; #through;
+    case .HIDE_ACTIVE_VIEW_IN_RESIZE; #through;
+    case .SHOW_ACTIVE_VIEW; #through;
+    case .SHOW_ACTIVE_VIEW_IN_RESIZE; #through;
+    case .ENTER_INSERT_MODE_PREPEND; #through;
+    case .ENTER_INSERT_MODE_APPEND; #through;
+    case .GRAB_VIEW_RIGHT_SIDE; #through;
+    case .GRAB_VIEW_BOTTOM_SIDE; #through;
+    case .GRAB_VIEW_TOP; #through;
+    case .MOVE_VIEW_EDGE_DOWN; #through;
+    case .MOVE_VIEW_EDGE_UP; #through;
+    case .MOVE_VIEW_EDGE_LEFT; #through;
+    case .MOVE_VIEW_EDGE_RIGHT; #through;
+    case .SCROLL_TO_NEXT_EDITOR; #through;
+    case .ENTER_NORMAL_MODE;
+        return true;
+    case;
+    }
+    return false;
+}
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 Move_Edge_In_Direction :: (direction: Side2D) {
     Init_Cursor_Proc_Or_Return(true);
+    restored_hidden_view := false;
+    if active_view.hidden {
+        selected_view_side = active_view.hidden_side;
+        if !Show_View(Active_View_ID()) {
+            return;
+        }
+        restored_hidden_view = true;
+    }
+    if !restored_hidden_view && active_layer.type == .FILE_EXPLORER && (direction == .TOP || direction == .BOTTOM) {
+        Resize_File_Explorer_Preview(direction);
+        return;
+    }
     direction_opposite := Opposite(direction);    
     if selected_view_side != direction && selected_view_side != direction_opposite {
         return;
@@ -1309,6 +1442,12 @@ Move_View_Edge_Right :: #bake_arguments Move_Edge_In_Direction(direction=.RIGHT)
 
 Set_View_Proportions_Equal :: () {
     Init_Cursor_Proc_Or_Return(true);
+    if active_view.hidden {
+        selected_view_side = active_view.hidden_side;
+        if !Show_View(Active_View_ID()) {
+            return;
+        }
+    }
     edge, use_side := Get_View_Edge(active_view, selected_view_side);
     if edge[0] == null || edge[1] == null {
         Log_Warning("unable to get edge");
@@ -1352,6 +1491,7 @@ Get_Register_Lines :: (register: u32) -> (lines: [][]u32, first_line_is_new_line
 
 Init_Cursor_Proc_Or_Return :: ($RESET_BLINK := false, $NEED_TEXT_BUFFER := true) #expand {
     `active_view := Active_View();
+    Set_Rendering_Bounds_To_View(Active_View_ID());
     `active_layer := Active_View_Layer();
     `cursor := Layer_Cursor(`active_layer);
     if `cursor == null then `return;
@@ -1365,6 +1505,7 @@ Init_Cursor_Proc_Or_Return :: ($RESET_BLINK := false, $NEED_TEXT_BUFFER := true)
 }
 
 Init_Cursor_Proc_Or_Return_Value :: (value: $T, $RESET_BLINK := false) -> T #expand {
+    Set_Rendering_Bounds_To_View(Active_View_ID());
     `active_layer := Active_View_Layer();
     `cursor := Layer_Cursor(`active_layer);
     if `cursor == null then `return value;

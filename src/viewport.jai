@@ -17,7 +17,8 @@ Viewports :: struct {
 }
 
 Window_Viewport_Rect :: inline () -> ViewportRect {
-    return .{.{0, 0}, .{window.width, window.height}};
+    title_bar_height := min(Custom_Title_Bar_Height(), max(window.height, 0));
+    return .{.{0, title_bar_height}, .{window.width, max(window.height-title_bar_height, 0)}};
 }
 
 Clear_Viewports :: () {

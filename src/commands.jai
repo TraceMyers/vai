@@ -1,4 +1,212 @@
 
+CommandAutocompleteMatch :: struct {
+    input: string;
+    description: string;
+}
+
+CommandAutocompleteState :: struct {
+    open: bool;
+    initial_input: [..]u32;
+    matches: [..]CommandAutocompleteMatch;
+    selected_index: s64 = -1;
+    replacement_start: s64;
+}
+
+command_autocomplete: CommandAutocompleteState;
+
+Command_Autocomplete_Is_Open :: () -> bool {
+    return command_autocomplete.open;
+}
+
+Command_Autocomplete_Input_Matches :: (candidate: string, prefix: []u32) -> bool {
+    if candidate.count == 0 || prefix.count > candidate.count {
+        return false;
+    }
+    for prefix {
+        if Remove_Modifier_Flags(it) != candidate[it_index] {
+            return false;
+        }
+    }
+    return true;
+}
+
+Command_Autocomplete_Input_Is_Whitespace :: (code_point: u32) -> bool {
+    return Is_Unmarked_Whitespace(Remove_Modifier_Flags(code_point));
+}
+
+Command_Autocomplete_Input_Range_Equals :: (input: []u32, begin: s64, end: s64, candidate: string) -> bool {
+    if begin < 0 || end < begin || end > input.count || end-begin != candidate.count {
+        return false;
+    }
+    for candidate {
+        if Remove_Modifier_Flags(input[begin+it_index]) != cast(u32)it {
+            return false;
+        }
+    }
+    return true;
+}
+
+Command_Autocomplete_Build_Command_Matches :: (prefix: []u32) {
+    array_reset_keeping_memory(*command_autocomplete.matches);
+    for binding: COMPTIME_COMMAND_BINDINGS {
+        if it_index == cast(s64)Command.NONE then continue;
+        matched := false;
+        for binding.input {
+            if Command_Autocomplete_Input_Matches(it, prefix) {
+                matched = true;
+                break;
+            }
+        }
+        if matched {
+            array_add(*command_autocomplete.matches, .{
+                binding.input[0],
+                binding.extension.description,
+            });
+        }
+    }
+}
+
+Command_Autocomplete_Option_Context :: (input: []u32) -> s64, []u32, bool {
+    replacement_start: s64;
+    option_prefix: []u32;
+    valid: bool;
+    command_end: s64;
+    while command_end < input.count && !Command_Autocomplete_Input_Is_Whitespace(input[command_end]) {
+        command_end += 1;
+    }
+    if command_end == input.count {
+        return replacement_start, option_prefix, valid;
+    }
+    if !Command_Autocomplete_Input_Range_Equals(input, 0, command_end, "set")
+    && !Command_Autocomplete_Input_Range_Equals(input, 0, command_end, "s") {
+        return replacement_start, option_prefix, valid;
+    }
+
+    replacement_start = command_end;
+    while replacement_start < input.count && Command_Autocomplete_Input_Is_Whitespace(input[replacement_start]) {
+        replacement_start += 1;
+    }
+    for replacement_start..input.count-1 {
+        if Command_Autocomplete_Input_Is_Whitespace(input[it]) {
+            return 0, .{}, false;
+        }
+    }
+
+    option_prefix.data = input.data + replacement_start;
+    option_prefix.count = input.count - replacement_start;
+    valid = true;
+    return replacement_start, option_prefix, valid;
+}
+
+Command_Autocomplete_Build_Option_Matches :: (prefix: []u32) {
+    array_reset_keeping_memory(*command_autocomplete.matches);
+    for option_mappings {
+        if Command_Autocomplete_Input_Matches(it.input, prefix) {
+            array_add(*command_autocomplete.matches, .{
+                it.input,
+                it.extension.description,
+            });
+        }
+    }
+}
+
+Command_Autocomplete_Apply_Selected :: () {
+    if !command_autocomplete.open
+    || command_autocomplete.selected_index < 0
+    || command_autocomplete.selected_index >= command_autocomplete.matches.count {
+        return;
+    }
+    selected := command_autocomplete.matches[command_autocomplete.selected_index];
+    array_reset_keeping_memory(*auxiliary_input_buffer);
+    if command_autocomplete.replacement_start > 0 {
+        for 0..command_autocomplete.replacement_start-1 {
+            array_add(*auxiliary_input_buffer, command_autocomplete.initial_input[it]);
+        }
+    }
+    for selected.input {
+        array_add(*auxiliary_input_buffer, cast(u32)it);
+    }
+}
+
+Command_Autocomplete_Close :: (restore_initial: bool) {
+    if restore_initial && command_autocomplete.open {
+        array_reset_keeping_memory(*auxiliary_input_buffer);
+        Array_Append(*auxiliary_input_buffer, command_autocomplete.initial_input);
+    }
+    command_autocomplete.open = false;
+    command_autocomplete.selected_index = -1;
+    command_autocomplete.replacement_start = 0;
+    array_reset_keeping_memory(*command_autocomplete.initial_input);
+    array_reset_keeping_memory(*command_autocomplete.matches);
+}
+
+Command_Autocomplete_Advance :: () {
+    if command_autocomplete.open {
+        command_autocomplete.selected_index = Increment_Wrap(
+            command_autocomplete.selected_index,
+            0,
+            command_autocomplete.matches.count-1,
+        );
+        Command_Autocomplete_Apply_Selected();
+        return;
+    }
+
+    array_reset_keeping_memory(*command_autocomplete.initial_input);
+    Array_Append(*command_autocomplete.initial_input, auxiliary_input_buffer);
+
+    has_whitespace := false;
+    for command_autocomplete.initial_input {
+        if Command_Autocomplete_Input_Is_Whitespace(it) {
+            has_whitespace = true;
+            break;
+        }
+    }
+    if !has_whitespace {
+        command_autocomplete.replacement_start = 0;
+        Command_Autocomplete_Build_Command_Matches(command_autocomplete.initial_input);
+    } else {
+        replacement_start, option_prefix, valid_option_context :=
+            Command_Autocomplete_Option_Context(command_autocomplete.initial_input);
+        if !valid_option_context {
+            array_reset_keeping_memory(*command_autocomplete.initial_input);
+            return;
+        }
+        command_autocomplete.replacement_start = replacement_start;
+        Command_Autocomplete_Build_Option_Matches(option_prefix);
+    }
+    if command_autocomplete.matches.count == 0 {
+        command_autocomplete.replacement_start = 0;
+        array_reset_keeping_memory(*command_autocomplete.initial_input);
+        return;
+    }
+
+    command_autocomplete.open = true;
+    command_autocomplete.selected_index = 0;
+    Command_Autocomplete_Apply_Selected();
+}
+
+Command_Autocomplete_Accept :: () -> bool {
+    if !command_autocomplete.open {
+        return false;
+    }
+    Command_Autocomplete_Close(false);
+    return true;
+}
+
+Command_Autocomplete_Cancel :: () -> bool {
+    if !command_autocomplete.open {
+        return false;
+    }
+    Command_Autocomplete_Close(true);
+    return true;
+}
+
+Command_Autocomplete_Cancel_For_Typed_Input :: () {
+    if command_autocomplete.open {
+        Command_Autocomplete_Close(true);
+    }
+}
+
 
 Parse_And_Execute_Commands :: (in_utf32: []u32) {
     if in_utf32.count == 0 {
@@ -228,7 +436,9 @@ Execute_Command_Save :: (args: [][]u32) {
 }
 
 Execute_Command_Toggle_Tool_View :: (args: [][]u32) {
-    if tool_view_is_active {
+    // Hide only when the tool is already the focused view; otherwise Show, which
+    // opens it if closed and moves the cursor into it if open-but-unfocused.
+    if tool_view_is_active && Active_View_ID() == tool_view_id {
         Execute_Command_Hide_Tool_View();
         return;
     }
@@ -236,7 +446,8 @@ Execute_Command_Toggle_Tool_View :: (args: [][]u32) {
 }
 
 Execute_Command_Toggle_File_Explorer :: (args: [][]u32) {
-    if tool_view_is_active && view_pool.items[tool_view_id].active_layer == cast(s8)ToolViewLayer.FILE_EXPLORER {
+    showing_explorer := tool_view_is_active && view_pool.items[tool_view_id].active_layer == cast(s8)ToolViewLayer.FILE_EXPLORER;
+    if showing_explorer && Active_View_ID() == tool_view_id {
         Execute_Command_Hide_Tool_View();
         return;
     }
@@ -247,14 +458,7 @@ Execute_Command_Hide_Tool_View :: () {
     if !tool_view_is_active {
         return;
     }
-    tool_view := *view_pool.items[tool_view_id];
-    base_empty_view := *view_pool.items[base_empty_view_id];
-    tool_view_is_active = false;
-    tool_view.viewport.left = 0.0;
-    base_empty_view.viewport.right = 1.0;
-    if Active_View_ID() == tool_view_id {
-        Pop_Active_View_ID();
-    }
+    Hide_View(tool_view_id);
 }
 
 Execute_Command_Show_Tool_View :: (layer: ToolViewLayer) {
@@ -265,16 +469,21 @@ Execute_Command_Show_Tool_View :: (layer: ToolViewLayer) {
     tool_view.active_layer = cast(s8)layer;
     last_tool_view_layer = layer;
     tool_view.layers[tool_view.active_layer].need_reinit = true;
-    if !tool_view_is_active {
+    if tool_view.hidden {
+        Show_View(tool_view_id);
+    } else if !tool_view_is_active {
         tool_view_is_active = true;
         tool_view.viewport.left = screen_proportion.*;
         base_empty_view.viewport.right = 1.0 - screen_proportion.*;
-        Push_Active_View_ID(tool_view_id);
     }
+    // Always focus: showing an already-visible tool (e.g. from :t/:e/:p while the
+    // cursor is in the editor, or switching layers) must move the cursor into it.
+    Focus_Overlay_View_ID(tool_view_id);
 }
 
 Execute_Command_Toggle_Project_View :: (args: [][]u32) {
-    if tool_view_is_active && view_pool.items[tool_view_id].active_layer == cast(s8)ToolViewLayer.PROJECT_EXPLORER {
+    showing_projects := tool_view_is_active && view_pool.items[tool_view_id].active_layer == cast(s8)ToolViewLayer.PROJECT_EXPLORER;
+    if showing_projects && Active_View_ID() == tool_view_id {
         Execute_Command_Hide_Tool_View();
         return;
     }

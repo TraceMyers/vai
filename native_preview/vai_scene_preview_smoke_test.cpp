@@ -4,6 +4,8 @@
 #include <windows.h>
 
 #include <cmath>
+#include <cstddef>
+#include <cstring>
 #include <cstdio>
 #include <fstream>
 #include <vector>
@@ -109,6 +111,108 @@ bool WriteEXRFixture(const char* path) {
     return result == TINYEXR_SUCCESS;
 }
 
+bool WriteOBJMaterialFixture(const char* obj_path, const char* mtl_path) {
+    constexpr const char* obj =
+        "mtllib preview-smoke.mtl\n"
+        "o triangle\n"
+        "v 0 0 0\n"
+        "v 1 0 0\n"
+        "v 0 1 0\n"
+        "usemtl smoke\n"
+        "f 1 2 3\n";
+    constexpr const char* mtl =
+        "newmtl smoke\n"
+        "Kd 0.25 0.50 0.75\n"
+        "d 1.0\n"
+        "illum 1\n";
+    std::ofstream obj_output(obj_path, std::ios::binary);
+    obj_output.write(obj, static_cast<std::streamsize>(std::strlen(obj)));
+    obj_output.close();
+    std::ofstream mtl_output(mtl_path, std::ios::binary);
+    mtl_output.write(mtl, static_cast<std::streamsize>(std::strlen(mtl)));
+    return obj_output.good() && mtl_output.good();
+}
+
+bool TestOBJMaterial(const VaiScenePreviewProvider* provider) {
+    constexpr const char* obj_path = ".build/native_preview/preview-smoke.obj";
+    constexpr const char* mtl_path = ".build/native_preview/preview-smoke.mtl";
+    if (!WriteOBJMaterialFixture(obj_path, mtl_path)) {
+        std::fprintf(stderr, "could not prepare the OBJ/MTL smoke fixture\n");
+        return false;
+    }
+
+    char error[1024] = {};
+    VaiScenePreviewMesh mesh = {};
+    const bool loaded = provider->can_preview(obj_path) && provider->load_scene(obj_path, &mesh, error, sizeof(error));
+    bool valid = loaded && mesh.vertices && mesh.vertex_count == 3;
+    constexpr float expected[3] = { 0.25f, 0.50f, 0.75f };
+    if (valid) {
+        for (uint32_t vertex_index = 0; vertex_index < mesh.vertex_count; ++vertex_index) {
+            for (size_t channel = 0; channel < 3; ++channel) {
+                if (std::fabs(mesh.vertices[vertex_index].color[channel] - expected[channel]) > 0.0001f) {
+                    valid = false;
+                }
+            }
+        }
+    }
+    if (!valid) {
+        std::fprintf(stderr, "OBJ material preview failed: %s\n", error[0] ? error : "unexpected material color");
+    } else {
+        std::printf("previewed OBJ/MTL smoke fixture (RGB 0.25 0.50 0.75)\n");
+    }
+    if (loaded) provider->release_scene(&mesh);
+    return valid;
+}
+
+bool TestLitScene(const VaiScenePreviewProvider* provider, const char* scene_path) {
+    constexpr size_t lit_api_size = offsetof(VaiScenePreviewProvider, release_lit_scene)
+        + sizeof(VaiLitScenePreviewReleaseFn);
+    if (provider->struct_size < lit_api_size || !provider->load_lit_scene || !provider->release_lit_scene) {
+        return true;
+    }
+
+    char error[1024] = {};
+    VaiLitScenePreviewMesh mesh = {};
+    const bool loaded = provider->load_lit_scene(scene_path, &mesh, error, sizeof(error)) != 0;
+    bool valid = loaded && mesh.vertices && mesh.vertex_count >= 3 && mesh.vertex_count % 3 == 0
+        && mesh.materials && mesh.material_count > 0
+        && mesh.draw_ranges && mesh.draw_range_count > 0;
+    uint32_t nonzero_normals = 0;
+    uint32_t base_textures = 0;
+    uint32_t normal_textures = 0;
+    if (valid) {
+        for (uint32_t vertex_index = 0; vertex_index < mesh.vertex_count; ++vertex_index) {
+            const VaiLitScenePreviewVertex& vertex = mesh.vertices[vertex_index];
+            const float length_squared = vertex.normal[0]*vertex.normal[0]
+                + vertex.normal[1]*vertex.normal[1] + vertex.normal[2]*vertex.normal[2];
+            if (std::isfinite(length_squared) && length_squared > 0.25f) ++nonzero_normals;
+        }
+        for (uint32_t material_index = 0; material_index < mesh.material_count; ++material_index) {
+            const VaiLitScenePreviewMaterial& material = mesh.materials[material_index];
+            if (material.flags & VAI_SCENE_MATERIAL_BASE_COLOR_TEXTURE) ++base_textures;
+            if (material.flags & VAI_SCENE_MATERIAL_NORMAL_TEXTURE) ++normal_textures;
+        }
+        for (uint32_t range_index = 0; range_index < mesh.draw_range_count; ++range_index) {
+            const VaiLitScenePreviewDrawRange& range = mesh.draw_ranges[range_index];
+            if (range.vertex_count == 0
+            || static_cast<uint64_t>(range.first_vertex) + range.vertex_count > mesh.vertex_count
+            || range.material_index >= mesh.material_count) {
+                valid = false;
+            }
+        }
+        valid = valid && nonzero_normals == mesh.vertex_count;
+    }
+    if (!valid) {
+        std::fprintf(stderr, "lit preview failed for %s: %s\n", scene_path, error[0] ? error : "invalid lit mesh");
+    } else {
+        std::printf(
+            "lit previewed %s (%u materials, %u ranges, %u base textures, %u normal textures)\n",
+            scene_path, mesh.material_count, mesh.draw_range_count, base_textures, normal_textures);
+    }
+    if (loaded) provider->release_lit_scene(&mesh);
+    return valid;
+}
+
 bool TestScene(const VaiScenePreviewProvider* provider, const char* scene_path) {
     char error[1024] = {};
     VaiScenePreviewMesh mesh = {};
@@ -120,9 +224,23 @@ bool TestScene(const VaiScenePreviewProvider* provider, const char* scene_path) 
         std::fprintf(stderr, "preview failed for %s: %s\n", scene_path, error[0] ? error : "invalid triangle list");
         return false;
     }
-    std::printf("previewed %s (%u vertices)\n", scene_path, mesh.vertex_count);
+    float color_min[3] = { mesh.vertices[0].color[0], mesh.vertices[0].color[1], mesh.vertices[0].color[2] };
+    float color_max[3] = { color_min[0], color_min[1], color_min[2] };
+    for (uint32_t vertex_index = 1; vertex_index < mesh.vertex_count; ++vertex_index) {
+        for (size_t channel = 0; channel < 3; ++channel) {
+            const float value = mesh.vertices[vertex_index].color[channel];
+            if (value < color_min[channel]) color_min[channel] = value;
+            if (value > color_max[channel]) color_max[channel] = value;
+        }
+    }
+    std::printf(
+        "previewed %s (%u vertices, RGB %.3f %.3f %.3f to %.3f %.3f %.3f)\n",
+        scene_path,
+        mesh.vertex_count,
+        color_min[0], color_min[1], color_min[2],
+        color_max[0], color_max[1], color_max[2]);
     provider->release_scene(&mesh);
-    return true;
+    return TestLitScene(provider, scene_path);
 }
 
 bool TestDDS(const VaiScenePreviewProvider* provider) {
@@ -206,6 +324,8 @@ int main(int argc, char** argv) {
     for (int argument = 2; argument < argc; ++argument) {
         if (!TestScene(provider, argv[argument])) ++failures;
     }
+    if (!TestOBJMaterial(provider)) ++failures;
+    if (!TestLitScene(provider, ".build/native_preview/preview-smoke.obj")) ++failures;
     if (!TestDDS(provider)) ++failures;
     if (!TestHighPrecisionImages(provider)) ++failures;
 

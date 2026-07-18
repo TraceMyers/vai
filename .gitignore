@@ -1,5 +1,6 @@
 .build/
 bin/
+libs/
 release/
 release.zip
 vai-release.zip
@@ -8,3 +9,14 @@ intro.txt
 settings.txt
 src/includesstdlibs.code-workspace
 input_record.txt
+
+# AI assistant artifacts and handoffs — kept out of commit history
+docs/language-support-plan.md
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+.claude/
+.cursor/
+.cursorrules
+.aider*
+.github/copilot-instructions.md

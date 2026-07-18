@@ -63,6 +63,7 @@ OptionValue :: union {
 OptionSetting :: struct {
     using value: OptionValue;
     default_value: OptionValue;
+    description: string;
     type: enum u8 {
         BOOL;
         INTEGER;

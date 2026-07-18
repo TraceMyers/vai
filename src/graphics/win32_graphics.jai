@@ -60,6 +60,12 @@ Graphics_Backend :: struct {
         text_shader.uniform_mvp_loc = glGetUniformLocation(text_shader.id, temp_c_string("mvp"));
         image_shader.uniform_mvp_loc = glGetUniformLocation(image_shader.id, temp_c_string("mvp"));
         scene_shader.uniform_mvp_loc = glGetUniformLocation(scene_shader.id, temp_c_string("mvp"));
+        scene_shader.texture_sampler_loc = glGetUniformLocation(scene_shader.id, temp_c_string("base_color_sampler"));
+        scene_shader.normal_texture_sampler_loc = glGetUniformLocation(scene_shader.id, temp_c_string("normal_sampler"));
+        scene_shader.has_base_texture_loc = glGetUniformLocation(scene_shader.id, temp_c_string("has_base_color_texture"));
+        scene_shader.has_normal_texture_loc = glGetUniformLocation(scene_shader.id, temp_c_string("has_normal_texture"));
+        scene_shader.normal_scale_loc = glGetUniformLocation(scene_shader.id, temp_c_string("normal_scale"));
+        scene_shader.light_direction_loc = glGetUniformLocation(scene_shader.id, temp_c_string("light_direction"));
         // Create_Shader constructs a local Shader record, so make the draw
         // mode explicit instead of relying on struct-field defaults.
         basic_color_shader.draw_style = .TRIANGLES;
@@ -92,12 +98,21 @@ Graphics_Backend :: struct {
 
         vertices.data = vertex_buffer.data;
 
+        Create_Preview_Upload_Context();
         DumpGLErrors("context");
 
         return true;
     }
 
     Shutdown :: () {
+        // Scene materials own OpenGL textures and must release them before the
+        // context disappears. The provider service shuts down after graphics.
+        File_Explorer_Image_Preview_Clear();
+        File_Explorer_Scene_Preview_Clear();
+        if preview_upload_gl_context != null {
+            wglDeleteContext(preview_upload_gl_context);
+            preview_upload_gl_context = null;
+        }
         ReleaseDC(window.handle, device_context);
         wglDeleteContext(gl_context);
     }
@@ -191,23 +206,107 @@ Set_Image_Shader_Texture :: (texture: u32, ul: IntVector2, lr: IntVector2) {
     );
 }
 
+Create_Preview_Upload_Context :: () -> bool {
+    if wglCreateContextAttribsARB == null {
+        Log_Warning("background scene-preview GPU uploads are unavailable");
+        return false;
+    }
+    attributes := s32.[
+        cast(s32)WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
+        cast(s32)WGL_CONTEXT_MINOR_VERSION_ARB, 3,
+        cast(s32)WGL_CONTEXT_PROFILE_MASK_ARB, cast(s32)WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
+        0,
+    ];
+    preview_upload_gl_context = wglCreateContextAttribsARB(device_context, gl_context, attributes.data);
+    if preview_upload_gl_context == null {
+        Log_Warning("unable to create the shared preview upload context");
+        return false;
+    }
+    return true;
+}
+
 Set_Scene_Shader_Projection :: (mvp: Matrix4) {
     Set_Shader_For_Scene();
     glUniformMatrix4fv(scene_shader.uniform_mvp_loc, 1, GL_TRUE, mvp.floats.data);
 }
 
-Render_Scene_Triangle_List :: (vertices: *void, vertex_count: s64, vertex_stride: s64, position_offset: s64, color_offset: s64, mvp: Matrix4) {
-    if vertices == null || vertex_count <= 0 {
+Render_Scene_Triangle_List :: (
+    gpu_vertex_buffer: u32,
+    vertex_count: s64,
+    vertex_stride: s64,
+    position_offset: s64,
+    normal_offset: s64,
+    tangent_offset: s64,
+    color_offset: s64,
+    uv_offset: s64,
+    materials: *FileExplorerSceneMaterial,
+    material_count: s64,
+    draw_ranges: *FileExplorerSceneDrawRange,
+    draw_range_count: s64,
+    light_direction: Vector3,
+    mvp: Matrix4,
+    viewport_ul: IntVector2,
+    viewport_lr: IntVector2
+) {
+    viewport_width := viewport_lr.x - viewport_ul.x;
+    viewport_height := viewport_lr.y - viewport_ul.y;
+    if gpu_vertex_buffer == 0 || vertex_count <= 0 || materials == null || material_count <= 0
+    || draw_ranges == null || draw_range_count <= 0
+    || viewport_width <= 0 || viewport_height <= 0 {
         return;
     }
+
+    // Flush queued 2D geometry while the full-window viewport is still active.
+    // The scene MVP maps to NDC, so its viewport must be the explorer preview
+    // itself rather than the full editor window.
     Set_Scene_Shader_Projection(mvp);
-    glBindBuffer(GL_ARRAY_BUFFER, vb);
-    glBufferData(GL_ARRAY_BUFFER, vertex_stride * vertex_count, vertices, GL_STREAM_DRAW);
+    glViewport(viewport_ul.x, window.height-viewport_lr.y, xx viewport_width, xx viewport_height);
+    defer glViewport(0, 0, xx window.width, xx window.height);
+
+    Set_Scissor(viewport_ul, viewport_lr);
+    Enable_Depth_Test();
+    // UI quads and earlier previews share the window depth buffer. Clearing
+    // only this preview makes the direct 3D draw independent without
+    // disturbing depth elsewhere in the editor.
+    glClear(GL_DEPTH_BUFFER_BIT);
+
+    glBindBuffer(GL_ARRAY_BUFFER, gpu_vertex_buffer);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, xx vertex_stride, xx position_offset);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, xx vertex_stride, xx color_offset);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, xx vertex_stride, xx normal_offset);
     glEnableVertexAttribArray(1);
-    glDrawArrays(GL_TRIANGLES, 0, xx vertex_count);
+    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, xx vertex_stride, xx tangent_offset);
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, xx vertex_stride, xx color_offset);
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, xx vertex_stride, xx uv_offset);
+    glEnableVertexAttribArray(4);
+    glUniform3f(scene_shader.light_direction_loc, light_direction.x, light_direction.y, light_direction.z);
+    glUniform1i(scene_shader.texture_sampler_loc, 0);
+    glUniform1i(scene_shader.normal_texture_sampler_loc, 1);
+    for range_index: 0..draw_range_count-1 {
+        range := draw_ranges[range_index];
+        if range.material_index < 0 || range.material_index >= material_count
+        || range.first_vertex < 0 || range.vertex_count <= 0
+        || range.first_vertex + range.vertex_count > vertex_count {
+            continue;
+        }
+        material := materials[range.material_index];
+        has_base_texture := (material.flags & SCENE_MATERIAL_BASE_COLOR_TEXTURE) != 0
+            && material.base_color_texture.texture != 0;
+        has_normal_texture := (material.flags & SCENE_MATERIAL_NORMAL_TEXTURE) != 0
+            && material.normal_texture.texture != 0;
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, material.base_color_texture.texture);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, material.normal_texture.texture);
+        glUniform1i(scene_shader.has_base_texture_loc, xx has_base_texture);
+        glUniform1i(scene_shader.has_normal_texture_loc, xx has_normal_texture);
+        glUniform1f(scene_shader.normal_scale_loc, material.normal_scale);
+        glDrawArrays(GL_TRIANGLES, xx range.first_vertex, xx range.vertex_count);
+    }
+    glActiveTexture(GL_TEXTURE0);
+    glBindBuffer(GL_ARRAY_BUFFER, vb);
     DumpGLErrors("scene preview draw");
     Set_Shader_For_Text();
 }
@@ -373,7 +472,12 @@ Shader :: struct {
 
     uniform_mvp_loc: s32;
     texture_sampler_loc: s32;
+    normal_texture_sampler_loc: s32;
     image_rect_loc: s32;
+    has_base_texture_loc: s32;
+    has_normal_texture_loc: s32;
+    normal_scale_loc: s32;
+    light_direction_loc: s32;
 
     blend_style: ShaderBlendStyle;
     // Most shaders render the editor's batched quads. Lines opt in below.
@@ -524,15 +628,24 @@ SCENE_VERTEX_SHADER :: #string HERE
 #version 330 core
 
 out vec4 f_color;
+out vec3 f_normal;
+out vec4 f_tangent;
+out vec2 f_uv;
 
 layout(location=0) in vec3 vert_position;
-layout(location=1) in vec4 vert_color;
+layout(location=1) in vec3 vert_normal;
+layout(location=2) in vec4 vert_tangent;
+layout(location=3) in vec4 vert_color;
+layout(location=4) in vec2 vert_uv;
 
 uniform mat4 mvp;
 
 void main() {
     gl_Position = mvp * vec4(vert_position, 1.0);
     f_color = vert_color;
+    f_normal = vert_normal;
+    f_tangent = vert_tangent;
+    f_uv = vert_uv;
 }
 HERE
 
@@ -540,17 +653,55 @@ SCENE_FRAGMENT_SHADER :: #string HERE
 #version 330 core
 
 in vec4 f_color;
+in vec3 f_normal;
+in vec4 f_tangent;
+in vec2 f_uv;
 out vec4 color;
 
+uniform sampler2D base_color_sampler;
+uniform sampler2D normal_sampler;
+uniform bool has_base_color_texture;
+uniform bool has_normal_texture;
+uniform float normal_scale;
+uniform vec3 light_direction;
+
 void main() {
-    color = f_color;
+    vec2 sampled_uv = vec2(f_uv.x, 1.0 - f_uv.y);
+    vec4 base_color = f_color;
+    if (has_base_color_texture) {
+        base_color *= texture(base_color_sampler, sampled_uv);
+    }
+    if (base_color.a < 0.01) {
+        discard;
+    }
+
+    vec3 normal = normalize(f_normal);
+    if (!gl_FrontFacing) {
+        normal = -normal;
+    }
+    if (has_normal_texture) {
+        vec3 tangent = normalize(f_tangent.xyz - normal * dot(normal, f_tangent.xyz));
+        vec3 bitangent = normalize(cross(normal, tangent)) * f_tangent.w;
+        vec3 mapped = texture(normal_sampler, sampled_uv).xyz * 2.0 - 1.0;
+        mapped.xy *= normal_scale;
+        normal = normalize(mat3(tangent, bitangent, normal) * mapped);
+    }
+
+    float facing = dot(normal, normalize(light_direction));
+    float wrapped_diffuse = clamp((facing + 0.12) / 1.12, 0.0, 1.0);
+    float illumination = 0.30 + 0.70 * wrapped_diffuse;
+    color = vec4(base_color.rgb * illumination, base_color.a);
 }
 HERE
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-gl_context: HGLRC;
+#scope_export
+preview_upload_gl_context: HGLRC;
 device_context: HDC;
+
+#scope_file
+gl_context: HGLRC;
 chosen_msaa: s32;
 
 current_shader: *Shader;

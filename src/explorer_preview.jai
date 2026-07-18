@@ -5,6 +5,205 @@ FileExplorerPreviewKind :: enum u8 {
     SCENE;
 }
 
+FileExplorerPreviewState :: enum u8 {
+    NONE;
+    LOADING;
+    READY;
+    UNAVAILABLE;
+}
+
+file_explorer_selected_preview_kind: FileExplorerPreviewKind;
+file_explorer_selected_preview_path: string;
+file_explorer_preview_state: FileExplorerPreviewState;
+file_explorer_preview_generation: u64;
+
+File_Explorer_Preview_Request_Is_Current :: (
+    kind: FileExplorerPreviewKind,
+    file_path: string,
+    generation: u64
+) -> bool {
+    return generation == atomic_read(*file_explorer_preview_generation)
+        && kind == file_explorer_selected_preview_kind
+        && file_path == file_explorer_selected_preview_path;
+}
+
+File_Explorer_Select_Preview :: (kind: FileExplorerPreviewKind, file_path: string) {
+    if kind == file_explorer_selected_preview_kind && file_path == file_explorer_selected_preview_path {
+        return;
+    }
+
+    Cancel_Pending_File_Explorer_Preview_Tasks();
+    String_Reset(*file_explorer_selected_preview_path);
+    file_explorer_selected_preview_path = copy_string(file_path);
+    file_explorer_selected_preview_kind = kind;
+    generation := atomic_add(*file_explorer_preview_generation, cast(u64)1) + 1;
+
+    if file_path.count == 0 {
+        file_explorer_preview_state = .NONE;
+        return;
+    }
+    if kind == .NONE {
+        file_explorer_preview_state = .UNAVAILABLE;
+        return;
+    }
+
+    file_explorer_preview_state = .LOADING;
+    request: AsyncTaskRequest;
+    if kind == {
+    case .TEXT;
+        request = .{
+            type=.LOAD_FILE_EXPLORER_PREVIEW,
+            load_file_explorer_preview=.{file_path=copy_string(file_path), generation=generation},
+        };
+    case .IMAGE;
+        request = .{
+            type=.LOAD_FILE_EXPLORER_IMAGE_PREVIEW,
+            load_file_explorer_image_preview=.{file_path=copy_string(file_path), generation=generation},
+        };
+    case .SCENE;
+        request = .{
+            type=.LOAD_FILE_EXPLORER_SCENE_PREVIEW,
+            load_file_explorer_scene_preview=.{file_path=copy_string(file_path), generation=generation},
+        };
+    case;
+        file_explorer_preview_state = .UNAVAILABLE;
+        return;
+    }
+    Make_Unique_Thread_Work_Request(request);
+}
+
+File_Explorer_Selected_Preview_Name :: () -> string {
+    _, _, name := split_from_right(file_explorer_selected_preview_path, #char "/");
+    if name.count == 0 {
+        _, _, name = split_from_right(file_explorer_selected_preview_path, #char "\\");
+    }
+    if name.count == 0 then return file_explorer_selected_preview_path;
+    return name;
+}
+
+Circular_Feather_From_Center :: (
+    position: IntVector2,
+    center: IntVector2,
+    inner_radius: float,
+    outer_radius: float,
+    invert := false
+) -> float {
+    dx := cast(float)(position.x-center.x);
+    dy := cast(float)(position.y-center.y);
+    distance_squared := dx*dx + dy*dy;
+    inner_squared := inner_radius*inner_radius;
+    outer_squared := max(outer_radius*outer_radius, inner_squared+1.0);
+    amount := clamp((distance_squared-inner_squared)/(outer_squared-inner_squared), 0.0, 1.0);
+    amount = amount*amount*(3.0-2.0*amount);
+    return ifx invert then 1.0-amount else amount;
+}
+
+Render_File_Explorer_Loading_Preview :: (ul: IntVector2, lr: IntVector2) {
+    width := lr.x-ul.x;
+    height := lr.y-ul.y;
+    if width <= 0 || height <= 0 then return;
+
+    Set_Shader_For_Blended_Color();
+    center := IntVector2.{(ul.x+lr.x)/2, (ul.y+lr.y)/2};
+    field_radius := cast(float)min(width, height);
+    inner_radius := field_radius * 0.20;
+    outer_radius := field_radius * 0.58;
+    dot_step := max(sdw(15), 8);
+    dot_size := max(sdw(1), 1);
+    y := ul.y + dot_step/2;
+    row: s32;
+    while y < lr.y {
+        x := ul.x + dot_step/2 + (row%2)*(dot_step/2);
+        while x < lr.x {
+            feather := Circular_Feather_From_Center(.{x, y}, center, inner_radius, outer_radius, invert=true);
+            if feather > 0.01 {
+                color := fRGBA.{0.42, 0.50, 0.52, 0.30*feather};
+                Render_Quad(.{x, y}, .{min(x+dot_size, lr.x), min(y+dot_size, lr.y)}, color);
+            }
+            x += dot_step;
+        }
+        y += dot_step;
+        row += 1;
+    }
+    Flush_Draws();
+
+    dot_count := cast(s64)(seconds_since_init()/0.72) % 4;
+    // Keep three character cells reserved so the label itself never shifts;
+    // only the old-school ellipsis changes.
+    ellipsis := "   ";
+    if dot_count == 1 then ellipsis = ".  ";
+    else if dot_count == 2 then ellipsis = ".. ";
+    else if dot_count == 3 then ellipsis = "...";
+    label := tprint("Loading %%", File_Explorer_Selected_Preview_Name(), ellipsis);
+    label_width := xx label.count * Width(font);
+    line_height: s32 = xx (get_baseline_height(font) * 4);
+    line_height += xx (cast(float32)line_height * line_spacing_factor);
+    label_x := max(ul.x+(width-label_width)/2, ul.x+4);
+    label_y := max(ul.y, lr.y-line_height);
+    Render_Text_String_At(label, label_x, label_y, .{0.48, 0.54, 0.56, 0.72});
+}
+
+Render_File_Explorer_Unavailable_Preview :: (ul: IntVector2, lr: IntVector2) {
+    width := lr.x-ul.x;
+    height := lr.y-ul.y;
+    if width <= 0 || height <= 0 then return;
+
+    line_height: s32 = xx (get_baseline_height(font) * 4);
+    line_height += xx (cast(float32)line_height * line_spacing_factor);
+    minimum_dimension := min(width, height);
+    icon_size := min(max(sdw(48), 28), max(minimum_dimension-line_height*2, 16));
+    center_x := (ul.x+lr.x)/2;
+    center_y := (ul.y+lr.y-line_height)/2;
+    icon_left := center_x-icon_size/2;
+    icon_right := center_x+icon_size/2;
+    icon_top := center_y-icon_size/2;
+    icon_bottom := center_y+icon_size/2;
+    fold := max(icon_size/4, 4);
+    color := fRGBA.{0.48, 0.54, 0.56, 0.78};
+
+    Set_Shader_For_Lines();
+    Render_Line(.{icon_left, icon_top}, .{icon_right-fold, icon_top}, color);
+    Render_Line(.{icon_right-fold, icon_top}, .{icon_right, icon_top+fold}, color);
+    Render_Line(.{icon_right, icon_top+fold}, .{icon_right, icon_bottom}, color);
+    Render_Line(.{icon_right, icon_bottom}, .{icon_left, icon_bottom}, color);
+    Render_Line(.{icon_left, icon_bottom}, .{icon_left, icon_top}, color);
+    Render_Line(.{icon_right-fold, icon_top}, .{icon_right-fold, icon_top+fold}, color);
+    Render_Line(.{icon_right-fold, icon_top+fold}, .{icon_right, icon_top+fold}, color);
+
+    eye_y := center_y+icon_size/10;
+    eye_half_width := max(icon_size*27/100, 4);
+    eye_half_height := max(icon_size*10/100, 2);
+    eye_points := IntVector2.[
+        .{center_x-eye_half_width, eye_y},
+        .{center_x-eye_half_width/2, eye_y-eye_half_height},
+        .{center_x, eye_y-eye_half_height-eye_half_height/3},
+        .{center_x+eye_half_width/2, eye_y-eye_half_height},
+        .{center_x+eye_half_width, eye_y},
+        .{center_x+eye_half_width/2, eye_y+eye_half_height},
+        .{center_x, eye_y+eye_half_height+eye_half_height/3},
+        .{center_x-eye_half_width/2, eye_y+eye_half_height},
+    ];
+    for 0..eye_points.count-1 {
+        Render_Line(eye_points[it], eye_points[(it+1)%eye_points.count], color);
+    }
+    pupil_half := max(icon_size/24, 1);
+    Render_Line(.{center_x-pupil_half, eye_y}, .{center_x+pupil_half, eye_y}, color);
+    Render_Line(.{center_x, eye_y-pupil_half}, .{center_x, eye_y+pupil_half}, color);
+    slash_inset := max(icon_size/10, 3);
+    Render_Line(
+        .{icon_left+slash_inset, icon_top+slash_inset},
+        .{icon_right-slash_inset, icon_bottom-slash_inset},
+        color,
+    );
+    Flush_Draws();
+
+    label := "Preview unavailable";
+    label_width := xx label.count * Width(font);
+    label_x := max(ul.x+(width-label_width)/2, ul.x+4);
+    label_y := min(icon_bottom+line_height, lr.y-line_height/3);
+    Render_Text_String_At(label, label_x, label_y, .{0.48, 0.54, 0.56, 0.78});
+}
+
 FileExplorerImagePreview :: struct {
     file_path: string;
     pixels: []u8;
@@ -74,8 +273,43 @@ File_Explorer_Image_Preview_Is_For_File :: (file_path: string) -> bool {
     return file_explorer_image_preview.file_path == file_path;
 }
 
+File_Explorer_Image_Preview_Upload_Result_To_GPU :: (result: *LoadFileExplorerImagePreviewResult) -> bool {
+    if result.pixels.count == 0 || result.width <= 0 || result.height <= 0 || preview_upload_gl_context == null {
+        return false;
+    }
+    previous_context := wglGetCurrentContext();
+    previous_device_context := wglGetCurrentDC();
+    if !wglMakeCurrent(device_context, preview_upload_gl_context) {
+        return false;
+    }
+    defer wglMakeCurrent(previous_device_context, previous_context);
+
+    glGenTextures(1, *result.texture);
+    if result.texture == 0 {
+        return false;
+    }
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, result.texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(
+        GL_TEXTURE_2D, 0, cast(s32)GL_RGBA8,
+        xx result.width, xx result.height, 0,
+        GL_RGBA, GL_UNSIGNED_BYTE, result.pixels.data,
+    );
+    glFinish();
+    free(result.pixels.data);
+    result.pixels = .{};
+    return true;
+}
+
 Render_File_Explorer_Image_Preview :: (ul: IntVector2, lr: IntVector2) {
-    if file_explorer_image_preview.width <= 0 || file_explorer_image_preview.height <= 0 {
+    if file_explorer_image_preview.width <= 0 || file_explorer_image_preview.height <= 0
+    || file_explorer_image_preview.texture == 0 {
         return;
     }
 
@@ -83,27 +317,6 @@ Render_File_Explorer_Image_Preview :: (ul: IntVector2, lr: IntVector2) {
     // checkerboard or a previously rendered scene in the depth buffer.
     Disable_Depth_Test();
     defer Enable_Depth_Test();
-
-    if file_explorer_image_preview.texture == 0 {
-        if file_explorer_image_preview.pixels.count == 0 {
-            return;
-        }
-        glGenTextures(1, *file_explorer_image_preview.texture);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, file_explorer_image_preview.texture);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        // Simp's font uploader leaves this at its atlas stride. Our decoded
-        // RGBA pixels are tightly packed, so retaining that state makes GL
-        // read past the image allocation when a preview texture is created.
-        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glTexImage2D(GL_TEXTURE_2D, 0, cast(s32)GL_RGBA8, xx file_explorer_image_preview.width, xx file_explorer_image_preview.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, file_explorer_image_preview.pixels.data);
-        free(file_explorer_image_preview.pixels.data);
-        file_explorer_image_preview.pixels = .{};
-    }
 
     available_width := lr.x - ul.x;
     available_height := lr.y - ul.y;
@@ -157,12 +370,13 @@ Run_Production_Image_Preview_Smoke_Test :: () -> bool {
     Load_File_Explorer_Image_Preview(*source_task);
     source_result := *source_task.result.load_file_explorer_image_preview;
     if !source_result.success || source_result.width <= 0 || source_result.height <= 0
-    || source_result.pixels.count != cast(s64)source_result.width * cast(s64)source_result.height * 4 {
+    || source_result.texture == 0 || source_result.pixels.count != 0 {
         Log_Error("image preview smoke test could not load screenshot.png");
         if source_result.pixels.data != null free(source_result.pixels.data);
+        if source_result.texture != 0 then glDeleteTextures(1, *source_result.texture);
         return false;
     }
-    free(source_result.pixels.data);
+    glDeleteTextures(1, *source_result.texture);
 
     // Use deterministic opaque pixels for the framebuffer assertion. The
     // real PNG above verifies the production stb loader; these texels verify
@@ -183,6 +397,19 @@ Run_Production_Image_Preview_Smoke_Test :: () -> bool {
     file_explorer_image_preview.pixels[13] = 255;
     file_explorer_image_preview.pixels[14] = 255;
     file_explorer_image_preview.pixels[15] = 255;
+    upload_result: LoadFileExplorerImagePreviewResult = .{
+        success=true,
+        width=file_explorer_image_preview.width,
+        height=file_explorer_image_preview.height,
+        pixels=file_explorer_image_preview.pixels,
+    };
+    if !File_Explorer_Image_Preview_Upload_Result_To_GPU(*upload_result) {
+        File_Explorer_Image_Preview_Clear();
+        Log_Error("image preview smoke test could not upload its deterministic texture");
+        return false;
+    }
+    file_explorer_image_preview.pixels = .{};
+    file_explorer_image_preview.texture = upload_result.texture;
 
     Begin_Draw_Frame(true);
     Render_File_Explorer_Image_Preview(.{0, 0}, .{64, 64});

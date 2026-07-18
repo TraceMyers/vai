@@ -5,6 +5,10 @@ VirtualKey :: enum u8 {
     DOWN :: VK_DOWN;
     LEFT :: VK_LEFT;
     RIGHT :: VK_RIGHT;
+    H :: #char "H";
+    J :: #char "J";
+    K :: #char "K";
+    L :: #char "L";
 }
 
 
@@ -25,29 +29,19 @@ Create_Window :: (window_name: string, msaa := DEFAULT_MSAA) -> WindowType {
         work_area_get_success := SystemParametersInfoW(SPI_GETWORKAREA, 0, *work_area, 0); 
         if work_area_get_success {
             window.x = work_area.left;
-            window.y = work_area.left;
+            window.y = work_area.top;
         }
     }
 
-    // apparently (?) window size in terms of pixels is kind of virtual; this converts our virtual (intended)
-    // size to the true size, according to Windows
-    window_rect: RECT;
-    window_rect.right = window.width;
-    window_rect.bottom = window.height;
-    AdjustWindowRect(*window_rect, WINDOWED_STYLE, .FALSE);
-
-    true_width := window_rect.right - window_rect.left;
-    true_height := window_rect.bottom - window_rect.top;
-
     window.handle = CreateWindowExW(
-        0, // extended window style
+        WS_EX_APPWINDOW,
         xx Encode_Temp_C_String(WINDOW_CLASS, .UTF8, .UTF16),
         xx Encode_Temp_C_String(window_name, .UTF8, .UTF16),
         WINDOWED_STYLE,
         xx window.x,
         xx window.y,
-        xx true_width,
-        xx true_height,
+        xx window.width,
+        xx window.height,
         null,
         null,
         cast(HINSTANCE) 0,
@@ -58,6 +52,14 @@ Create_Window :: (window_name: string, msaa := DEFAULT_MSAA) -> WindowType {
         Log_Error("CreateWindowExW returned 0");
         return null;
     }
+
+    corner_preference: s32 = DWMWCP_DONOTROUND;
+    DwmSetWindowAttribute(
+        window.handle,
+        DWMWA_WINDOW_CORNER_PREFERENCE,
+        *corner_preference,
+        size_of(s32),
+    );
 
     UpdateWindow(window.handle);
     ShowWindow(window.handle, SW_SHOW);
@@ -84,6 +86,85 @@ Update_Window_Events :: () {
         DispatchMessageW(*msg);
     }
 }
+
+Platform_Window_Dpi :: () -> u32 {
+    if window.handle == null {
+        return 96;
+    }
+    dpi := GetDpiForWindow(window.handle);
+    return ifx dpi > 0 then dpi else 96;
+}
+
+Win32_Resize_Border_Thickness :: (hwnd: HWND) -> s32 {
+    dpi := GetDpiForWindow(hwnd);
+    if dpi == 0 {
+        dpi = 96;
+    }
+    return max(
+        GetSystemMetricsForDpi(SM_CXSIZEFRAME, dpi) + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi),
+        1,
+    );
+}
+
+Win32_Custom_Frame_Hit_Test :: (
+    position: IntVector2,
+    client_width: s32,
+    client_height: s32,
+    title_bar_height: s32,
+    button_width: s32,
+    resize_border: s32,
+    maximized: bool,
+) -> s64 {
+    if !maximized {
+        on_left := position.x >= 0 && position.x < resize_border;
+        on_right := position.x < client_width && position.x >= client_width-resize_border;
+        on_top := position.y >= 0 && position.y < resize_border;
+        on_bottom := position.y < client_height && position.y >= client_height-resize_border;
+
+        if on_top && on_left then return HTTOPLEFT;
+        if on_top && on_right then return HTTOPRIGHT;
+        if on_bottom && on_left then return HTBOTTOMLEFT;
+        if on_bottom && on_right then return HTBOTTOMRIGHT;
+        if on_left then return HTLEFT;
+        if on_right then return HTRIGHT;
+        if on_top then return HTTOP;
+        if on_bottom then return HTBOTTOM;
+    }
+
+    button := Custom_Title_Bar_Button_At(position, client_width, title_bar_height, button_width);
+    if button != .NONE {
+        return HTCLIENT;
+    }
+    if position.y >= 0 && position.y < title_bar_height {
+        return HTCAPTION;
+    }
+    return HTCLIENT;
+}
+
+Win32_Custom_Title_Bar_Button_At :: (hwnd: HWND, position: IntVector2) -> CustomTitleBarButton {
+    client_rect: RECT;
+    GetClientRect(hwnd, *client_rect);
+    dpi := GetDpiForWindow(hwnd);
+    if dpi == 0 then dpi = 96;
+    title_bar_height := Scale_Custom_Title_Bar_Metric(CUSTOM_TITLE_BAR_HEIGHT_96, dpi);
+    button_width := Scale_Custom_Title_Bar_Metric(CUSTOM_TITLE_BAR_BUTTON_WIDTH_96, dpi);
+    return Custom_Title_Bar_Button_At(position, client_rect.right-client_rect.left, title_bar_height, button_width);
+}
+
+Perform_Custom_Title_Bar_Button_Action :: (hwnd: HWND, button: CustomTitleBarButton) {
+    if button == {
+    case .MINIMIZE;
+        ShowWindow(hwnd, SW_MINIMIZE);
+    case .MAXIMIZE;
+        show_command := ifx IsZoomed(hwnd)
+            then cast(s32)SW_RESTORE
+            else cast(s32)SW_MAXIMIZE;
+        ShowWindow(hwnd, show_command);
+    case .CLOSE;
+        quit = true;
+    case;
+    }
+}
     
 Receive_Window_Message :: (hwnd: HWND, message: u32, wParam: WPARAM, lParam: LPARAM) -> s64 #c_call {
 
@@ -92,11 +173,58 @@ Receive_Window_Message :: (hwnd: HWND, message: u32, wParam: WPARAM, lParam: LPA
     MARGINS :: struct {
         cxLeftWidth, cxRightWidth, cyTopHeight, cyBottomHeight: int;
     }
+    WM_CANCELMODE :: 0x001f;
+    WM_CAPTURECHANGED :: 0x0215;
+    WM_KILLFOCUS :: 0x0008;
+    WM_MOUSELEAVE :: 0x02a3;
     dwmapi   :: #system_library "Dwmapi";
     DwmExtendFrameIntoClientArea :: (window: HWND, margins: *MARGINS) -> HRESULT #foreign dwmapi;
 
     push_context {
         if message == {
+        case WM_NCCALCSIZE;
+            if wParam != 0 && IsZoomed(hwnd) {
+                params := cast(*NCCALCSIZE_PARAMS)lParam;
+                border := Win32_Resize_Border_Thickness(hwnd);
+                params.rgrc[0].left += border;
+                params.rgrc[0].top += border;
+                params.rgrc[0].right -= border;
+                params.rgrc[0].bottom -= border;
+            }
+            return 0;
+        case WM_NCHITTEST;
+            screen_position := Mouse_Position_From_LParam(lParam);
+            client_position := POINT.{screen_position.x, screen_position.y};
+            ScreenToClient(hwnd, *client_position);
+            client_rect: RECT;
+            GetClientRect(hwnd, *client_rect);
+            dpi := GetDpiForWindow(hwnd);
+            if dpi == 0 then dpi = 96;
+            return Win32_Custom_Frame_Hit_Test(
+                .{client_position.x, client_position.y},
+                client_rect.right-client_rect.left,
+                client_rect.bottom-client_rect.top,
+                Scale_Custom_Title_Bar_Metric(CUSTOM_TITLE_BAR_HEIGHT_96, dpi),
+                Scale_Custom_Title_Bar_Metric(CUSTOM_TITLE_BAR_BUTTON_WIDTH_96, dpi),
+                Win32_Resize_Border_Thickness(hwnd),
+                IsZoomed(hwnd) != 0,
+            );
+        case WM_DPICHANGED;
+            suggested_rect := cast(*RECT)lParam;
+            SetWindowPos(
+                hwnd,
+                null,
+                suggested_rect.left,
+                suggested_rect.top,
+                suggested_rect.right-suggested_rect.left,
+                suggested_rect.bottom-suggested_rect.top,
+                SWP_NOZORDER | SWP_NOACTIVATE,
+            );
+            Mark_Custom_Title_Bar_UI_Changed();
+            return 0;
+        case WM_NCMOUSEMOVE;
+            Set_Custom_Title_Bar_Hovered_Button(.NONE);
+            mouse_hover_position_is_known = false;
         //   case WM_CREATE;
             // push the window that we draw to into the upper left of the Windows window, so we're drawing to the whole window I guess -Trace
             // rect: RECT;
@@ -124,15 +252,8 @@ Receive_Window_Message :: (hwnd: HWND, message: u32, wParam: WPARAM, lParam: LPA
         case WM_KEYDOWN;
             if wParam == VK_F9 {
                 quit = true;
-            } else if wParam == {
-            case VK_LEFT;
-                Set_Bit(*key_pressed, xx VK_LEFT);
-            case VK_RIGHT;
-                Set_Bit(*key_pressed, xx VK_RIGHT);
-            case VK_UP;
-                Set_Bit(*key_pressed, xx VK_UP);
-            case VK_DOWN;
-                Set_Bit(*key_pressed, xx VK_DOWN);
+            } else if !Mouse_Input_Locks_Keyboard() && wParam <= 255 {
+                Set_Bit(*key_pressed, xx wParam);
             }
             last_vkey = xx wParam;
             last_vkey_modified_by_control = (modifier_keys & .CONTROL) != 0;
@@ -143,16 +264,11 @@ Receive_Window_Message :: (hwnd: HWND, message: u32, wParam: WPARAM, lParam: LPA
             }
         case WM_SYSKEYUP;
         case WM_KEYUP;
-            if wParam == {
-            case VK_LEFT;
-                Unset_Bit(*key_pressed, xx VK_LEFT);
-            case VK_RIGHT;
-                Unset_Bit(*key_pressed, xx VK_RIGHT);
-            case VK_UP;
-                Unset_Bit(*key_pressed, xx VK_UP);
-            case VK_DOWN;
-                Unset_Bit(*key_pressed, xx VK_DOWN);
+            if wParam <= 255 {
+                Unset_Bit(*key_pressed, xx wParam);
             }
+        case WM_KILLFOCUS;
+            Clear(*key_pressed);
         case WM_SYSCHAR;
               // This is here to prevent beeps when a Alt key combo is pressed. If we don't return 0, windows helpfully emits a beep sound to indicate the user that the key wasn't handled.
         case WM_CHAR;
@@ -172,6 +288,77 @@ Receive_Window_Message :: (hwnd: HWND, message: u32, wParam: WPARAM, lParam: LPA
             }
             if code_point != U32_MAX {
                 Take_Raw_Input(code_point);
+            }
+        case WM_MOUSEMOVE;
+            if !tracking_mouse_leave {
+                track_mouse_event := TRACKMOUSEEVENT.{
+                    cbSize=size_of(TRACKMOUSEEVENT),
+                    dwFlags=TME_LEAVE,
+                    hwndTrack=hwnd,
+                };
+                tracking_mouse_leave = TrackMouseEvent(*track_mouse_event) != 0;
+            }
+            mouse_position := Mouse_Position_From_LParam(lParam);
+            title_bar_button := Win32_Custom_Title_Bar_Button_At(hwnd, mouse_position);
+            Set_Custom_Title_Bar_Hovered_Button(title_bar_button);
+            if title_bar_button != .NONE
+            || Custom_Title_Bar_Pressed_Button() != .NONE
+            || mouse_position.y < Custom_Title_Bar_Height() {
+                mouse_hover_position_is_known = false;
+                return 0;
+            }
+            Take_Mouse_Event(.MOVE, mouse_position);
+        case WM_MOUSELEAVE;
+            tracking_mouse_leave = false;
+            Set_Custom_Title_Bar_Hovered_Button(.NONE);
+            Take_Mouse_Event(.LEAVE, .{});
+        case WM_LBUTTONDOWN;
+            mouse_position := Mouse_Position_From_LParam(lParam);
+            title_bar_button := Win32_Custom_Title_Bar_Button_At(hwnd, mouse_position);
+            if title_bar_button != .NONE {
+                Set_Custom_Title_Bar_Hovered_Button(title_bar_button);
+                Set_Custom_Title_Bar_Pressed_Button(title_bar_button);
+                SetCapture(hwnd);
+                return 0;
+            }
+            mouse_left_button_down = true;
+            SetCapture(hwnd);
+            Take_Mouse_Event(.LEFT_DOWN, mouse_position);
+        case WM_LBUTTONDBLCLK;
+            mouse_position := Mouse_Position_From_LParam(lParam);
+            title_bar_button := Win32_Custom_Title_Bar_Button_At(hwnd, mouse_position);
+            if title_bar_button != .NONE {
+                Set_Custom_Title_Bar_Hovered_Button(title_bar_button);
+                Set_Custom_Title_Bar_Pressed_Button(title_bar_button);
+                SetCapture(hwnd);
+                return 0;
+            }
+            mouse_left_button_down = true;
+            SetCapture(hwnd);
+            Take_Mouse_Event(.LEFT_DOUBLE_CLICK, mouse_position);
+        case WM_LBUTTONUP;
+            mouse_position := Mouse_Position_From_LParam(lParam);
+            if Custom_Title_Bar_Pressed_Button() != .NONE {
+                pressed_button := Custom_Title_Bar_Pressed_Button();
+                hovered_button := Win32_Custom_Title_Bar_Button_At(hwnd, mouse_position);
+                Set_Custom_Title_Bar_Hovered_Button(hovered_button);
+                Set_Custom_Title_Bar_Pressed_Button(.NONE);
+                ReleaseCapture();
+                if hovered_button == pressed_button {
+                    Perform_Custom_Title_Bar_Button_Action(hwnd, pressed_button);
+                }
+                return 0;
+            }
+            Take_Mouse_Event(.LEFT_UP, mouse_position);
+            mouse_left_button_down = false;
+            ReleaseCapture();
+        case WM_CANCELMODE; #through;
+        case WM_CAPTURECHANGED;
+            Set_Custom_Title_Bar_Pressed_Button(.NONE);
+            // ReleaseCapture() sends WM_CAPTURECHANGED too; preserve the
+            // queued button-up event in that normal completion path.
+            if mouse_left_button_down {
+                Cancel_Mouse_Interaction();
             }
         // case WM_PAINT;
             // paint_struct: PAINTSTRUCT;
@@ -221,7 +408,7 @@ Create_Window_Class :: (bg_color := float.[0.0, 0.0, 0.0]) -> bool {
 
     window_class: WNDCLASSEXW;
     window_class.cbSize = size_of(WNDCLASSEXW);
-    window_class.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC; // https://learn.microsoft.com/en-us/windows/win32/winmsg/window-class-styles
+    window_class.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC | CS_DBLCLKS; // https://learn.microsoft.com/en-us/windows/win32/winmsg/window-class-styles
     window_class.lpfnWndProc = xx Receive_Window_Message; // the callback function where windows will send us data such as keyboard inputs, resizes, and many more things, and we will tell windows how the window should respond.
     window_class.cbClsExtra = 0; // extra bytes to allocate at the end of the class. 
     window_class.cbWndExtra = 0; // extra bytes to allocate at the end of an instance.
@@ -244,8 +431,25 @@ Create_Window_Class :: (bg_color := float.[0.0, 0.0, 0.0]) -> bool {
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 WINDOW_CLASS :: "Window Class";
+// Keep the standard state-management bits, including WS_CAPTION, so Windows
+// preserves minimize/taskbar semantics. WM_NCCALCSIZE removes the actual
+// non-client caption and gives the full surface to Vai's custom frame.
 WINDOWED_STYLE : u32 : WS_OVERLAPPEDWINDOW;
 SECONDARY_WINDOW_STYLE : u32 : WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME;
+CS_DBLCLKS :: 0x0008;
+TME_LEAVE :: 0x0000_0002;
+HTCLIENT :: 1;
+HTCAPTION :: 2;
+HTLEFT :: 10;
+HTRIGHT :: 11;
+HTTOP :: 12;
+HTTOPLEFT :: 13;
+HTTOPRIGHT :: 14;
+HTBOTTOM :: 15;
+HTBOTTOMLEFT :: 16;
+HTBOTTOMRIGHT :: 17;
+DWMWA_WINDOW_CORNER_PREFERENCE :: 33;
+DWMWCP_DONOTROUND :: 1;
 DEFAULT_MSAA : s32 : 1;
 COLOR_WINDOW : u32 : 5;
 
@@ -264,7 +468,27 @@ PAINTSTRUCT :: struct {
     rgbReserved: [32]u8;
 }
 
+TRACKMOUSEEVENT :: struct {
+    cbSize: u32;
+    dwFlags: u32;
+    hwndTrack: HWND;
+    dwHoverTime: u32;
+}
+
+TrackMouseEvent :: (event: *TRACKMOUSEEVENT) -> BOOL #foreign user32;
+GetDpiForWindow :: (hwnd: HWND) -> u32 #foreign user32;
+GetSystemMetricsForDpi :: (index: s32, dpi: u32) -> s32 #foreign user32;
+IsZoomed :: (hwnd: HWND) -> BOOL #foreign user32;
+dwmapi :: #system_library "Dwmapi";
+DwmSetWindowAttribute :: (hwnd: HWND, attribute: u32, value: *void, value_size: u32) -> HRESULT #foreign dwmapi;
+
+NCCALCSIZE_PARAMS :: struct {
+    rgrc: [3]RECT;
+    lppos: *void;
+}
+
 window_class_created := false;
 last_vkey: u32;
 last_vkey_modified_by_control: bool;
 last_vkey_modified_by_shift: bool;
+tracking_mouse_leave: bool;

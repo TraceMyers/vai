@@ -57,6 +57,58 @@ Smoothed_Delta_Time :: inline () -> float32 {
     return xx running_average_frame_time;
 }
 
+INTERACTIVE_DELTA_TIME_MAX :: 1.0 / 30.0;
+INTERACTIVE_DELTA_TIME_HISTORY_COUNT :: 7;
+
+Robust_Interactive_Delta_Time :: (samples: *[INTERACTIVE_DELTA_TIME_HISTORY_COUNT]float64, fallback: float64) -> float32 {
+    sorted_samples: [INTERACTIVE_DELTA_TIME_HISTORY_COUNT]float64;
+    sample_count: s32;
+    for samples.* {
+        if it <= 0 {
+            continue;
+        }
+        sample := min(it, INTERACTIVE_DELTA_TIME_MAX);
+        insert_index := sample_count;
+        while insert_index > 0 && sorted_samples[insert_index-1] > sample {
+            sorted_samples[insert_index] = sorted_samples[insert_index-1];
+            insert_index -= 1;
+        }
+        sorted_samples[insert_index] = sample;
+        sample_count += 1;
+    }
+
+    if sample_count == 0 {
+        return clamp(cast(float32)fallback, 0.0, cast(float32)INTERACTIVE_DELTA_TIME_MAX);
+    }
+
+    // Preserve the original seven-frame average for ordinary frame jitter.
+    // Samples far from the median are hitches rather than a useful pacing
+    // signal, so replace only those outliers instead of letting one bad frame
+    // contaminate the next seven animation steps.
+    middle_index := sample_count / 2;
+    median := sorted_samples[middle_index];
+    if sample_count % 2 == 0 {
+        median = (median + sorted_samples[middle_index-1]) * 0.5;
+    }
+    outlier_min := median * 0.5;
+    outlier_max := median * 1.75;
+    sum: float64;
+    index: s32;
+    while index < sample_count {
+        sample := sorted_samples[index];
+        if sample < outlier_min || sample > outlier_max {
+            sample = median;
+        }
+        sum += sample;
+        index += 1;
+    }
+    return cast(float32)(sum / cast(float64)sample_count);
+}
+
+Interactive_Delta_Time :: inline () -> float32 {
+    return Robust_Interactive_Delta_Time(*running_frame_times, delta_time);
+}
+
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 FRAME_TIME_TARGET : float64 : 1.0 / 360.0;
@@ -78,7 +130,7 @@ Calculate_Running_Average_Frame_Time :: () -> float64 {
 
 frame_times: [128]float64;
 max_frame_time: float64;
-running_frame_times: [7]float64;
+running_frame_times: [INTERACTIVE_DELTA_TIME_HISTORY_COUNT]float64;
 frame_time_index: s32;
 running_average_frame_time: float64;
 running_frame_time_index: s32;

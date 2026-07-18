@@ -5,11 +5,15 @@
 #include "../third_party/tinyusdz/src/tinyusdz.hh"
 #include "../third_party/tinyusdz/src/image-loader.hh"
 #include "../third_party/tinyusdz/src/external/tinyexr.h"
+#define STB_IMAGE_STATIC
+#define STB_IMAGE_IMPLEMENTATION
+#include "../third_party/tinyusdz/src/external/stb_image.h"
 #include "../third_party/tinyusdz/src/tydra/render-data.hh"
 #include "vai_scene_preview_api.h"
 
 #include <algorithm>
 #include <cctype>
+#include <climits>
 #include <cfloat>
 #include <cmath>
 #include <cstdint>
@@ -17,11 +21,14 @@
 #include <cstring>
 #include <fstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
 
 constexpr uint32_t kMaxPreviewVertices = 3u * 1024u * 1024u;
+constexpr uint32_t kMaxPreviewMaterials = 4096u;
+constexpr size_t kMaxPreviewTextureBytes = 512ull * 1024ull * 1024ull;
 
 void SetError(char* destination, uint32_t capacity, const char* message) {
     if (!destination || capacity == 0) return;
@@ -51,22 +58,164 @@ bool IsBuiltinExtension(const std::string& extension) {
         || extension == "dds" || extension == "exr" || extension == "tif" || extension == "tiff" || extension == "dng";
 }
 
+struct PreviewTexture {
+    std::vector<uint8_t> pixels;
+    uint32_t width = 0;
+    uint32_t height = 0;
+};
+
+struct PreviewMaterial {
+    PreviewTexture base_color_texture;
+    PreviewTexture normal_texture;
+    uint32_t flags = 0;
+    float normal_scale = 1.0f;
+};
+
+struct PreviewVertex {
+    VaiLitScenePreviewVertex lit = {};
+    float legacy_color[4] = {};
+    uint32_t material_index = 0;
+};
+
+float Dot3(const float a[3], const float b[3]) {
+    return a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+}
+
+void Cross3(const float a[3], const float b[3], float out[3]) {
+    out[0] = a[1]*b[2] - a[2]*b[1];
+    out[1] = a[2]*b[0] - a[0]*b[2];
+    out[2] = a[0]*b[1] - a[1]*b[0];
+}
+
+bool Normalize3(float value[3]) {
+    const float length_squared = Dot3(value, value);
+    if (!std::isfinite(length_squared) || length_squared <= 1.0e-12f) return false;
+    const float inverse_length = 1.0f / std::sqrt(length_squared);
+    value[0] *= inverse_length;
+    value[1] *= inverse_length;
+    value[2] *= inverse_length;
+    return true;
+}
+
 struct PreviewBuild {
-    std::vector<VaiScenePreviewVertex> vertices;
+    std::vector<PreviewVertex> vertices;
+    std::vector<PreviewMaterial> materials = { PreviewMaterial{} };
+    size_t texture_bytes = 0;
     float bounds_min[3] = { FLT_MAX, FLT_MAX, FLT_MAX };
     float bounds_max[3] = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
 
     bool Append(float x, float y, float z, const float color[4]) {
+        const float position[3] = { x, y, z };
+        const float normal[3] = {};
+        const float tangent[4] = {};
+        const float uv[2] = {};
+        return AppendLit(position, normal, tangent, color, color, uv, 0);
+    }
+
+    bool AppendLit(
+        const float position[3],
+        const float normal[3],
+        const float tangent[4],
+        const float color[4],
+        const float legacy_color[4],
+        const float uv[2],
+        uint32_t material_index
+    ) {
         if (vertices.size() >= kMaxPreviewVertices) return false;
-        VaiScenePreviewVertex vertex = {{ x, y, z }, { color[0], color[1], color[2], color[3] }};
+        PreviewVertex vertex = {};
+        std::memcpy(vertex.lit.position, position, sizeof(vertex.lit.position));
+        std::memcpy(vertex.lit.normal, normal, sizeof(vertex.lit.normal));
+        std::memcpy(vertex.lit.tangent, tangent, sizeof(vertex.lit.tangent));
+        std::memcpy(vertex.lit.color, color, sizeof(vertex.lit.color));
+        std::memcpy(vertex.lit.uv, uv, sizeof(vertex.lit.uv));
+        std::memcpy(vertex.legacy_color, legacy_color, sizeof(vertex.legacy_color));
+        vertex.material_index = material_index < materials.size() ? material_index : 0;
         vertices.push_back(vertex);
-        bounds_min[0] = std::min(bounds_min[0], x);
-        bounds_min[1] = std::min(bounds_min[1], y);
-        bounds_min[2] = std::min(bounds_min[2], z);
-        bounds_max[0] = std::max(bounds_max[0], x);
-        bounds_max[1] = std::max(bounds_max[1], y);
-        bounds_max[2] = std::max(bounds_max[2], z);
+        bounds_min[0] = std::min(bounds_min[0], position[0]);
+        bounds_min[1] = std::min(bounds_min[1], position[1]);
+        bounds_min[2] = std::min(bounds_min[2], position[2]);
+        bounds_max[0] = std::max(bounds_max[0], position[0]);
+        bounds_max[1] = std::max(bounds_max[1], position[1]);
+        bounds_max[2] = std::max(bounds_max[2], position[2]);
         return true;
+    }
+
+    uint32_t AddMaterial(PreviewMaterial material) {
+        const size_t material_texture_bytes = material.base_color_texture.pixels.size()
+            + material.normal_texture.pixels.size();
+        if (materials.size() >= kMaxPreviewMaterials
+        || material_texture_bytes > kMaxPreviewTextureBytes - std::min(texture_bytes, kMaxPreviewTextureBytes)) {
+            return 0;
+        }
+        texture_bytes += material_texture_bytes;
+        materials.push_back(std::move(material));
+        return static_cast<uint32_t>(materials.size() - 1);
+    }
+
+    void CompleteMissingFrames() {
+        for (size_t triangle = 0; triangle + 2 < vertices.size(); triangle += 3) {
+            PreviewVertex* corners[3] = { &vertices[triangle], &vertices[triangle + 1], &vertices[triangle + 2] };
+            const float edge_a[3] = {
+                corners[1]->lit.position[0] - corners[0]->lit.position[0],
+                corners[1]->lit.position[1] - corners[0]->lit.position[1],
+                corners[1]->lit.position[2] - corners[0]->lit.position[2],
+            };
+            const float edge_b[3] = {
+                corners[2]->lit.position[0] - corners[0]->lit.position[0],
+                corners[2]->lit.position[1] - corners[0]->lit.position[1],
+                corners[2]->lit.position[2] - corners[0]->lit.position[2],
+            };
+            float face_normal[3];
+            Cross3(edge_a, edge_b, face_normal);
+            if (!Normalize3(face_normal)) {
+                face_normal[0] = 0.0f; face_normal[1] = 1.0f; face_normal[2] = 0.0f;
+            }
+            for (PreviewVertex* corner : corners) {
+                if (!Normalize3(corner->lit.normal)) {
+                    std::memcpy(corner->lit.normal, face_normal, sizeof(face_normal));
+                }
+            }
+
+            const float du_a = corners[1]->lit.uv[0] - corners[0]->lit.uv[0];
+            const float dv_a = corners[1]->lit.uv[1] - corners[0]->lit.uv[1];
+            const float du_b = corners[2]->lit.uv[0] - corners[0]->lit.uv[0];
+            const float dv_b = corners[2]->lit.uv[1] - corners[0]->lit.uv[1];
+            const float determinant = du_a*dv_b - du_b*dv_a;
+            float face_tangent[3] = {};
+            float face_bitangent[3] = {};
+            bool has_uv_frame = std::isfinite(determinant) && std::fabs(determinant) > 1.0e-10f;
+            if (has_uv_frame) {
+                const float inverse = 1.0f / determinant;
+                for (int component = 0; component < 3; ++component) {
+                    face_tangent[component] = (edge_a[component]*dv_b - edge_b[component]*dv_a) * inverse;
+                    face_bitangent[component] = (edge_b[component]*du_a - edge_a[component]*du_b) * inverse;
+                }
+                has_uv_frame = Normalize3(face_tangent) && Normalize3(face_bitangent);
+            }
+
+            for (PreviewVertex* corner : corners) {
+                float tangent[3] = { corner->lit.tangent[0], corner->lit.tangent[1], corner->lit.tangent[2] };
+                if (!Normalize3(tangent)) {
+                    if (has_uv_frame) {
+                        std::memcpy(tangent, face_tangent, sizeof(tangent));
+                    } else {
+                        const float reference[3] = {
+                            std::fabs(corner->lit.normal[1]) < 0.95f ? 0.0f : 1.0f,
+                            std::fabs(corner->lit.normal[1]) < 0.95f ? 1.0f : 0.0f,
+                            0.0f,
+                        };
+                        Cross3(reference, corner->lit.normal, tangent);
+                        Normalize3(tangent);
+                    }
+                    std::memcpy(corner->lit.tangent, tangent, sizeof(tangent));
+                }
+                if (corner->lit.tangent[3] == 0.0f) {
+                    float cross[3];
+                    Cross3(corner->lit.normal, tangent, cross);
+                    corner->lit.tangent[3] = has_uv_frame && Dot3(cross, face_bitangent) < 0.0f ? -1.0f : 1.0f;
+                }
+            }
+        }
     }
 
     bool Finalize(VaiScenePreviewMesh* out_mesh, char* error, uint32_t error_capacity) {
@@ -80,33 +229,312 @@ struct PreviewBuild {
             SetError(error, error_capacity, "Out of memory while creating the scene preview.");
             return false;
         }
-        std::memcpy(allocated_vertices, vertices.data(), byte_count);
+        for (size_t index = 0; index < vertices.size(); ++index) {
+            std::memcpy(allocated_vertices[index].position, vertices[index].lit.position, sizeof(allocated_vertices[index].position));
+            std::memcpy(allocated_vertices[index].color, vertices[index].legacy_color, sizeof(allocated_vertices[index].color));
+        }
         out_mesh->vertices = allocated_vertices;
         out_mesh->vertex_count = static_cast<uint32_t>(vertices.size());
         std::memcpy(out_mesh->bounds_min, bounds_min, sizeof(bounds_min));
         std::memcpy(out_mesh->bounds_max, bounds_max, sizeof(bounds_max));
         return true;
     }
+
+    bool FinalizeLit(VaiLitScenePreviewMesh* out_mesh, char* error, uint32_t error_capacity) {
+        if (vertices.empty()) {
+            SetError(error, error_capacity, "The scene contains no supported triangle geometry.");
+            return false;
+        }
+        CompleteMissingFrames();
+
+        auto* allocated_vertices = static_cast<VaiLitScenePreviewVertex*>(
+            std::malloc(vertices.size() * sizeof(VaiLitScenePreviewVertex)));
+        auto* allocated_materials = static_cast<VaiLitScenePreviewMaterial*>(
+            std::calloc(materials.size(), sizeof(VaiLitScenePreviewMaterial)));
+        std::vector<VaiLitScenePreviewDrawRange> ranges;
+        for (size_t first = 0; first < vertices.size();) {
+            size_t end = first + 1;
+            while (end < vertices.size() && vertices[end].material_index == vertices[first].material_index) ++end;
+            ranges.push_back({
+                static_cast<uint32_t>(first),
+                static_cast<uint32_t>(end - first),
+                vertices[first].material_index,
+            });
+            first = end;
+        }
+        auto* allocated_ranges = static_cast<VaiLitScenePreviewDrawRange*>(
+            std::malloc(ranges.size() * sizeof(VaiLitScenePreviewDrawRange)));
+
+        const auto cleanup = [&]() {
+            if (allocated_materials) {
+                for (size_t index = 0; index < materials.size(); ++index) {
+                    std::free(const_cast<uint8_t*>(allocated_materials[index].base_color_texture.pixels));
+                    std::free(const_cast<uint8_t*>(allocated_materials[index].normal_texture.pixels));
+                }
+            }
+            std::free(allocated_vertices);
+            std::free(allocated_materials);
+            std::free(allocated_ranges);
+        };
+        if (!allocated_vertices || !allocated_materials || !allocated_ranges) {
+            cleanup();
+            SetError(error, error_capacity, "Out of memory while creating the lit scene preview.");
+            return false;
+        }
+
+        for (size_t index = 0; index < vertices.size(); ++index) {
+            allocated_vertices[index] = vertices[index].lit;
+        }
+        std::memcpy(allocated_ranges, ranges.data(), ranges.size() * sizeof(VaiLitScenePreviewDrawRange));
+        for (size_t index = 0; index < materials.size(); ++index) {
+            const PreviewMaterial& source = materials[index];
+            VaiLitScenePreviewMaterial& destination = allocated_materials[index];
+            destination.flags = source.flags;
+            destination.normal_scale = source.normal_scale;
+            const auto copy_texture = [&](const PreviewTexture& texture, VaiImagePreview* image) -> bool {
+                if (texture.pixels.empty()) return true;
+                auto* pixels = static_cast<uint8_t*>(std::malloc(texture.pixels.size()));
+                if (!pixels) return false;
+                std::memcpy(pixels, texture.pixels.data(), texture.pixels.size());
+                image->pixels = pixels;
+                image->width = texture.width;
+                image->height = texture.height;
+                image->row_stride = texture.width * 4;
+                return true;
+            };
+            if (!copy_texture(source.base_color_texture, &destination.base_color_texture)
+            || !copy_texture(source.normal_texture, &destination.normal_texture)) {
+                cleanup();
+                SetError(error, error_capacity, "Out of memory while copying scene preview textures.");
+                return false;
+            }
+        }
+
+        out_mesh->vertices = allocated_vertices;
+        out_mesh->vertex_count = static_cast<uint32_t>(vertices.size());
+        out_mesh->materials = allocated_materials;
+        out_mesh->material_count = static_cast<uint32_t>(materials.size());
+        out_mesh->draw_ranges = allocated_ranges;
+        out_mesh->draw_range_count = static_cast<uint32_t>(ranges.size());
+        std::memcpy(out_mesh->bounds_min, bounds_min, sizeof(bounds_min));
+        std::memcpy(out_mesh->bounds_max, bounds_max, sizeof(bounds_max));
+        return true;
+    }
 };
 
-bool AppendGLTFPrimitive(PreviewBuild& build, const cgltf_node* node, const cgltf_primitive& primitive) {
+bool FBXTextureDimensionsAreSafe(int width, int height);
+
+bool DecodeTextureMemory(const uint8_t* data, size_t size, PreviewTexture* texture) {
+    if (!data || size == 0 || size > static_cast<size_t>(INT_MAX)) return false;
+    int width = 0;
+    int height = 0;
+    int source_channels = 0;
+    if (!stbi_info_from_memory(data, static_cast<int>(size), &width, &height, &source_channels)
+    || !FBXTextureDimensionsAreSafe(width, height)) {
+        return false;
+    }
+    stbi_uc* pixels = stbi_load_from_memory(
+        data, static_cast<int>(size), &width, &height, &source_channels, 4);
+    if (!pixels) return false;
+    const size_t byte_count = static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
+    texture->pixels.assign(pixels, pixels + byte_count);
+    texture->width = static_cast<uint32_t>(width);
+    texture->height = static_cast<uint32_t>(height);
+    stbi_image_free(pixels);
+    return true;
+}
+
+int Base64Value(unsigned char value) {
+    if (value >= 'A' && value <= 'Z') return value - 'A';
+    if (value >= 'a' && value <= 'z') return value - 'a' + 26;
+    if (value >= '0' && value <= '9') return value - '0' + 52;
+    if (value == '+') return 62;
+    if (value == '/') return 63;
+    return -1;
+}
+
+bool DecodeBase64(const char* encoded, std::vector<uint8_t>* decoded) {
+    decoded->clear();
+    int accumulator = 0;
+    int bits = -8;
+    for (const unsigned char* cursor = reinterpret_cast<const unsigned char*>(encoded); *cursor; ++cursor) {
+        if (*cursor == '=') break;
+        const int value = Base64Value(*cursor);
+        if (value < 0) {
+            if (std::isspace(*cursor)) continue;
+            return false;
+        }
+        accumulator = (accumulator << 6) | value;
+        bits += 6;
+        if (bits >= 0) {
+            decoded->push_back(static_cast<uint8_t>((accumulator >> bits) & 0xff));
+            bits -= 8;
+        }
+    }
+    return !decoded->empty();
+}
+
+std::string DirectoryOf(const char* path) {
+    const std::string value = path ? path : "";
+    const size_t separator = value.find_last_of("/\\");
+    return separator == std::string::npos ? std::string() : value.substr(0, separator + 1);
+}
+
+bool LoadGLTFTexture(const char* scene_path, const cgltf_texture* texture, PreviewTexture* output) {
+    if (!texture) return false;
+    const cgltf_image* image = texture->image;
+    if (!image && texture->has_webp) image = texture->webp_image;
+    if (!image || texture->has_basisu) return false;
+
+    if (image->buffer_view && image->buffer_view->buffer && image->buffer_view->buffer->data) {
+        const uint8_t* data = static_cast<const uint8_t*>(image->buffer_view->buffer->data)
+            + image->buffer_view->offset;
+        return DecodeTextureMemory(data, image->buffer_view->size, output);
+    }
+    if (!image->uri) return false;
+    if (std::strncmp(image->uri, "data:", 5) == 0) {
+        const char* comma = std::strchr(image->uri, ',');
+        if (!comma || comma - image->uri < 7
+        || std::strncmp(comma - 7, ";base64", 7) != 0) {
+            return false;
+        }
+        std::vector<uint8_t> decoded;
+        return DecodeBase64(comma + 1, &decoded)
+            && DecodeTextureMemory(decoded.data(), decoded.size(), output);
+    }
+
+    std::vector<char> decoded_uri(std::strlen(image->uri) + 1);
+    std::memcpy(decoded_uri.data(), image->uri, decoded_uri.size());
+    cgltf_decode_uri(decoded_uri.data());
+    const std::string filename = DirectoryOf(scene_path) + decoded_uri.data();
+    int width = 0;
+    int height = 0;
+    int source_channels = 0;
+    if (!stbi_info(filename.c_str(), &width, &height, &source_channels)
+    || !FBXTextureDimensionsAreSafe(width, height)) {
+        return false;
+    }
+    stbi_uc* pixels = stbi_load(filename.c_str(), &width, &height, &source_channels, 4);
+    if (!pixels) return false;
+    const size_t byte_count = static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
+    output->pixels.assign(pixels, pixels + byte_count);
+    output->width = static_cast<uint32_t>(width);
+    output->height = static_cast<uint32_t>(height);
+    stbi_image_free(pixels);
+    return true;
+}
+
+struct GLTFPreviewMaterial {
+    const cgltf_material* material = nullptr;
+    const cgltf_texture_view* base_texture_view = nullptr;
+    const cgltf_texture_view* normal_texture_view = nullptr;
+    uint32_t build_material_index = 0;
+    float base_color[4] = { 0.78f, 0.80f, 0.84f, 1.0f };
+};
+
+GLTFPreviewMaterial* GLTFPreviewMaterialFor(
+    PreviewBuild& build,
+    std::vector<GLTFPreviewMaterial>& preview_materials,
+    const char* scene_path,
+    const cgltf_material* material
+) {
+    for (GLTFPreviewMaterial& preview : preview_materials) {
+        if (preview.material == material) return &preview;
+    }
+    preview_materials.emplace_back();
+    GLTFPreviewMaterial& preview = preview_materials.back();
+    preview.material = material;
+    if (!material) return &preview;
+
+    if (material->has_pbr_metallic_roughness) {
+        std::memcpy(preview.base_color, material->pbr_metallic_roughness.base_color_factor, sizeof(preview.base_color));
+        preview.base_texture_view = &material->pbr_metallic_roughness.base_color_texture;
+    } else if (material->has_pbr_specular_glossiness) {
+        std::memcpy(preview.base_color, material->pbr_specular_glossiness.diffuse_factor, sizeof(preview.base_color));
+        preview.base_texture_view = &material->pbr_specular_glossiness.diffuse_texture;
+    }
+    preview.normal_texture_view = &material->normal_texture;
+
+    PreviewMaterial build_material;
+    if (preview.base_texture_view->texture
+    && LoadGLTFTexture(scene_path, preview.base_texture_view->texture, &build_material.base_color_texture)) {
+        build_material.flags |= VAI_SCENE_MATERIAL_BASE_COLOR_TEXTURE;
+    }
+    if (preview.normal_texture_view->texture
+    && LoadGLTFTexture(scene_path, preview.normal_texture_view->texture, &build_material.normal_texture)) {
+        build_material.flags |= VAI_SCENE_MATERIAL_NORMAL_TEXTURE;
+        build_material.normal_scale = preview.normal_texture_view->scale;
+        if (!std::isfinite(build_material.normal_scale)) build_material.normal_scale = 1.0f;
+        build_material.normal_scale = std::max(0.0f, std::min(build_material.normal_scale, 8.0f));
+    }
+    const cgltf_texture* wrap_texture = preview.base_texture_view->texture
+        ? preview.base_texture_view->texture : preview.normal_texture_view->texture;
+    if (wrap_texture && wrap_texture->sampler) {
+        if (wrap_texture->sampler->wrap_s != cgltf_wrap_mode_clamp_to_edge) {
+            build_material.flags |= VAI_SCENE_MATERIAL_WRAP_U_REPEAT;
+        }
+        if (wrap_texture->sampler->wrap_t != cgltf_wrap_mode_clamp_to_edge) {
+            build_material.flags |= VAI_SCENE_MATERIAL_WRAP_V_REPEAT;
+        }
+    } else {
+        build_material.flags |= VAI_SCENE_MATERIAL_WRAP_U_REPEAT | VAI_SCENE_MATERIAL_WRAP_V_REPEAT;
+    }
+    preview.build_material_index = build.AddMaterial(std::move(build_material));
+    return &preview;
+}
+
+void TransformGLTFDirection(const float transform[16], const float source[3], float output[3]) {
+    output[0] = transform[0]*source[0] + transform[4]*source[1] + transform[8]*source[2];
+    output[1] = transform[1]*source[0] + transform[5]*source[1] + transform[9]*source[2];
+    output[2] = transform[2]*source[0] + transform[6]*source[1] + transform[10]*source[2];
+    Normalize3(output);
+}
+
+void TransformGLTFUV(const cgltf_texture_view* view, float uv[2]) {
+    if (!view || !view->has_transform) return;
+    const float scaled_u = uv[0] * view->transform.scale[0];
+    const float scaled_v = uv[1] * view->transform.scale[1];
+    const float cosine = std::cos(view->transform.rotation);
+    const float sine = std::sin(view->transform.rotation);
+    uv[0] = view->transform.offset[0] + cosine*scaled_u - sine*scaled_v;
+    uv[1] = view->transform.offset[1] + sine*scaled_u + cosine*scaled_v;
+}
+
+bool AppendGLTFPrimitive(
+    PreviewBuild& build,
+    std::vector<GLTFPreviewMaterial>& preview_materials,
+    const char* scene_path,
+    const cgltf_node* node,
+    const cgltf_primitive& primitive
+) {
     if (primitive.type != cgltf_primitive_type_triangles) return true;
 
     const cgltf_accessor* positions = nullptr;
+    const cgltf_accessor* normals = nullptr;
+    const cgltf_accessor* tangents = nullptr;
     const cgltf_accessor* colors = nullptr;
+    const cgltf_accessor* texcoords = nullptr;
+    GLTFPreviewMaterial* preview_material = GLTFPreviewMaterialFor(
+        build, preview_materials, scene_path, primitive.material);
+    int texcoord_set = 0;
+    const cgltf_texture_view* uv_view = preview_material->base_texture_view;
+    if (!uv_view || !uv_view->texture) uv_view = preview_material->normal_texture_view;
+    if (uv_view) {
+        texcoord_set = uv_view->has_transform && uv_view->transform.has_texcoord
+            ? uv_view->transform.texcoord : uv_view->texcoord;
+    }
     for (cgltf_size attribute_index = 0; attribute_index < primitive.attributes_count; ++attribute_index) {
         const cgltf_attribute& attribute = primitive.attributes[attribute_index];
         if (attribute.type == cgltf_attribute_type_position) positions = attribute.data;
+        if (attribute.type == cgltf_attribute_type_normal) normals = attribute.data;
+        if (attribute.type == cgltf_attribute_type_tangent) tangents = attribute.data;
         if (attribute.type == cgltf_attribute_type_color && attribute.index == 0) colors = attribute.data;
+        if (attribute.type == cgltf_attribute_type_texcoord && attribute.index == texcoord_set) texcoords = attribute.data;
     }
     if (!positions || positions->count == 0) return true;
 
     float transform[16];
     cgltf_node_transform_world(node, transform);
-    float material_color[4] = { 0.78f, 0.80f, 0.84f, 1.0f };
-    if (primitive.material) {
-        std::memcpy(material_color, primitive.material->pbr_metallic_roughness.base_color_factor, sizeof(material_color));
-    }
 
     const cgltf_size index_count = primitive.indices ? primitive.indices->count : positions->count;
     const cgltf_size triangle_count = index_count / 3;
@@ -118,7 +546,12 @@ bool AppendGLTFPrimitive(PreviewBuild& build, const cgltf_node* node, const cglt
 
             float position[3] = {};
             if (!cgltf_accessor_read_float(positions, vertex_index, position, 3)) continue;
-            float color[4] = { material_color[0], material_color[1], material_color[2], material_color[3] };
+            float color[4] = {
+                preview_material->base_color[0],
+                preview_material->base_color[1],
+                preview_material->base_color[2],
+                preview_material->base_color[3],
+            };
             if (colors && vertex_index < colors->count) {
                 const cgltf_size component_count = std::min<cgltf_size>(4, cgltf_num_components(colors->type));
                 float vertex_color[4] = { 1, 1, 1, 1 };
@@ -127,10 +560,36 @@ bool AppendGLTFPrimitive(PreviewBuild& build, const cgltf_node* node, const cglt
                 }
             }
 
-            const float x = transform[0] * position[0] + transform[4] * position[1] + transform[8]  * position[2] + transform[12];
-            const float y = transform[1] * position[0] + transform[5] * position[1] + transform[9]  * position[2] + transform[13];
-            const float z = transform[2] * position[0] + transform[6] * position[1] + transform[10] * position[2] + transform[14];
-            if (!build.Append(x, y, z, color)) return false;
+            const float output_position[3] = {
+                transform[0] * position[0] + transform[4] * position[1] + transform[8]  * position[2] + transform[12],
+                transform[1] * position[0] + transform[5] * position[1] + transform[9]  * position[2] + transform[13],
+                transform[2] * position[0] + transform[6] * position[1] + transform[10] * position[2] + transform[14],
+            };
+            float normal[3] = {};
+            if (normals && vertex_index < normals->count) {
+                float source[3] = {};
+                if (cgltf_accessor_read_float(normals, vertex_index, source, 3)) {
+                    TransformGLTFDirection(transform, source, normal);
+                }
+            }
+            float tangent[4] = {};
+            if (tangents && vertex_index < tangents->count) {
+                float source[4] = {};
+                if (cgltf_accessor_read_float(tangents, vertex_index, source, 4)) {
+                    TransformGLTFDirection(transform, source, tangent);
+                    tangent[3] = source[3];
+                }
+            }
+            float uv[2] = {};
+            if (texcoords && vertex_index < texcoords->count) {
+                cgltf_accessor_read_float(texcoords, vertex_index, uv, 2);
+                TransformGLTFUV(uv_view, uv);
+            }
+            if (!build.AppendLit(
+                output_position, normal, tangent, color, color, uv,
+                preview_material->build_material_index)) {
+                return false;
+            }
         }
     }
     return true;
@@ -153,11 +612,12 @@ bool LoadGLTF(const char* path, PreviewBuild& build, char* error, uint32_t error
         return false;
     }
 
+    std::vector<GLTFPreviewMaterial> preview_materials;
     for (cgltf_size node_index = 0; node_index < data->nodes_count; ++node_index) {
         const cgltf_node& node = data->nodes[node_index];
         if (!node.mesh) continue;
         for (cgltf_size primitive_index = 0; primitive_index < node.mesh->primitives_count; ++primitive_index) {
-            if (!AppendGLTFPrimitive(build, &node, node.mesh->primitives[primitive_index])) {
+            if (!AppendGLTFPrimitive(build, preview_materials, path, &node, node.mesh->primitives[primitive_index])) {
                 free_data();
                 SetError(error, error_capacity, "The glTF preview exceeds Vai's geometry safety limit.");
                 return false;
@@ -168,19 +628,292 @@ bool LoadGLTF(const char* path, PreviewBuild& build, char* error, uint32_t error
     return true;
 }
 
-void FBXMaterialColor(const ufbx_node* node, const ufbx_mesh* mesh, size_t face_index, float color[4]) {
-    color[0] = 0.78f; color[1] = 0.80f; color[2] = 0.84f; color[3] = 1.0f;
-    if (mesh->face_material.count == 0 || face_index >= mesh->face_material.count) return;
+struct FBXPreviewMaterial {
+    const ufbx_material* material = nullptr;
+    const ufbx_texture* texture = nullptr;
+    const ufbx_texture* normal_texture = nullptr;
+    stbi_uc* pixels = nullptr;
+    stbi_uc* normal_pixels = nullptr;
+    int width = 0;
+    int height = 0;
+    int normal_width = 0;
+    int normal_height = 0;
+    float base_color[3] = { 0.78f, 0.80f, 0.84f };
+    float average_texture_color[3] = { 1.0f, 1.0f, 1.0f };
+    uint32_t build_material_index = 0;
+};
+
+const ufbx_material* FBXMaterialForFace(const ufbx_node* node, const ufbx_mesh* mesh, size_t face_index) {
+    if (mesh->face_material.count == 0 || face_index >= mesh->face_material.count) return nullptr;
     const uint32_t material_index = mesh->face_material.data[face_index];
     const ufbx_material_list& materials = node->materials.count ? node->materials : mesh->materials;
-    if (material_index >= materials.count || !materials.data[material_index]) return;
-    const ufbx_material* material = materials.data[material_index];
-    const ufbx_material_map& map = material->pbr.base_color.has_value
-        ? material->pbr.base_color : material->fbx.diffuse_color;
-    if (!map.has_value) return;
-    color[0] = static_cast<float>(map.value_vec3.x);
-    color[1] = static_cast<float>(map.value_vec3.y);
-    color[2] = static_cast<float>(map.value_vec3.z);
+    if (material_index >= materials.count) return nullptr;
+    return materials.data[material_index];
+}
+
+const ufbx_texture* FBXFileTexture(const ufbx_material_map* map) {
+    if (!map || !map->texture) return nullptr;
+    if (map->texture->type == UFBX_TEXTURE_FILE) return map->texture;
+    for (size_t index = 0; index < map->texture->file_textures.count; ++index) {
+        const ufbx_texture* texture = map->texture->file_textures.data[index];
+        if (texture && texture->type == UFBX_TEXTURE_FILE) return texture;
+    }
+    return nullptr;
+}
+
+bool FBXTextureDimensionsAreSafe(int width, int height) {
+    constexpr int kMaxTextureDimension = 16384;
+    constexpr uint64_t kMaxTextureBytes = 256ull * 1024ull * 1024ull;
+    return width > 0 && height > 0
+        && width <= kMaxTextureDimension && height <= kMaxTextureDimension
+        && static_cast<uint64_t>(width) * static_cast<uint64_t>(height) * 4ull <= kMaxTextureBytes;
+}
+
+stbi_uc* LoadFBXTexture(const ufbx_texture* texture, int* width, int* height) {
+    if (!texture) return nullptr;
+    const ufbx_blob* content = nullptr;
+    if (texture->content.data && texture->content.size > 0) {
+        content = &texture->content;
+    } else if (texture->video && texture->video->content.data && texture->video->content.size > 0) {
+        content = &texture->video->content;
+    }
+
+    int source_channels = 0;
+    if (content) {
+        if (content->size > static_cast<size_t>(INT_MAX)
+        || !stbi_info_from_memory(static_cast<const stbi_uc*>(content->data), static_cast<int>(content->size), width, height, &source_channels)
+        || !FBXTextureDimensionsAreSafe(*width, *height)) {
+            return nullptr;
+        }
+        return stbi_load_from_memory(
+            static_cast<const stbi_uc*>(content->data),
+            static_cast<int>(content->size),
+            width,
+            height,
+            &source_channels,
+            4);
+    }
+
+    if (!texture->filename.data || texture->filename.length == 0) return nullptr;
+    const std::string filename(texture->filename.data, texture->filename.length);
+    if (!stbi_info(filename.c_str(), width, height, &source_channels)
+    || !FBXTextureDimensionsAreSafe(*width, *height)) {
+        return nullptr;
+    }
+    return stbi_load(filename.c_str(), width, height, &source_channels, 4);
+}
+
+FBXPreviewMaterial* FBXPreviewMaterialFor(
+    PreviewBuild& build,
+    std::vector<FBXPreviewMaterial>& preview_materials,
+    const ufbx_material* material
+) {
+    for (FBXPreviewMaterial& preview : preview_materials) {
+        if (preview.material == material) return &preview;
+    }
+
+    preview_materials.emplace_back();
+    FBXPreviewMaterial& preview = preview_materials.back();
+    preview.material = material;
+    if (!material) return &preview;
+
+    const ufbx_material_map* color_map = nullptr;
+    const ufbx_material_map* factor_map = nullptr;
+    if (material->pbr.base_color.has_value || material->pbr.base_color.texture) {
+        color_map = &material->pbr.base_color;
+        factor_map = &material->pbr.base_factor;
+    } else if (material->fbx.diffuse_color.has_value || material->fbx.diffuse_color.texture) {
+        color_map = &material->fbx.diffuse_color;
+        factor_map = &material->fbx.diffuse_factor;
+    }
+
+    if (color_map && color_map->has_value) {
+        preview.base_color[0] = static_cast<float>(color_map->value_vec3.x);
+        preview.base_color[1] = static_cast<float>(color_map->value_vec3.y);
+        preview.base_color[2] = static_cast<float>(color_map->value_vec3.z);
+    } else if (color_map && color_map->texture) {
+        preview.base_color[0] = preview.base_color[1] = preview.base_color[2] = 1.0f;
+    }
+    if (factor_map && factor_map->has_value) {
+        const float factor = static_cast<float>(factor_map->value_real);
+        preview.base_color[0] *= factor;
+        preview.base_color[1] *= factor;
+        preview.base_color[2] *= factor;
+    }
+
+    preview.texture = FBXFileTexture(&material->pbr.base_color);
+    if (!preview.texture) preview.texture = FBXFileTexture(&material->fbx.diffuse_color);
+    preview.pixels = LoadFBXTexture(preview.texture, &preview.width, &preview.height);
+    if (preview.pixels) {
+        const uint64_t pixel_count = static_cast<uint64_t>(preview.width) * static_cast<uint64_t>(preview.height);
+        const uint64_t sample_stride = std::max<uint64_t>(pixel_count / 4096ull, 1ull);
+        uint64_t samples = 0;
+        double totals[3] = {};
+        for (uint64_t pixel = 0; pixel < pixel_count; pixel += sample_stride) {
+            totals[0] += preview.pixels[pixel * 4 + 0];
+            totals[1] += preview.pixels[pixel * 4 + 1];
+            totals[2] += preview.pixels[pixel * 4 + 2];
+            ++samples;
+        }
+        preview.average_texture_color[0] = static_cast<float>(totals[0] / (255.0 * static_cast<double>(samples)));
+        preview.average_texture_color[1] = static_cast<float>(totals[1] / (255.0 * static_cast<double>(samples)));
+        preview.average_texture_color[2] = static_cast<float>(totals[2] / (255.0 * static_cast<double>(samples)));
+    }
+
+    preview.normal_texture = FBXFileTexture(&material->pbr.normal_map);
+    if (!preview.normal_texture) preview.normal_texture = FBXFileTexture(&material->fbx.normal_map);
+    if (!preview.normal_texture) preview.normal_texture = FBXFileTexture(&material->fbx.bump);
+    preview.normal_pixels = LoadFBXTexture(preview.normal_texture, &preview.normal_width, &preview.normal_height);
+
+    PreviewMaterial build_material;
+    build_material.normal_scale = material->fbx.bump_factor.has_value
+        ? static_cast<float>(material->fbx.bump_factor.value_real) : 1.0f;
+    if (!std::isfinite(build_material.normal_scale)) build_material.normal_scale = 1.0f;
+    build_material.normal_scale = std::max(0.0f, std::min(build_material.normal_scale, 8.0f));
+    const ufbx_texture* wrap_texture = preview.texture ? preview.texture : preview.normal_texture;
+    if (wrap_texture) {
+        if (wrap_texture->wrap_u == UFBX_WRAP_REPEAT) build_material.flags |= VAI_SCENE_MATERIAL_WRAP_U_REPEAT;
+        if (wrap_texture->wrap_v == UFBX_WRAP_REPEAT) build_material.flags |= VAI_SCENE_MATERIAL_WRAP_V_REPEAT;
+    }
+    if (preview.pixels) {
+        const size_t byte_count = static_cast<size_t>(preview.width) * static_cast<size_t>(preview.height) * 4;
+        build_material.base_color_texture.pixels.assign(preview.pixels, preview.pixels + byte_count);
+        build_material.base_color_texture.width = static_cast<uint32_t>(preview.width);
+        build_material.base_color_texture.height = static_cast<uint32_t>(preview.height);
+        build_material.flags |= VAI_SCENE_MATERIAL_BASE_COLOR_TEXTURE;
+    }
+    if (preview.normal_pixels) {
+        const size_t byte_count = static_cast<size_t>(preview.normal_width) * static_cast<size_t>(preview.normal_height) * 4;
+        build_material.normal_texture.pixels.assign(preview.normal_pixels, preview.normal_pixels + byte_count);
+        build_material.normal_texture.width = static_cast<uint32_t>(preview.normal_width);
+        build_material.normal_texture.height = static_cast<uint32_t>(preview.normal_height);
+        build_material.flags |= VAI_SCENE_MATERIAL_NORMAL_TEXTURE;
+    }
+    preview.build_material_index = build.AddMaterial(std::move(build_material));
+    return &preview;
+}
+
+double FBXWrapTextureCoordinate(double value, ufbx_wrap_mode wrap) {
+    if (wrap == UFBX_WRAP_CLAMP) return std::max(0.0, std::min(value, 1.0));
+    return value - std::floor(value);
+}
+
+void FBXVertexColor(
+    const FBXPreviewMaterial* preview,
+    const ufbx_mesh* mesh,
+    uint32_t vertex_index,
+    float color[4]
+) {
+    color[0] = preview->base_color[0];
+    color[1] = preview->base_color[1];
+    color[2] = preview->base_color[2];
+    color[3] = 1.0f;
+
+    if (preview->pixels) {
+        float sampled[3] = {
+            preview->average_texture_color[0],
+            preview->average_texture_color[1],
+            preview->average_texture_color[2],
+        };
+        if (mesh->vertex_uv.exists && vertex_index < mesh->vertex_uv.indices.count) {
+            ufbx_vec2 uv = ufbx_get_vertex_vec2(&mesh->vertex_uv, vertex_index);
+            if (preview->texture->has_uv_transform) {
+                const ufbx_vec3 transformed = ufbx_transform_position(
+                    &preview->texture->uv_to_texture,
+                    ufbx_vec3{ uv.x, uv.y, 0.0 });
+                uv.x = transformed.x;
+                uv.y = transformed.y;
+            }
+            const double u = FBXWrapTextureCoordinate(uv.x, preview->texture->wrap_u);
+            const double v = FBXWrapTextureCoordinate(uv.y, preview->texture->wrap_v);
+            const int x = std::min(static_cast<int>(u * preview->width), preview->width - 1);
+            const int y = std::min(static_cast<int>((1.0 - v) * preview->height), preview->height - 1);
+            const stbi_uc* texel = preview->pixels + (static_cast<size_t>(y) * preview->width + x) * 4;
+            sampled[0] = static_cast<float>(texel[0]) / 255.0f;
+            sampled[1] = static_cast<float>(texel[1]) / 255.0f;
+            sampled[2] = static_cast<float>(texel[2]) / 255.0f;
+        }
+        color[0] *= sampled[0];
+        color[1] *= sampled[1];
+        color[2] *= sampled[2];
+    }
+
+    if (mesh->vertex_color.exists && vertex_index < mesh->vertex_color.indices.count) {
+        const ufbx_vec4 vertex_color = ufbx_get_vertex_vec4(&mesh->vertex_color, vertex_index);
+        color[0] *= static_cast<float>(vertex_color.x);
+        color[1] *= static_cast<float>(vertex_color.y);
+        color[2] *= static_cast<float>(vertex_color.z);
+    }
+}
+
+void FBXLitVertexAttributes(
+    const FBXPreviewMaterial* preview,
+    const ufbx_node* node,
+    const ufbx_mesh* mesh,
+    uint32_t vertex_index,
+    float normal[3],
+    float tangent[4],
+    float color[4],
+    float legacy_color[4],
+    float uv_out[2]
+) {
+    color[0] = preview->base_color[0];
+    color[1] = preview->base_color[1];
+    color[2] = preview->base_color[2];
+    color[3] = 1.0f;
+    if (mesh->vertex_color.exists && vertex_index < mesh->vertex_color.indices.count) {
+        const ufbx_vec4 vertex_color = ufbx_get_vertex_vec4(&mesh->vertex_color, vertex_index);
+        color[0] *= static_cast<float>(vertex_color.x);
+        color[1] *= static_cast<float>(vertex_color.y);
+        color[2] *= static_cast<float>(vertex_color.z);
+        color[3] *= static_cast<float>(vertex_color.w);
+    }
+    FBXVertexColor(preview, mesh, vertex_index, legacy_color);
+
+    const ufbx_texture* uv_texture = preview->texture ? preview->texture : preview->normal_texture;
+    if (mesh->vertex_uv.exists && vertex_index < mesh->vertex_uv.indices.count) {
+        ufbx_vec2 uv = ufbx_get_vertex_vec2(&mesh->vertex_uv, vertex_index);
+        if (uv_texture && uv_texture->has_uv_transform) {
+            const ufbx_vec3 transformed = ufbx_transform_position(
+                &uv_texture->uv_to_texture,
+                ufbx_vec3{ uv.x, uv.y, 0.0 });
+            uv.x = transformed.x;
+            uv.y = transformed.y;
+        }
+        uv_out[0] = static_cast<float>(uv.x);
+        uv_out[1] = static_cast<float>(uv.y);
+    }
+
+    if (mesh->skinned_normal.exists && vertex_index < mesh->skinned_normal.indices.count) {
+        ufbx_vec3 value = ufbx_get_vertex_vec3(&mesh->skinned_normal, vertex_index);
+        if (mesh->skinned_is_local) value = ufbx_transform_direction(&node->geometry_to_world, value);
+        normal[0] = static_cast<float>(value.x);
+        normal[1] = static_cast<float>(value.y);
+        normal[2] = static_cast<float>(value.z);
+        Normalize3(normal);
+    }
+    if (mesh->vertex_tangent.exists && vertex_index < mesh->vertex_tangent.indices.count) {
+        ufbx_vec3 value = ufbx_get_vertex_vec3(&mesh->vertex_tangent, vertex_index);
+        if (mesh->skinned_is_local) value = ufbx_transform_direction(&node->geometry_to_world, value);
+        tangent[0] = static_cast<float>(value.x);
+        tangent[1] = static_cast<float>(value.y);
+        tangent[2] = static_cast<float>(value.z);
+        Normalize3(tangent);
+    }
+    if (mesh->vertex_bitangent.exists && vertex_index < mesh->vertex_bitangent.indices.count
+    && Dot3(normal, normal) > 0.0f && Dot3(tangent, tangent) > 0.0f) {
+        ufbx_vec3 value = ufbx_get_vertex_vec3(&mesh->vertex_bitangent, vertex_index);
+        if (mesh->skinned_is_local) value = ufbx_transform_direction(&node->geometry_to_world, value);
+        float bitangent[3] = {
+            static_cast<float>(value.x),
+            static_cast<float>(value.y),
+            static_cast<float>(value.z),
+        };
+        Normalize3(bitangent);
+        float cross[3];
+        Cross3(normal, tangent, cross);
+        tangent[3] = Dot3(cross, bitangent) < 0.0f ? -1.0f : 1.0f;
+    }
 }
 
 bool LoadFBX(const char* path, PreviewBuild& build, char* error, uint32_t error_capacity) {
@@ -188,6 +921,11 @@ bool LoadFBX(const char* path, PreviewBuild& build, char* error, uint32_t error_
     options.ignore_missing_external_files = true;
     options.generate_missing_normals = true;
     options.use_blender_pbr_material = true;
+    if (ExtensionOf(path) == "obj") {
+        // OBJ materials live in a separate .mtl file. Missing material libraries
+        // should not prevent geometry-only previews from loading.
+        options.load_external_files = true;
+    }
     ufbx_error load_error = {};
     ufbx_scene* scene = ufbx_load_file(path, &options, &load_error);
     if (!scene) {
@@ -198,6 +936,7 @@ bool LoadFBX(const char* path, PreviewBuild& build, char* error, uint32_t error_
     }
 
     std::vector<uint32_t> triangle_indices;
+    std::vector<FBXPreviewMaterial> preview_materials;
     for (size_t node_index = 0; node_index < scene->nodes.count; ++node_index) {
         const ufbx_node* node = scene->nodes.data[node_index];
         if (!node || !node->mesh || !node->visible) continue;
@@ -205,15 +944,34 @@ bool LoadFBX(const char* path, PreviewBuild& build, char* error, uint32_t error_
         triangle_indices.resize(mesh->max_face_triangles * 3);
         for (size_t face_index = 0; face_index < mesh->num_faces; ++face_index) {
             const size_t triangle_count = ufbx_triangulate_face(triangle_indices.data(), triangle_indices.size(), mesh, mesh->faces.data[face_index]);
-            float color[4];
-            FBXMaterialColor(node, mesh, face_index, color);
+            const ufbx_material* material = FBXMaterialForFace(node, mesh, face_index);
+            const FBXPreviewMaterial* preview_material = FBXPreviewMaterialFor(build, preview_materials, material);
             for (size_t triangle = 0; triangle < triangle_count; ++triangle) {
                 for (size_t corner = 0; corner < 3; ++corner) {
                     const uint32_t index = triangle_indices[triangle * 3 + corner];
                     if (index >= mesh->skinned_position.indices.count) continue;
                     ufbx_vec3 position = ufbx_get_vertex_vec3(&mesh->skinned_position, index);
                     if (mesh->skinned_is_local) position = ufbx_transform_position(&node->geometry_to_world, position);
-                    if (!build.Append(static_cast<float>(position.x), static_cast<float>(position.y), static_cast<float>(position.z), color)) {
+                    const float output_position[3] = {
+                        static_cast<float>(position.x),
+                        static_cast<float>(position.y),
+                        static_cast<float>(position.z),
+                    };
+                    float normal[3] = {};
+                    float tangent[4] = {};
+                    float color[4] = {};
+                    float legacy_color[4] = {};
+                    float uv[2] = {};
+                    FBXLitVertexAttributes(
+                        preview_material, node, mesh, index,
+                        normal, tangent, color, legacy_color, uv);
+                    if (!build.AppendLit(
+                        output_position, normal, tangent, color, legacy_color, uv,
+                        preview_material->build_material_index)) {
+                        for (FBXPreviewMaterial& preview : preview_materials) {
+                            stbi_image_free(preview.pixels);
+                            stbi_image_free(preview.normal_pixels);
+                        }
                         ufbx_free_scene(scene);
                         SetError(error, error_capacity, "The FBX preview exceeds Vai's geometry safety limit.");
                         return false;
@@ -222,37 +980,206 @@ bool LoadFBX(const char* path, PreviewBuild& build, char* error, uint32_t error_
             }
         }
     }
+    for (FBXPreviewMaterial& preview : preview_materials) {
+        stbi_image_free(preview.pixels);
+        stbi_image_free(preview.normal_pixels);
+    }
     ufbx_free_scene(scene);
     return true;
 }
 
-void AppendUSDNode(const tinyusdz::tydra::Node& node, const tinyusdz::tydra::RenderScene& scene, PreviewBuild& build, bool* exceeded_limit) {
+bool ReadUSDAttribute(
+    const tinyusdz::tydra::VertexAttribute& attribute,
+    size_t point_index,
+    size_t face_vertex_index,
+    size_t expected_components,
+    float* output
+) {
+    using Format = tinyusdz::tydra::VertexAttributeFormat;
+    if (attribute.empty()) return false;
+    const size_t available_components = attribute.format == Format::Vec2 ? 2
+        : attribute.format == Format::Vec3 ? 3
+        : attribute.format == Format::Vec4 ? 4 : 0;
+    if (available_components < expected_components) return false;
+
+    size_t index = attribute.is_constant() ? 0 : point_index;
+    if (!attribute.is_constant() && attribute.vertex_count() != 0
+    && point_index >= attribute.vertex_count() && face_vertex_index < attribute.vertex_count()) {
+        index = face_vertex_index;
+    }
+    if (!attribute.indices.empty()) {
+        if (index >= attribute.indices.size()) return false;
+        index = attribute.indices[index];
+    }
+    const size_t stride = attribute.stride_bytes();
+    if (index >= attribute.vertex_count() || stride < available_components*sizeof(float)
+    || index*stride + available_components*sizeof(float) > attribute.data.size()) {
+        return false;
+    }
+    std::memcpy(output, attribute.data.data() + index*stride, expected_components*sizeof(float));
+    return true;
+}
+
+void TransformUSDDirection(
+    const tinyusdz::value::matrix4d& matrix,
+    const float source[3],
+    float output[3]
+) {
+    output[0] = static_cast<float>(source[0]*matrix.m[0][0] + source[1]*matrix.m[1][0] + source[2]*matrix.m[2][0]);
+    output[1] = static_cast<float>(source[0]*matrix.m[0][1] + source[1]*matrix.m[1][1] + source[2]*matrix.m[2][1]);
+    output[2] = static_cast<float>(source[0]*matrix.m[0][2] + source[1]*matrix.m[1][2] + source[2]*matrix.m[2][2]);
+    Normalize3(output);
+}
+
+bool CopyUSDTexture(
+    const tinyusdz::tydra::RenderScene& scene,
+    int32_t texture_id,
+    PreviewTexture* output,
+    uint32_t* material_flags
+) {
+    if (texture_id < 0 || static_cast<size_t>(texture_id) >= scene.textures.size()) return false;
+    const tinyusdz::tydra::UVTexture& texture = scene.textures[static_cast<size_t>(texture_id)];
+    if (texture.texture_image_id < 0 || static_cast<size_t>(texture.texture_image_id) >= scene.images.size()) return false;
+    const tinyusdz::tydra::TextureImage& image = scene.images[static_cast<size_t>(texture.texture_image_id)];
+    if (image.buffer_id < 0 || static_cast<size_t>(image.buffer_id) >= scene.buffers.size()) return false;
+    const tinyusdz::tydra::BufferData& buffer = scene.buffers[static_cast<size_t>(image.buffer_id)];
+
+    bool copied = false;
+    if (image.decoded && image.texelComponentType == tinyusdz::tydra::ComponentType::UInt8
+    && image.width > 0 && image.height > 0 && image.channels > 0 && image.channels <= 4
+    && FBXTextureDimensionsAreSafe(image.width, image.height)) {
+        const size_t pixel_count = static_cast<size_t>(image.width) * static_cast<size_t>(image.height);
+        if (buffer.data.size() >= pixel_count * static_cast<size_t>(image.channels)) {
+            output->pixels.resize(pixel_count * 4);
+            for (size_t pixel = 0; pixel < pixel_count; ++pixel) {
+                const uint8_t* source = buffer.data.data() + pixel * image.channels;
+                uint8_t* destination = output->pixels.data() + pixel * 4;
+                destination[0] = source[0];
+                destination[1] = image.channels > 1 ? source[1] : source[0];
+                destination[2] = image.channels > 2 ? source[2] : source[0];
+                destination[3] = image.channels > 3 ? source[3] : 255;
+            }
+            output->width = static_cast<uint32_t>(image.width);
+            output->height = static_cast<uint32_t>(image.height);
+            copied = true;
+        }
+    } else if (!image.decoded) {
+        copied = DecodeTextureMemory(buffer.data.data(), buffer.data.size(), output);
+    }
+    if (copied) {
+        using Wrap = tinyusdz::tydra::UVTexture::WrapMode;
+        if (texture.wrapS == Wrap::REPEAT || texture.wrapS == Wrap::MIRROR) {
+            *material_flags |= VAI_SCENE_MATERIAL_WRAP_U_REPEAT;
+        }
+        if (texture.wrapT == Wrap::REPEAT || texture.wrapT == Wrap::MIRROR) {
+            *material_flags |= VAI_SCENE_MATERIAL_WRAP_V_REPEAT;
+        }
+    }
+    return copied;
+}
+
+void TransformUSDUV(const tinyusdz::tydra::UVTexture* texture, float uv[2]) {
+    if (!texture || !texture->has_transform2d) return;
+    const float scaled_u = uv[0] * texture->tx_scale[0];
+    const float scaled_v = uv[1] * texture->tx_scale[1];
+    const float cosine = std::cos(texture->tx_rotation);
+    const float sine = std::sin(texture->tx_rotation);
+    uv[0] = texture->tx_translation[0] + cosine*scaled_u - sine*scaled_v;
+    uv[1] = texture->tx_translation[1] + sine*scaled_u + cosine*scaled_v;
+}
+
+std::vector<uint32_t> BuildUSDMaterials(PreviewBuild& build, const tinyusdz::tydra::RenderScene& scene) {
+    std::vector<uint32_t> material_indices(scene.materials.size(), 0);
+    for (size_t index = 0; index < scene.materials.size(); ++index) {
+        const tinyusdz::tydra::RenderMaterial& source = scene.materials[index];
+        PreviewMaterial material;
+        if (CopyUSDTexture(scene, source.surfaceShader.diffuseColor.texture_id, &material.base_color_texture, &material.flags)) {
+            material.flags |= VAI_SCENE_MATERIAL_BASE_COLOR_TEXTURE;
+        }
+        if (CopyUSDTexture(scene, source.surfaceShader.normal.texture_id, &material.normal_texture, &material.flags)) {
+            material.flags |= VAI_SCENE_MATERIAL_NORMAL_TEXTURE;
+        }
+        material_indices[index] = build.AddMaterial(std::move(material));
+    }
+    return material_indices;
+}
+
+void AppendUSDNode(
+    const tinyusdz::tydra::Node& node,
+    const tinyusdz::tydra::RenderScene& scene,
+    const std::vector<uint32_t>& material_indices,
+    PreviewBuild& build,
+    bool* exceeded_limit
+) {
     if (node.nodeType == tinyusdz::tydra::NodeType::Mesh && node.id >= 0 && static_cast<size_t>(node.id) < scene.meshes.size()) {
         const tinyusdz::tydra::RenderMesh& mesh = scene.meshes[static_cast<size_t>(node.id)];
         float color[4] = { mesh.displayColor[0], mesh.displayColor[1], mesh.displayColor[2], mesh.displayOpacity };
+        uint32_t build_material_index = 0;
+        const tinyusdz::tydra::UVTexture* uv_texture = nullptr;
         if (mesh.material_id >= 0 && static_cast<size_t>(mesh.material_id) < scene.materials.size()) {
             const auto& material = scene.materials[static_cast<size_t>(mesh.material_id)];
             color[0] = material.surfaceShader.diffuseColor.value[0];
             color[1] = material.surfaceShader.diffuseColor.value[1];
             color[2] = material.surfaceShader.diffuseColor.value[2];
             color[3] *= material.surfaceShader.opacity.value;
+            build_material_index = material_indices[static_cast<size_t>(mesh.material_id)];
+            int32_t uv_texture_id = material.surfaceShader.diffuseColor.texture_id;
+            if (uv_texture_id < 0) uv_texture_id = material.surfaceShader.normal.texture_id;
+            if (uv_texture_id >= 0 && static_cast<size_t>(uv_texture_id) < scene.textures.size()) {
+                uv_texture = &scene.textures[static_cast<size_t>(uv_texture_id)];
+            }
         }
         const std::vector<uint32_t>& indices = mesh.faceVertexIndices();
         const std::vector<uint32_t>& face_counts = mesh.faceVertexCounts();
+        const tinyusdz::tydra::VertexAttribute* texcoords = nullptr;
+        const auto texcoords_iterator = mesh.texcoords.find(0);
+        if (texcoords_iterator != mesh.texcoords.end()) texcoords = &texcoords_iterator->second;
         size_t face_offset = 0;
         for (uint32_t face_count : face_counts) {
             if (face_offset + face_count > indices.size()) break;
             for (uint32_t triangle_index = 1; triangle_index + 1 < face_count; ++triangle_index) {
                 const uint32_t corners[3] = { indices[face_offset], indices[face_offset + triangle_index], indices[face_offset + triangle_index + 1] };
-                for (uint32_t corner : corners) {
+                const size_t face_vertices[3] = { face_offset, face_offset + triangle_index, face_offset + triangle_index + 1 };
+                for (size_t corner_index = 0; corner_index < 3; ++corner_index) {
+                    const uint32_t corner = corners[corner_index];
                     if (corner >= mesh.points.size()) continue;
                     const auto& position = mesh.points[corner];
                     // TinyUSDZ matrices are row-major and USD multiplies points on the left.
                     const auto& matrix = node.global_matrix;
-                    const float x = static_cast<float>(position[0] * matrix.m[0][0] + position[1] * matrix.m[1][0] + position[2] * matrix.m[2][0] + matrix.m[3][0]);
-                    const float y = static_cast<float>(position[0] * matrix.m[0][1] + position[1] * matrix.m[1][1] + position[2] * matrix.m[2][1] + matrix.m[3][1]);
-                    const float z = static_cast<float>(position[0] * matrix.m[0][2] + position[1] * matrix.m[1][2] + position[2] * matrix.m[2][2] + matrix.m[3][2]);
-                    if (!build.Append(x, y, z, color)) {
+                    const float output_position[3] = {
+                        static_cast<float>(position[0] * matrix.m[0][0] + position[1] * matrix.m[1][0] + position[2] * matrix.m[2][0] + matrix.m[3][0]),
+                        static_cast<float>(position[0] * matrix.m[0][1] + position[1] * matrix.m[1][1] + position[2] * matrix.m[2][1] + matrix.m[3][1]),
+                        static_cast<float>(position[0] * matrix.m[0][2] + position[1] * matrix.m[1][2] + position[2] * matrix.m[2][2] + matrix.m[3][2]),
+                    };
+                    float normal[3] = {};
+                    float source_direction[3] = {};
+                    if (ReadUSDAttribute(mesh.normals, corner, face_vertices[corner_index], 3, source_direction)) {
+                        TransformUSDDirection(matrix, source_direction, normal);
+                    }
+                    float tangent[4] = {};
+                    if (ReadUSDAttribute(mesh.tangents, corner, face_vertices[corner_index], 3, source_direction)) {
+                        TransformUSDDirection(matrix, source_direction, tangent);
+                    }
+                    float bitangent[3] = {};
+                    if (ReadUSDAttribute(mesh.binormals, corner, face_vertices[corner_index], 3, source_direction)) {
+                        TransformUSDDirection(matrix, source_direction, bitangent);
+                        float cross[3];
+                        Cross3(normal, tangent, cross);
+                        tangent[3] = Dot3(cross, bitangent) < 0.0f ? -1.0f : 1.0f;
+                    }
+                    float uv[2] = {};
+                    if (texcoords) {
+                        ReadUSDAttribute(*texcoords, corner, face_vertices[corner_index], 2, uv);
+                        TransformUSDUV(uv_texture, uv);
+                    }
+                    float vertex_color[4] = { color[0], color[1], color[2], color[3] };
+                    float sampled_color[3] = {};
+                    if (ReadUSDAttribute(mesh.vertex_colors, corner, face_vertices[corner_index], 3, sampled_color)) {
+                        vertex_color[0] *= sampled_color[0];
+                        vertex_color[1] *= sampled_color[1];
+                        vertex_color[2] *= sampled_color[2];
+                    }
+                    if (!build.AppendLit(output_position, normal, tangent, vertex_color, vertex_color, uv, build_material_index)) {
                         *exceeded_limit = true;
                         return;
                     }
@@ -263,7 +1190,7 @@ void AppendUSDNode(const tinyusdz::tydra::Node& node, const tinyusdz::tydra::Ren
     }
     for (const auto& child : node.children) {
         if (*exceeded_limit) return;
-        AppendUSDNode(child, scene, build, exceeded_limit);
+        AppendUSDNode(child, scene, material_indices, build, exceeded_limit);
     }
 }
 
@@ -285,15 +1212,20 @@ bool LoadUSD(const char* path, PreviewBuild& build, char* error, uint32_t error_
     tinyusdz::tydra::RenderSceneConverter converter;
     tinyusdz::tydra::RenderSceneConverterEnv environment(stage);
     environment.mesh_config.triangulate = true;
-    environment.scene_config.load_texture_assets = false;
+    environment.scene_config.load_texture_assets = true;
+    environment.material_config.preserve_texel_bitdepth = true;
+    environment.material_config.linearize_color_space = false;
+    environment.usd_filename = path;
+    environment.set_search_paths({ DirectoryOf(path) });
     if (!converter.ConvertToRenderScene(environment, &render_scene)) {
         SetError(error, error_capacity, converter.GetError());
         return false;
     }
 
     bool exceeded_limit = false;
+    const std::vector<uint32_t> material_indices = BuildUSDMaterials(build, render_scene);
     for (const auto& node : render_scene.nodes) {
-        AppendUSDNode(node, render_scene, build, &exceeded_limit);
+        AppendUSDNode(node, render_scene, material_indices, build, &exceeded_limit);
         if (exceeded_limit) {
             SetError(error, error_capacity, "The USD preview exceeds Vai's geometry safety limit.");
             return false;
@@ -633,6 +1565,21 @@ int VAI_SCENE_PREVIEW_CALL CanPreview(const char* utf8_path) {
     return IsBuiltinExtension(ExtensionOf(utf8_path)) ? 1 : 0;
 }
 
+bool BuildScene(const char* utf8_path, PreviewBuild& build, char* error, uint32_t error_capacity) {
+    const std::string extension = ExtensionOf(utf8_path);
+    if (extension == "gltf" || extension == "glb") {
+        return LoadGLTF(utf8_path, build, error, error_capacity);
+    }
+    if (extension == "fbx" || extension == "obj") {
+        return LoadFBX(utf8_path, build, error, error_capacity);
+    }
+    if (extension == "usd" || extension == "usda" || extension == "usdc" || extension == "usdz") {
+        return LoadUSD(utf8_path, build, error, error_capacity);
+    }
+    SetError(error, error_capacity, "This provider does not support the selected file type.");
+    return false;
+}
+
 int VAI_SCENE_PREVIEW_CALL LoadScene(const char* utf8_path, VaiScenePreviewMesh* out_mesh, char* error, uint32_t error_capacity) {
     if (!utf8_path || !out_mesh) {
         SetError(error, error_capacity, "The scene preview provider received invalid arguments.");
@@ -640,19 +1587,19 @@ int VAI_SCENE_PREVIEW_CALL LoadScene(const char* utf8_path, VaiScenePreviewMesh*
     }
     *out_mesh = {};
     PreviewBuild build;
-    const std::string extension = ExtensionOf(utf8_path);
-    bool loaded = false;
-    if (extension == "gltf" || extension == "glb") {
-        loaded = LoadGLTF(utf8_path, build, error, error_capacity);
-    } else if (extension == "fbx" || extension == "obj") {
-        loaded = LoadFBX(utf8_path, build, error, error_capacity);
-    } else if (extension == "usd" || extension == "usda" || extension == "usdc" || extension == "usdz") {
-        loaded = LoadUSD(utf8_path, build, error, error_capacity);
-    } else {
-        SetError(error, error_capacity, "This provider does not support the selected file type.");
+    return BuildScene(utf8_path, build, error, error_capacity)
+        && build.Finalize(out_mesh, error, error_capacity) ? 1 : 0;
+}
+
+int VAI_SCENE_PREVIEW_CALL LoadLitScene(const char* utf8_path, VaiLitScenePreviewMesh* out_mesh, char* error, uint32_t error_capacity) {
+    if (!utf8_path || !out_mesh) {
+        SetError(error, error_capacity, "The lit scene preview provider received invalid arguments.");
         return 0;
     }
-    return loaded && build.Finalize(out_mesh, error, error_capacity) ? 1 : 0;
+    *out_mesh = {};
+    PreviewBuild build;
+    return BuildScene(utf8_path, build, error, error_capacity)
+        && build.FinalizeLit(out_mesh, error, error_capacity) ? 1 : 0;
 }
 
 int VAI_SCENE_PREVIEW_CALL LoadImage(const char* utf8_path, VaiImagePreview* out_image, char* error, uint32_t error_capacity) {
@@ -677,6 +1624,20 @@ void VAI_SCENE_PREVIEW_CALL ReleaseScene(VaiScenePreviewMesh* mesh) {
     *mesh = {};
 }
 
+void VAI_SCENE_PREVIEW_CALL ReleaseLitScene(VaiLitScenePreviewMesh* mesh) {
+    if (!mesh) return;
+    if (mesh->materials) {
+        for (uint32_t index = 0; index < mesh->material_count; ++index) {
+            std::free(const_cast<uint8_t*>(mesh->materials[index].base_color_texture.pixels));
+            std::free(const_cast<uint8_t*>(mesh->materials[index].normal_texture.pixels));
+        }
+    }
+    std::free(const_cast<VaiLitScenePreviewVertex*>(mesh->vertices));
+    std::free(const_cast<VaiLitScenePreviewMaterial*>(mesh->materials));
+    std::free(const_cast<VaiLitScenePreviewDrawRange*>(mesh->draw_ranges));
+    *mesh = {};
+}
+
 void VAI_SCENE_PREVIEW_CALL ReleaseImage(VaiImagePreview* image) {
     if (!image) return;
     std::free(const_cast<uint8_t*>(image->pixels));
@@ -693,6 +1654,10 @@ const VaiScenePreviewProvider kProvider = {
     ReleaseScene,
     LoadImage,
     ReleaseImage,
+    "gltf;glb;fbx;obj;usd;usda;usdc;usdz",
+    "dds;exr;tif;tiff;dng",
+    LoadLitScene,
+    ReleaseLitScene,
 };
 
 } // namespace

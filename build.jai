@@ -4,7 +4,7 @@
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // [heavy optimization=false] or [not + debug info=true]
-debug_build := true; 
+debug_build := false; 
 // packaging stuff into release folder
 make_release := false;
 // auto-places profiler hooks throughout program; profiling data is printed after a run
@@ -17,6 +17,9 @@ do_profiling := false;
 
     make_directory_if_it_does_not_exist("bin");
     if !Build_Native_Preview_Provider() {
+        return;
+    }
+    if !Build_Native_Language_Libs() {
         return;
     }
 
@@ -119,6 +122,56 @@ Build_Native_Preview_Provider :: () -> bool {
     if !copy_file(".build/native_preview/output/Release/vai_builtin_scene_preview.dll", "bin/vai_builtin_scene_preview.dll") {
         compiler_report("Failed to copy the native scene preview provider into bin. Close any running Vai instance and try again.\n");
         return false;
+    }
+    return true;
+}
+
+Build_Native_Language_Libs :: () -> bool {
+    #if OS != .WINDOWS {
+        return true;
+    }
+
+    // The tree-sitter runtime and per-language grammar parsers are C and are
+    // statically linked into the editor.  src/tree_sitter.jai references them
+    // from <project>/libs, so the built archives are copied there.
+    config_result, _, _ := run_command(
+        "cmake",
+        "-S", "native_language",
+        "-B", ".build/native_language",
+        "-G", "Visual Studio 16 2019",
+        "-A", "x64",
+        capture_and_return_output=true,
+        print_captured_output=true,
+    );
+    if config_result.exit_code != 0 {
+        compiler_report("Failed to configure the native language libraries.\n");
+        return false;
+    }
+
+    build_result, _, _ := run_command(
+        "cmake",
+        "--build", ".build/native_language",
+        "--config", "Release",
+        "--target", "tree-sitter",
+        "--target", "jai-grammar",
+        "--", "/m:8",
+        capture_and_return_output=true,
+        print_captured_output=true,
+    );
+    if build_result.exit_code != 0 {
+        compiler_report("Failed to build the native language libraries.\n");
+        return false;
+    }
+
+    make_directory_if_it_does_not_exist("libs");
+    libs :: string.["tree-sitter", "jai-grammar"];
+    for libs {
+        source := tprint(".build/native_language/output/Release/%.lib", it);
+        dest   := tprint("libs/%.lib", it);
+        if !copy_file(source, dest) {
+            compiler_report(tprint("Failed to copy % into libs. Close any running Vai instance and try again.\n", it));
+            return false;
+        }
     }
     return true;
 }
