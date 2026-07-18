@@ -22,3 +22,6 @@ You need Windows, the .jai compiler, CMake, and the Visual Studio 2019 C++ Build
 jai build.jai
 .\bin\vai.exe
 ```
+## Demo
+
+[A video demo on youtube](https://www.youtube.com/watch?v=BTOMlV10F6k)
