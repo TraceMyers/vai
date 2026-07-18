@@ -503,17 +503,13 @@ Scene_Preview_Upload_Texture :: (texture: *FileExplorerSceneTexture, repeat_u: b
     texture.pixels = .{};
 }
 
+// Runs on the main thread during result install, with the main GL context already
+// current.  Uploading here (instead of on the worker's own context sharing the
+// window's single CS_OWNDC HDC) avoids concurrent wglMakeCurrent crashes.
 Scene_Preview_Upload_Result_To_GPU :: (result: *LoadFileExplorerScenePreviewResult) -> bool {
-    if result.vertices.count < 3 || preview_upload_gl_context == null {
+    if result.vertices.count < 3 {
         return false;
     }
-    previous_context := wglGetCurrentContext();
-    previous_device_context := wglGetCurrentDC();
-    if !wglMakeCurrent(device_context, preview_upload_gl_context) {
-        return false;
-    }
-    defer wglMakeCurrent(previous_device_context, previous_context);
-
     glGenBuffers(1, *result.vertex_buffer);
     if result.vertex_buffer == 0 {
         return false;
@@ -537,9 +533,9 @@ Scene_Preview_Upload_Result_To_GPU :: (result: *LoadFileExplorerScenePreviewResu
             Scene_Preview_Upload_Texture(*material.normal_texture, repeat_u, repeat_v);
         }
     }
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    // Publish only fully resident shared objects to the main context.
-    glFinish();
+    // Uploading here changed the GL_ARRAY_BUFFER binding; restore the invariant
+    // the 2D batch pipeline relies on before returning to the renderer.
+    Restore_Batch_Vertex_Buffer();
     return true;
 }
 

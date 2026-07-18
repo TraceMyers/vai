@@ -305,6 +305,13 @@ Render_Scene_Triangle_List :: (
         glUniform1f(scene_shader.normal_scale_loc, material.normal_scale);
         glDrawArrays(GL_TRIANGLES, xx range.first_vertex, xx range.vertex_count);
     }
+    // The 2D batch pipeline (Set_Vertex_Format) only manages attribs 0-2, so the
+    // scene-only attribs (3 = color, 4 = uv here) must be disabled or a following
+    // 2D draw fetches them out of bounds and crashes the driver.
+    glDisableVertexAttribArray(1);
+    glDisableVertexAttribArray(2);
+    glDisableVertexAttribArray(3);
+    glDisableVertexAttribArray(4);
     glActiveTexture(GL_TEXTURE0);
     glBindBuffer(GL_ARRAY_BUFFER, vb);
     DumpGLErrors("scene preview draw");
@@ -357,6 +364,14 @@ Render_Quad :: inline (ul: Vector2, lr: Vector2, color := fRGBA_WHITE, uv1 := Ve
     Inline_Buffer_Append(*vertices, .{Vector3.{xy=ul, z=depth}, xx,force color, uv1});
     Inline_Buffer_Append(*vertices, .{Vector3.{xy=lr, z=depth}, xx,force color, uv2});
     Inline_Buffer_Append(*vertices, .{Vector3.{xy=.{lr.x, ul.y}, z=depth}, xx,force color, .{uv2.x, uv1.y}});
+}
+
+// The batched 2D pipeline (Flush_Draws) assumes its vertex buffer stays bound to
+// GL_ARRAY_BUFFER.  Code that binds a different buffer (e.g. scene/image preview
+// GPU uploads) must call this afterward to restore that invariant.
+Restore_Batch_Vertex_Buffer :: () {
+    glActiveTexture(GL_TEXTURE0);
+    glBindBuffer(GL_ARRAY_BUFFER, vb);
 }
 
 Flush_Draws :: () {

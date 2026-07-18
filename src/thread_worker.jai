@@ -72,7 +72,6 @@ Load_File_Explorer_Image_Preview :: (task: *AsyncTask) {
     decoded_pixels := stbi_load(temp_c_string(file_path), *width, *height, *source_channels, 4);
     if decoded_pixels == null {
         Image_Preview_Load_File(file_path, *task.result.load_file_explorer_image_preview);
-        Prepare_File_Explorer_Image_Preview_GPU_Result(task);
         return;
     }
     defer stbi_image_free(decoded_pixels);
@@ -93,40 +92,14 @@ Load_File_Explorer_Image_Preview :: (task: *AsyncTask) {
     result.width = width;
     result.height = height;
     result.success = true;
-    Prepare_File_Explorer_Image_Preview_GPU_Result(task);
-}
-
-Prepare_File_Explorer_Image_Preview_GPU_Result :: (task: *AsyncTask) {
-    result := *task.result.load_file_explorer_image_preview;
-    if !result.success {
-        return;
-    }
-    generation := task.request.load_file_explorer_image_preview.generation;
-    if generation != 0 && atomic_read(*file_explorer_preview_generation) != generation {
-        return;
-    }
-    if !File_Explorer_Image_Preview_Upload_Result_To_GPU(result) {
-        result.success = false;
-    }
+    // GPU upload happens on the main thread during result install (see
+    // Process_Async_Results); the worker only produces CPU pixels.
 }
 
 Load_File_Explorer_Scene_Preview :: (task: *AsyncTask) {
+    // Parse into CPU geometry only.  The GPU upload happens on the main thread
+    // during result install so it never shares the window HDC with the renderer.
     Scene_Preview_Load_File(task.request.load_file_explorer_scene_preview.file_path, *task.result.load_file_explorer_scene_preview);
-    result := *task.result.load_file_explorer_scene_preview;
-    if !result.success {
-        return;
-    }
-
-    generation := task.request.load_file_explorer_scene_preview.generation;
-    if generation != 0 && atomic_read(*file_explorer_preview_generation) != generation {
-        return;
-    }
-    if !Scene_Preview_Upload_Result_To_GPU(result) {
-        Scene_Preview_Free_Result_Geometry(result);
-        String_Reset(*result.error_message);
-        result.error_message = copy_string("The scene could not be prepared for preview.");
-        result.success = false;
-    }
 }
 
 SearchTextRequest :: struct {
@@ -276,15 +249,19 @@ Process_Async_Results :: () -> ui_changed: bool {
             current := request.generation == 0 || File_Explorer_Preview_Request_Is_Current(.IMAGE, request.file_path, request.generation);
             if current {
                 File_Explorer_Image_Preview_Clear();
-                if task.result.load_file_explorer_image_preview.success {
+                r := *task.result.load_file_explorer_image_preview;
+                if r.success && !File_Explorer_Image_Preview_Upload_Result_To_GPU(r) {
+                    r.success = false;
+                }
+                if r.success {
                     file_explorer_image_preview.file_path = request.file_path;
-                    file_explorer_image_preview.width = task.result.load_file_explorer_image_preview.width;
-                    file_explorer_image_preview.height = task.result.load_file_explorer_image_preview.height;
-                    file_explorer_image_preview.pixels = task.result.load_file_explorer_image_preview.pixels;
-                    file_explorer_image_preview.texture = task.result.load_file_explorer_image_preview.texture;
+                    file_explorer_image_preview.width = r.width;
+                    file_explorer_image_preview.height = r.height;
+                    file_explorer_image_preview.pixels = r.pixels;
+                    file_explorer_image_preview.texture = r.texture;
                     task.request.load_file_explorer_image_preview.file_path = .{};
-                    task.result.load_file_explorer_image_preview.pixels = .{};
-                    task.result.load_file_explorer_image_preview.texture = 0;
+                    r.pixels = .{};
+                    r.texture = 0;
                     file_explorer_preview_state = .READY;
                 } else {
                     file_explorer_preview_state = .UNAVAILABLE;
@@ -297,21 +274,28 @@ Process_Async_Results :: () -> ui_changed: bool {
             current := request.generation == 0 || File_Explorer_Preview_Request_Is_Current(.SCENE, request.file_path, request.generation);
             if current {
                 File_Explorer_Scene_Preview_Clear();
+                r := *task.result.load_file_explorer_scene_preview;
+                if r.success && !Scene_Preview_Upload_Result_To_GPU(r) {
+                    Scene_Preview_Free_Result_Geometry(r);
+                    String_Reset(*r.error_message);
+                    r.error_message = copy_string("The scene could not be prepared for preview.");
+                    r.success = false;
+                }
                 file_explorer_scene_preview.file_path = request.file_path;
-                file_explorer_scene_preview.vertices = task.result.load_file_explorer_scene_preview.vertices;
-                file_explorer_scene_preview.vertex_buffer = task.result.load_file_explorer_scene_preview.vertex_buffer;
-                file_explorer_scene_preview.materials = task.result.load_file_explorer_scene_preview.materials;
-                file_explorer_scene_preview.draw_ranges = task.result.load_file_explorer_scene_preview.draw_ranges;
-                file_explorer_scene_preview.bounds_min = task.result.load_file_explorer_scene_preview.bounds_min;
-                file_explorer_scene_preview.bounds_max = task.result.load_file_explorer_scene_preview.bounds_max;
-                file_explorer_scene_preview.error_message = task.result.load_file_explorer_scene_preview.error_message;
+                file_explorer_scene_preview.vertices = r.vertices;
+                file_explorer_scene_preview.vertex_buffer = r.vertex_buffer;
+                file_explorer_scene_preview.materials = r.materials;
+                file_explorer_scene_preview.draw_ranges = r.draw_ranges;
+                file_explorer_scene_preview.bounds_min = r.bounds_min;
+                file_explorer_scene_preview.bounds_max = r.bounds_max;
+                file_explorer_scene_preview.error_message = r.error_message;
                 task.request.load_file_explorer_scene_preview.file_path = .{};
-                task.result.load_file_explorer_scene_preview.vertices = .{};
-                task.result.load_file_explorer_scene_preview.vertex_buffer = 0;
-                task.result.load_file_explorer_scene_preview.materials = .{};
-                task.result.load_file_explorer_scene_preview.draw_ranges = .{};
-                task.result.load_file_explorer_scene_preview.error_message = .{};
-                file_explorer_preview_state = ifx task.result.load_file_explorer_scene_preview.success then .READY else .UNAVAILABLE;
+                r.vertices = .{};
+                r.vertex_buffer = 0;
+                r.materials = .{};
+                r.draw_ranges = .{};
+                r.error_message = .{};
+                file_explorer_preview_state = ifx r.success then .READY else .UNAVAILABLE;
             }
         }
         Discard_Async_Task(task);

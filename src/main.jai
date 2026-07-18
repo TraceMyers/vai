@@ -64,6 +64,10 @@ Vai_Main :: () {
         Run_Highlight_Smoke_Test_Main();
         return;
     }
+    if Has_Command_Line_Argument("--scene-preview-stress") {
+        Run_Scene_Preview_Concurrency_Stress();
+        return;
+    }
 
     if !Scoped_Construct(Text_Buffers)          then return;
     if !Scoped_Construct(Runtime_Settings)      then return;
@@ -186,6 +190,93 @@ Run_Scene_Preview_Smoke_Test_Main :: () {
     array_free(arguments);
     defer String_Reset(*scene_path);
     assert(Run_Production_Scene_Preview_Smoke_Test(scene_path));
+}
+
+// Stress test for scene-preview stability under real-world timing: unlike the
+// single-shot smoke test, this renders on the main thread every frame WHILE the
+// worker loads the next asset, cycling through the .SCENE files in a directory
+// like fast file-explorer scrolling.  It reproduces the class of intermittent
+// crashes fixed by moving GPU upload onto the main thread and by resetting the
+// scene vertex-attrib state after each 3D draw.  Usage:
+//   vai.exe --scene-preview-stress <dir>
+Run_Scene_Preview_Concurrency_Stress :: () {
+    if !Scoped_Construct(Runtime_Settings) then return;
+    window.info = *settings_file_data.window_info;
+    window.width  = 256;
+    window.height = 256;
+    window.x = -1;
+    window.y = -1;
+    if !Create_Window("Vai") then return;
+    if !Scoped_Construct(Graphics_Backend) then return;
+    if !Scoped_Construct(Options) then return;      // FONT_SIZE for Render_Text
+    if !Scoped_Construct(Render_Text) then return;  // font, for error-message previews
+    if !Scoped_Construct(Thread_Worker) then return;
+
+    provider_path := tprint("%/vai_builtin_scene_preview.dll", exe_path);
+    if !Scene_Preview_Register_Provider(provider_path, required=true) {
+        print("STRESS: could not load provider\n");
+        return;
+    }
+    defer {
+        for *scene_preview_providers  String_Reset(*it.file_path);
+        array_reset(*scene_preview_providers);
+        File_Explorer_Scene_Preview_Clear();
+    }
+
+    dir: string;
+    iterations := 400;
+    args := get_command_line_arguments();
+    for args {
+        if it == "--scene-preview-stress" && it_index+1 < args.count {
+            dir = copy_string(args[it_index+1]);
+            break;
+        }
+    }
+    array_free(args);
+    defer String_Reset(*dir);
+
+    files: [..]string;
+    defer { for files  free(it.data); array_reset(*files); }
+    list_ok, listing := Directory_List(dir);
+    if list_ok for listing {
+        if it.is_directory || it.is_symlink then continue;
+        _, _, ext := split_from_right(it.name, #char ".");
+        if File_Explorer_Preview_Kind_For_Extension(To_Lower_Temp(ext)) != .SCENE then continue;
+        array_add(*files, copy_string(tprint("%/%", dir, it.name)));
+    }
+    if files.count == 0 {
+        print("STRESS: no scene files in [%]\n", dir);
+        return;
+    }
+    print("STRESS: % scene files, % iterations\n", files.count, iterations);
+
+    preview_ul := IntVector2.{8, 8};
+    preview_lr := IntVector2.{200, 200};
+    background_rgb := fRGB.{0.05, 0.07, 0.09};
+
+    Draw_One_Frame :: () #expand {
+        Begin_Draw_Frame(true);
+        Set_Shader_For_Blended_Color();
+        Render_Quad(.{0, 0}, .{window.width, window.height}, .{rgb=`background_rgb, a=1.0});
+        Set_Scissor(`preview_ul, `preview_lr);
+        Render_File_Explorer_Scene_Preview(`preview_ul, `preview_lr);
+        Flush_Draws();
+        glFinish();
+        Process_Async_Results();
+        reset_temporary_storage();
+    }
+
+    for iter: 0..iterations-1 {
+        // Select the next file and keep rendering until its load resolves, so the
+        // worker's load/upload overlaps main-thread rendering (the crash window).
+        File_Explorer_Select_Preview(.SCENE, files[iter % files.count]);
+        for frame: 0..20_000_000 {
+            Draw_One_Frame();
+            if file_explorer_preview_state == .READY || file_explorer_preview_state == .UNAVAILABLE  break;
+        }
+        if iter % 50 == 0  print("STRESS: iter %\n", iter);
+    }
+    print("STRESS: DONE (no crash)\n");
 }
 
 // Headless verification of the tree-sitter highlighting integration: load Jai

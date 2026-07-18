@@ -273,17 +273,13 @@ File_Explorer_Image_Preview_Is_For_File :: (file_path: string) -> bool {
     return file_explorer_image_preview.file_path == file_path;
 }
 
+// Runs on the main thread during result install, with the main GL context already
+// current.  Uploading here (instead of on the worker's own context sharing the
+// window's single CS_OWNDC HDC) avoids concurrent wglMakeCurrent crashes.
 File_Explorer_Image_Preview_Upload_Result_To_GPU :: (result: *LoadFileExplorerImagePreviewResult) -> bool {
-    if result.pixels.count == 0 || result.width <= 0 || result.height <= 0 || preview_upload_gl_context == null {
+    if result.pixels.count == 0 || result.width <= 0 || result.height <= 0 {
         return false;
     }
-    previous_context := wglGetCurrentContext();
-    previous_device_context := wglGetCurrentDC();
-    if !wglMakeCurrent(device_context, preview_upload_gl_context) {
-        return false;
-    }
-    defer wglMakeCurrent(previous_device_context, previous_context);
-
     glGenTextures(1, *result.texture);
     if result.texture == 0 {
         return false;
@@ -301,9 +297,9 @@ File_Explorer_Image_Preview_Upload_Result_To_GPU :: (result: *LoadFileExplorerIm
         xx result.width, xx result.height, 0,
         GL_RGBA, GL_UNSIGNED_BYTE, result.pixels.data,
     );
-    glFinish();
     free(result.pixels.data);
     result.pixels = .{};
+    Restore_Batch_Vertex_Buffer();
     return true;
 }
 
@@ -367,11 +363,18 @@ Run_Production_Image_Preview_Smoke_Test :: () -> bool {
         load_file_explorer_image_preview=.{file_path="screenshot.png"},
     };
     Init_Task_Result(*source_task);
+    // The worker now produces CPU pixels only; the GPU upload happens on the main
+    // thread during result install.  Exercise both stages here.
     Load_File_Explorer_Image_Preview(*source_task);
     source_result := *source_task.result.load_file_explorer_image_preview;
     if !source_result.success || source_result.width <= 0 || source_result.height <= 0
-    || source_result.texture == 0 || source_result.pixels.count != 0 {
+    || source_result.pixels.count == 0 {
         Log_Error("image preview smoke test could not load screenshot.png");
+        if source_result.pixels.data != null free(source_result.pixels.data);
+        return false;
+    }
+    if !File_Explorer_Image_Preview_Upload_Result_To_GPU(source_result) || source_result.texture == 0 || source_result.pixels.count != 0 {
+        Log_Error("image preview smoke test could not upload screenshot.png");
         if source_result.pixels.data != null free(source_result.pixels.data);
         if source_result.texture != 0 then glDeleteTextures(1, *source_result.texture);
         return false;
