@@ -2,6 +2,7 @@
 bin/
 libs/
 release/
+tmp/
 release.zip
 vai-release.zip
 src/.vs/

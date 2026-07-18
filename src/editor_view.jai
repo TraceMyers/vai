@@ -631,7 +631,7 @@ Render_Custom_Title_Bar :: (render_pass: ViewRenderPass) {
         controls_left := max(window.width - button_width*3, 0);
         available_path_width := max(controls_left - path_x - 8, 0);
         available_path_characters := ifx Width(font) > 0 then available_path_width / Width(font) else 0;
-        path := "title-bar-path-probe";
+        path := Custom_Title_Bar_Elide_From_Left(Custom_Title_Bar_Display_Text(), available_path_characters);
         line_height: s32 = xx (get_baseline_height(font) * 4);
         text_y := max((title_bar_height + line_height) / 2, line_height);
 

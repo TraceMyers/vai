@@ -1,16 +1,24 @@
-# Vai
+# vai
 
-![Alt text](screenshot.png "screenshot")
+![vai](screenshot.png)
 
-A gui vim replacement written in Jai, with these goals: 
+vai is a modal GUI code editor written in jai (similar to C++), based heavily on vi/vim/neovim. The #1 goal of the project is to provide an always-responsive text editor without hitching or hangs. Tied for #2 are: smooth scrolling, a file system navigator that uses vim motions, 3D and 2D asset previews, and split-based view layout configuration with collapsing views.
 
-<ul>
-    <li>never interrupt the text editing experience with laggy complex features</li>
-    <li>some programming language integration</li>
-    <li>removing common tool window friction</li>
-    <li>cross platform</li>
-</ul>
+vai is under development. Currently only Windows (+OpenGL) is supported.
 
-Vai currently does function as a text editor, but it is missing important features that make it worth using. Once I'm finished with making it a basic vim replacement, I'll start working on some nice features. Note that I'm writing this thing for myself, but hopefully there are other people out there who find it useful.
+## Highlights
 
-Currently this is explicitly win32/opengl-based, so Windows-only for now, and the cross platform part will come later.
+- vi-style normal, insert, visual, command, and view-resize modes
+- Multiple views with both keyboard and mouse double-click and drag-based resizing, collapsible tabs, and layouts that persist per-project
+- File and project explorers with asynchronous text, image, and lit 3D model previews, extensible with DLLs
+- Buffer navigation, search, undo/redo, repeat, yank/paste, and configurable soft wrapping
+- Syntax highlighting with tree-sitter (jai only at the moment)
+
+## Build
+
+You need Windows, the .jai compiler, CMake, and the Visual Studio 2019 C++ Build Tools with a Windows SDK.
+
+```powershell
+jai build.jai
+.\bin\vai.exe
+```
