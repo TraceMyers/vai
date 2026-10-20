@@ -2,6 +2,7 @@
 bin/
 libs/
 release/
+output/
 tmp/
 release.zip
 vai-release.zip
